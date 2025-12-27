@@ -2,67 +2,120 @@
 description: Spawn J Star Code Review bot into the current repository
 ---
 
-# /spawn-jstar - Add J Star Review to Current Repo
+# /spawn-jstar - Add J Star Reviewer v2 to Any Project
 
-This workflow adds the J Star Code Review bot to whatever repository you're currently working in.
+Works with **any programming language** — TypeScript, Python, Rust, Go, etc.
 
 ## Prerequisites
-- You must be in a Git repository
-- The repo must be hosted on GitHub
+- Node.js 18+ installed on your machine
 
 ## Steps
 
-### 1. Create the Workflow Directory
+### 1. Install the CLI Globally (One Time) use pnpm by default else revert to npm
 // turbo
 ```bash
-mkdir -p .github/workflows
+pnpm install -g jstar-reviewer
 ```
 
-### 2. Download the Spawn Template
+### 2. Run your First Command
 // turbo
 ```bash
-curl -o .github/workflows/jstar-review.yml https://raw.githubusercontent.com/JStaRFilms/jstar-code-review/main/.github/workflows/spawn-template.yml
+jstar setup
 ```
+*(Or simply run `jstar review` if you already have your keys ready)*
 
-### 3. (Optional) Create J Star Config Directory
-If you want project-specific coding rules:
-// turbo
+This **auto-creates** (or updates):
+- `.jstar/` directory
+- `.env.example` with required variables
+- `.gitignore` (appends `.jstar/` and `.env.local`)
+
+
+### 3. Configure Environment Variables
 ```bash
-mkdir -p .jstar
+cp .env.example .env.local
 ```
 
-### 4. (Optional) Create Rules File
-Create `.jstar/rules.md` with your coding guidelines. Example content:
+Edit `.env.local` and add your API keys:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+**Where to get keys:**
+- Google API Key: [Google AI Studio](https://aistudio.google.com/apikey)
+- Groq API Key: [console.groq.com](https://console.groq.com)
+
+### 4. Index Your Codebase (Build the Brain)
+```bash
+jstar init
+```
+
+This scans your codebase and creates embeddings for context-aware reviews.
+
+### 5. (Optional) Create Rules File
+Create `.jstar/rules.md` with your project-specific coding guidelines:
 
 ```markdown
 # Project Coding Rules
 
 ## General
-- Use TypeScript strict mode
-- No `any` types
-- All functions must have explicit return types
+- Follow PEP 8 (Python) / Google Style Guide
+- Add docstrings to all public functions
+
+
 
 ## Security  
 - Never log sensitive data
-- Validate all inputs with Zod
+- Validate all user inputs
 ```
 
-### 5. (Optional) Create Architecture File
-Create `.jstar/architecture.md` with your project structure overview.
+### 6. Understanding Review Modes
+Before running a review, understand the available modes:
 
-### 6. Commit and Push
+| Mode | Command | Best For |
+| :--- | :--- | :--- |
+| **Standard** | `jstar review` | checking staged changes *before* committing. |
+| **Retroactive** | `jstar review --last` | checking the *last commit* (if you forgot to review). |
+| **Pull Request** | `jstar review --pr` | checking an entire feature branch against `main`. |
+
+### 7. Run Your First Review
+
+**Agent Instruction:** Ask the user: *"Would you like to run the review yourself, or should I run a headless check for you?"*
+
+#### Option A: User Runs It (Recommended)
+The user runs the interactive TUI command in their terminal:
 ```bash
-git add .github/workflows/jstar-review.yml
-git commit -m "feat: add J Star Code Review bot"
-git push
+jstar review
 ```
 
-### 7. Add Secret (Manual Step)
-Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+#### Option B: Agent Runs It (Headless)
+If the user asks YOU to do it, use the headless flag to avoid hanging:
+// turbo
+```bash
+jstar review --headless
+```
+*(This outputs JSON-formatted results that you can parse)*
 
-- **Name:** `GROQ_API_KEY`
-- **Value:** Your Groq API key from [console.groq.com](https://console.groq.com)
+The dashboard will be saved to `.jstar/last-review.md`.
 
 ## Done! 🎉
 
-The bot will now automatically review every PR. You can also comment `/review` on any PR to trigger a manual review.
+**CLI Commands:**
+| Command | Description |
+|---------|-------------|
+| `jstar setup` | Create config files in current project |
+| `jstar init` | Index codebase (after major changes) |
+| `jstar review` | Review staged changes (Default) |
+| `jstar review --last` | Review last commit (Retroactive) |
+| `jstar review --pr` | Review branch against main (PR Mode) |
+
+**Output:**
+- Console: Quick summary with severity counts
+- `.jstar/last-review.md`: Full dashboard with fix prompts
+
+## Alternative: Without Global Install
+
+If you don't want to install globally:
+```bash
+npx jstar-reviewer review
+```
