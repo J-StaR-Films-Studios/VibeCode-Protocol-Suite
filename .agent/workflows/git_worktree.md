@@ -34,6 +34,18 @@ Ask the user to select an operation:
    git worktree add [folder_path] [branch_name]
    ```
 4. **Validation**: Run `git worktree list` to confirm.
+5. **Context Migration**:
+   - **Check**: Look for `.env` and `prisma/dev.db` (if using SQLite) in the root.
+   - **Ask**: "Should I copy the local environment (.env) and database to the new agent?"
+   - **Execute**:
+     ```bash
+     cp .env [worktree_path]/.env
+     # If SQLite DB exists:
+     mkdir -p [worktree_path]/prisma
+     cp prisma/dev.db [worktree_path]/prisma/dev.db
+     ```
+6. **Initialization**:
+   - **Execute**: Run `pnpm install` (or npm/yarn) in the new worktree to ensure dependencies are ready.
 
 ### [SYNC] Synchronize Agents
 1. **Scope**: Ask if user wants to sync **ALL** worktrees or a **SPECIFIC** one.
