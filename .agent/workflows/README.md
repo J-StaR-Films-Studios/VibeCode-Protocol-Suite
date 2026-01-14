@@ -16,7 +16,7 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────────┐ │
-│  │  🧠 /ORCHESTRATE — THE BRAIN (Autonomous Mode)                          │ │
+│  │  🧠 /VIBE-ORCHESTRATOR — THE BRAIN (Autonomous Mode)                    │ │
 │  │  Understands all workflows. Spawns sub-agents. Builds full projects.    │ │
 │  └─────────────────────────────────────────────────────────────────────────┘ │
 │                              │                                               │
@@ -57,7 +57,7 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 │  /git_worktree ◄──────────────►  /deep_code_audit                            │
 │       │                                 │                                    │
 │       ▼                                 ▼                                    │
-│  /orchestrate ◄───────────────►  /review_code                                │
+│  /vibe-orchestrator ◄─────────►  /review_code                                │
 │                                                                              │
 │  WHEN STUCK                       WHEN CHAT GETS STALE                       │
 │       │                                 │                                    │
@@ -107,7 +107,7 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
 | `/git_worktree` | Manage isolated dev environments | Multiple agents on same repo |
-| `/orchestrate` | **The Brain** — Autonomous full project builds | Kilo Code, automated pipelines |
+| `/vibe-orchestrator` | **The Brain** — Autonomous full project builds | Kilo Code, automated pipelines |
 | `/multi_agent_strategy` | Architecture docs for multi-agent | Planning parallel execution |
 
 ### 🆘 Recovery & Migration
@@ -340,7 +340,7 @@ The Smart Ops system supports **timeline tracking** for GitHub Projects:
 | Deep security audit | `/deep_code_audit` |
 | Update documentation | `/sync_docs` |
 | Set up parallel agents | `/git_worktree` |
-| **Build full project autonomously** | `/orchestrate` |
+| **Build full project autonomously** | `/vibe-orchestrator` |
 | Plan multi-agent architecture | `/multi_agent_strategy` |
 | Hand off to fresh agent | `/escalate` |
 | Move to new chat | `/migrate` |

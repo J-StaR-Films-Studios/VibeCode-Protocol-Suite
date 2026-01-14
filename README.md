@@ -13,6 +13,111 @@ VibeCode isn't just a collection of prompts—it's a **complete workflow system*
 
 This repository contains the **VibeCode Protocol Suite**: a battle-tested collection of protocols, workflows, and prompts that transform AI from simple code generators into genuine project partners.
 
+---
+
+## 📂 Repository Structure
+
+This repo is organized for **two types of users**:
+
+| Folder | Purpose | Who It's For |
+|--------|---------|--------------|
+| **`.agent/`** | Workflows & Skills for agentic IDEs | Cursor, Windsurf, Gemini Code Assist users |
+| **`Legacy (Manual Method)/`** | Copy-paste prompts & protocols | Browser-based AI users (ChatGPT, Claude.ai) |
+| **`Deep_Source_Prompts/`** | Reference docs & source materials | Prompt engineers, contributors |
+
+---
+
+## 🤖 For Agentic IDE Users (Recommended)
+
+**Using Cursor, Windsurf, VS Code + Gemini Code Assist, or similar?**  
+Everything you need is in the **`.agent/`** folder.
+
+### Quick Setup
+
+1. Copy the `.agent/` folder to the root of your project
+2. The IDE will automatically detect workflows and skills
+3. Invoke workflows with slash commands (e.g., `/init_vibecode_genesis`)
+
+### What's Inside `.agent/`
+
+```
+.agent/
+├── workflows/          # Executable step-by-step workflows
+│   ├── init_vibecode_genesis.md    # Start new projects
+│   ├── init_vibecode_design.md     # Generate design systems
+│   ├── build_vibecode_project.md   # Execute the build
+│   ├── reverse_genesis.md          # Onboard to existing codebases
+│   ├── orchestrate.md              # Parallel agent orchestration
+│   └── ...
+│
+└── skills/             # Implicit capabilities (auto-activated)
+    ├── prime-agent/        # Load project context
+    ├── code-review/        # J-Star code review loop
+    ├── security-audit/     # Deep security analysis
+    ├── vercel-ai-sdk/      # AI SDK reference docs
+    ├── youtube-pipeline/   # Video production workflow
+    └── ...
+```
+
+### Key Workflows
+
+| Slash Command | What It Does |
+|---------------|--------------|
+| `/init_vibecode_genesis` | Architect a new project with plans, docs, and roadmap |
+| `/init_vibecode_design` | Generate design system and page mockups |
+| `/build_vibecode_project_v2` | Scaffold and build the project (pnpm/PowerShell safe) |
+| `/reverse_genesis` | Onboard AI to an existing codebase |
+| `/orchestrate` | Autonomous multi-agent project builder |
+| `/vibe-orchestrator` | Master brain protocol for complex orchestration |
+| `/review_code` | Run J-Star code review loop |
+| `/escalate` | Generate escalation report when stuck |
+| `/migrate` | Transfer context to a new chat session |
+
+---
+
+## 📋 For Browser-Based AI Users
+
+**Using ChatGPT, Claude.ai, or Gemini in the browser?**  
+Use the **`Legacy (Manual Method)/`** folder with copy-paste prompts.
+
+### The Protocol Library
+
+| # | Protocol | Purpose |
+|---|----------|---------|
+| 0 | **VibeCode User Manual** | Complete guide to the system |
+| 1 | **Project Genesis Protocol** | Start any new project (99% of cases) |
+| 2 | **Ultimate Orchestration Prompt** | One-shot prompt for quick scripts |
+| 3 | **Design System Genesis Protocol** | Create visual design systems |
+| 4 | **GitHub Issue Meta-Prompt** | Structured issue creation |
+| 5 | **Escalation & Handoff Protocol** | When AI gets stuck |
+| 8 | **Seamless Migration Meta-Prompt** | Transfer context between sessions |
+| 9 | **Reverse Genesis Protocol** | Onboard AI to existing codebases |
+
+### How to Use
+
+1. Open the relevant `.md` file from `Legacy (Manual Method)/`
+2. Copy the entire prompt
+3. Paste it into your AI chat interface
+4. Follow the conversation flow
+
+---
+
+## 📚 Deep Source Prompts (For Contributors)
+
+The **`Deep_Source_Prompts/`** folder contains the **reference documentation** and **source materials** used to create the workflows and protocols.
+
+### Contents
+
+- **Coding Guidelines** - React/TypeScript and Next.js App Router standards
+- **Vercel AI SDK Docs** - Complete AI SDK reference (building RAG, streaming, tools)
+- **Design System Docs** - Google's Material Design 3, mobile-first patterns
+- **Agent Prompts** - Raw system prompts for various AI agents
+- **OpenRouter Docs** - API reference for multi-model routing
+
+> **Note:** These are raw, unprocessed reference materials. They're useful for understanding *why* the workflows are structured the way they are, or for creating new workflows.
+
+---
+
 ## 🎯 The VibeCode Philosophy
 
 - **Structured Collaboration**: Clear roles for different AI agents (Orchestrator, Builder, In-IDE Assistant, Design Agent)
@@ -20,28 +125,7 @@ This repository contains the **VibeCode Protocol Suite**: a battle-tested collec
 - **Documentation-Driven**: Every project gets proper docs, issues, and roadmaps
 - **Scalable**: Works for tiny scripts or enterprise applications
 
-## 📚 The Protocol Library
-
-### 🚀 **Starting New Projects (99% of cases)**
-- **[`Project Genesis Protocol v2.1 The VibeCode Workflow`](Project%20Genesis%20Protocol%20The%20VibeCode%20Workflow.md)** - Your default choice for any new project. Establishes the "vibe," creates documentation, and builds the foundation.
-
-### ⚡ **Quick Scripts & Components (1% of cases)**
-- **[`✨ ULTIMATE ORCHESTRATION PROMPT ✨`](%E2%9C%A8%20ULTIMATE%20ORCHESTRATION%20PROMPT%E2%9C%A8.md)** - One-shot prompt for standalone code pieces when you don't need full project structure.
-
-### 🎨 **Design & UI**
-- **[`Design System Genesis Protocol`](Design%20System%20Genesis%20Protocol.md)** - Creates visual design systems and mockups.
-
-### 🔄 **Existing Projects**
-- **[`The Reverse Genesis Protocol`](The%20Reverse%20Genesis%20Protocol.md)** - Onboards AI to existing codebases.
-
-### 🆘 **Debugging & Escalation**
-- **[`The Escalation & Handoff Protocol`](The%20Escalation%20%26%20Handoff%20Protocol.md)** - When your local AI gets stuck, escalate to the Orchestrator.
-
-### 🔄 **Session Management**
-- **[`The Seamless Migration Meta-Prompt`](The%20Seamless%20Migration%20Meta-Prompt%20%28Your%20Reusable%20Tool%29.md)** - Transfer project context between chat sessions.
-
-### 📋 **Issue Management**
-- **[`The Ultimate GitHub Issue Meta-Prompt Template`](The%20Ultimate%20GitHub%20Issue%20Meta-Prompt%20Template.md)** - Structured issue creation.
+---
 
 ## 👥 Your AI Team
 
@@ -52,52 +136,50 @@ This repository contains the **VibeCode Protocol Suite**: a battle-tested collec
 | **In-IDE Assistant** | Tactical coding, refactoring | Writing functions, fixing bugs in existing code |
 | **Design Agent** | Visual design, UI/UX | Creating mockups, design systems |
 
-## 🚀 Quick Start
+---
 
-1. **Choose Your Protocol**: For new projects, start with `Project Genesis Protocol v2.1`
-2. **Read the Manual**: Check [`VibeCode User Manual`](VibeCode%20User%20Manual.md) for detailed guidance
-3. **Follow the Workflow**: Each protocol contains step-by-step instructions
-4. **Iterate**: Use the escalation protocols when you hit roadblocks
+## 🚀 Quick Start Guide
 
-### Example: Building a Web App
-
+### For Agentic IDE Users
 ```bash
-# 1. Start with Genesis Protocol
-# Open: Project Genesis Protocol The VibeCode Workflow.md
-# Follow the conversation flow with your AI Orchestrator
+# 1. Copy .agent folder to your project root
+cp -r path/to/VibeCode-Protocol-Suite/.agent ./
 
-# 2. Build the initial foundation
-# Use the generated Builder Prompt with your Builder Agent
+# 2. Start a new project
+# Type: /init_vibecode_genesis
 
-# 3. Add design
-# Use: Design System Genesis Protocol.md
+# 3. Generate design system
+# Type: /init_vibecode_design
 
-# 4. Debug as needed
-# Use: The Escalation & Handoff Protocol.md
+# 4. Build the project
+# Type: /build_vibecode_project_v2
 ```
 
-## 📖 User Manual
+### For Browser AI Users
+```bash
+# 1. Open: Legacy (Manual Method)/1 Project Genesis Protocol The VibeCode Workflow.md
+# 2. Copy the entire content
+# 3. Paste into ChatGPT/Claude/Gemini
+# 4. Follow the conversation flow
+```
 
-For detailed explanations of when to use each protocol, see the **[VibeCode User Manual](VibeCode%20User%20Manual.md)**.
+---
 
 ## 🤝 Contributing
 
 This is a living system! If you discover improvements:
 
 1. Test your changes with real projects
-2. Update the User Manual if you add/modify protocols
-3. Create a GitHub Issue with your proposed changes
-4. Follow the existing protocol structure
+2. Add reference materials to `Deep_Source_Prompts/` if needed
+3. Create workflows in `.agent/workflows/` for agentic IDEs
+4. Update legacy prompts in `Legacy (Manual Method)/` for browser users
+5. Create a GitHub Issue with your proposed changes
+
+---
 
 ## 📄 License
 
 This repository contains workflow protocols and prompts. Feel free to use, modify, and share. The goal is to improve AI-human collaboration for everyone.
-
-## 🎯 Success Stories
-
-- **SmartNotes App**: Built a PyQt6 note-taking app with AI tagging
-- **Web Dashboards**: Created responsive admin panels with consistent design systems
-- **API Services**: Developed REST APIs with proper documentation and testing
 
 ---
 
