@@ -1,0 +1,43 @@
+{
+  "name": "vibesuite",
+  "version": "1.0.0",
+  "description": "A Complete System for AI-Human Software Development Collaboration",
+  "type": "module",
+  "bin": {
+    "vibesuite": "./bin/vibesuite.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    ".agent",
+    "VibeCode-Agents (e.g Kilo-code)",
+    "Legacy (Manual Method)"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JStaRFilms/VibeCode-Protocol-Suite.git"
+  },
+  "keywords": [
+    "ai",
+    "vibecode",
+    "cursor",
+    "windsurf",
+    "protocols"
+  ],
+  "author": "J StaR Films Studios",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "figlet": "^1.8.0",
+    "fs-extra": "^11.3.0",
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2"
+  },
+  "bugs": {
+    "url": "https://github.com/JStaRFilms/VibeCode-Protocol-Suite/issues"
+  },
+  "homepage": "https://github.com/JStaRFilms/VibeCode-Protocol-Suite#readme"
+}

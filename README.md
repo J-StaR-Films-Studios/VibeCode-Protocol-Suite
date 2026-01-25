@@ -7,6 +7,26 @@
 
 ---
 
+## 🚀 Quick Start (Recommended)
+
+Spawn the complete VibeCode system directly into your project with a single command:
+
+```bash
+# Using npx (No installation required)
+npx vibesuite init
+
+# Or using pnpm
+pnpm dlx vibesuite init
+```
+
+This interactive CLI will let you choose exactly what you need:
+- ✅ **.agent Folder** (For Cursor/Windsurf workflows)
+- ✅ **Kilo Code Agents** (YAML definitions)
+- ✅ **Legacy Protocols** (Manual prompts)
+- ✅ **Select Specific Workflows/Skills**
+
+---
+
 ## 🌟 What is VibeCode?
 
 VibeCode isn't just a collection of prompts—it's a **complete workflow system** for collaborating with AI to build software. Think of yourself as the Visionary/CEO, and your AI assistants as a specialized, high-performance development team.
