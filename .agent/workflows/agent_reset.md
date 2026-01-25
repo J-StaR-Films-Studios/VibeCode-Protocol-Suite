@@ -17,6 +17,26 @@ You are exhibiting context degradation. Before doing ANYTHING:
 3. **NO INTERNAL MONOLOGUE.** If you catch yourself writing "(Wait, I should...)" - STOP. That's a loop symptom.
 4. **READ BEFORE EDIT. ALWAYS.**
 
+---
+
+### 0. Re-Discover Available Skills & Workflows
+
+You may have forgotten what tools are available. **Run this now:**
+
+```bash
+# Global (always available)
+ls ~/.gemini/antigravity/skills/
+ls ~/.gemini/antigravity/global_workflows/
+
+# Local (project-specific, if exists)
+ls .agent/skills/ 2>/dev/null
+ls .agent/workflows/ 2>/dev/null
+```
+
+If the user's current task matches a skill (e.g., "AI SDK", "code review", "SEO", "YouTube"), **read that skill's SKILL.md immediately**.
+
+---
+
 You are exhibiting signs of context degradation. Before continuing:
 
 ### 1. Mandatory Pre-Edit Checklist

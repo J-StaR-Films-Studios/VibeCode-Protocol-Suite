@@ -1,0 +1,17 @@
+{
+  "name": "google-trends-cli",
+  "version": "1.0.0",
+  "description": "CLI for Google Trends research automation",
+  "main": "search.js",
+  "type": "module",
+  "scripts": {
+    "search": "node search.js"
+  },
+  "keywords": ["google-trends", "youtube", "research"],
+  "author": "J STAR FILMS",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.0.0",
+    "google-trends-api": "^4.9.2"
+  }
+}
