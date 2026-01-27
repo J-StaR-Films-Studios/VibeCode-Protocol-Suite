@@ -12,7 +12,7 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                           PROJECT LIFECYCLE                                   │
+│                         PROJECT LIFECYCLE (V3)                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────────┐ │
@@ -25,47 +25,108 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 │  NEW PROJECT                         EXISTING PROJECT                        │
 │       │                                    │                                 │
 │       ▼                                    ▼                                 │
-│  /init_vibecode_genesis ──────────►  /reverse_genesis                        │
-│       │                                    │                                 │
-│       ▼                                    │                                 │
-│  /init_vibecode_design                     │                                 │
-│       │                                    │                                 │
-│       ▼                                    │                                 │
-│  /build_vibecode_project ◄─────────────────┘                                 │
-│       │                                                                      │
-│       ├───► /init_smart_ops (bootstraps smart_start/complete)                │
-│       │                                                                      │
-│       ├───► /spawn-jstar-code-review (adds J-Star Reviewer)                  │
-│       │                                                                      │
-│       ▼                                                                      │
+│  ╔═══════════════════════╗          /reverse_genesis                         │
+│  ║ /init_vibecode_       ║                │                                  │
+│  ║     genesis_v3        ║                │                                  │
+│  ║                       ║                │                                  │
+│  ║ • Creates PRD         ║                │                                  │
+│  ║ • 1:1 FR↔Issues       ║                │                                  │
+│  ║ • Copies templates    ║                │                                  │
+│  ╚══════════╤════════════╝                │                                  │
+│             ▼                             │                                  │
+│  ┌───────────────────────┐                │                                  │
+│  │ /init_vibecode_design │ (Optional)     │                                  │
+│  │ • Design system       │                │                                  │
+│  │ • UI mockups          │                │                                  │
+│  └───────────┬───────────┘                │                                  │
+│              ▼                            │                                  │
+│  ╔═══════════════════════╗                │                                  │
+│  ║ /build_vibecode_      ║◄───────────────┘                                  │
+│  ║     project_v3        ║                                                   │
+│  ║                       ║                                                   │
+│  ║ • Scaffolds project   ║                                                   │
+│  ║ • tsc after EVERY edit║                                                   │
+│  ║ • Marks FR progress   ║                                                   │
+│  ╚══════════╤════════════╝                                                   │
+│             │                                                                │
+│             ▼                                                                │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
-│  │                      DAILY DEVELOPMENT LOOP                             │  │
-│  │  ┌──────────────────────────────────────────────────────────────────┐  │  │
-│  │  │ /prime_agent ──► /smart_start ──► WORK ──► /smart_complete       │  │  │
-│  │  └──────────────────────────────────────────────────────────────────┘  │  │
-│  │                            │                                            │  │
-│  │                            ▼                                            │  │
-│  │           /spawn_task (for complex features)                            │  │
-│  │           /analyze_component (for refactoring)                          │  │
-│  │           /review_code (for quality gates)                              │  │
-│  │           /sync_docs (keep docs updated)                                │  │
+│  │                    CONTINUATION LOOP (New Sessions)                     │  │
+│  │                                                                         │  │
+│  │   ╔═════════════════════╗      ╔═════════════════════╗                  │  │
+│  │   ║   /continue_build   ║─────►║   /finalize_build   ║                  │  │
+│  │   ║                     ║      ║                     ║                  │  │
+│  │   ║ • Context recovery  ║      ║ • Full verification ║                  │  │
+│  │   ║ • Verify prev work  ║      ║ • Acceptance audit  ║                  │  │
+│  │   ║ • Resume next FR    ║      ║ • Handoff report    ║                  │  │
+│  │   ║ • tsc after edit    ║      ║                     ║                  │  │
+│  │   ╚══════════╤══════════╝      ╚═════════════════════╝                  │  │
+│  │              │                                                          │  │
+│  │              └──────────────────┐                                       │  │
+│  │                                 │ (repeat until all FRs done)           │  │
+│  │              ┌──────────────────┘                                       │  │
+│  │              ▼                                                          │  │
+│  │   ┌─────────────────────────────────────────────────────────┐           │  │
+│  │   │ IF AGENT MISBEHAVES:                                    │           │  │
+│  │   │    /agent_reset ──► /prime_agent ──► resume work        │           │  │
+│  │   └─────────────────────────────────────────────────────────┘           │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
-│  PARALLEL DEVELOPMENT             QUALITY ASSURANCE                          │
-│       │                                 │                                    │
-│       ▼                                 ▼                                    │
-│  /git_worktree ◄──────────────►  /deep_code_audit                            │
-│       │                                 │                                    │
-│       ▼                                 ▼                                    │
-│  /vibe-orchestrator ◄─────────►  /review_code                                │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                           OPTIONAL ADD-ONS                              │  │
+│  │                                                                         │  │
+│  │  /init_smart_ops           → GitHub automation (smart_start/complete)   │  │
+│  │  /spawn-jstar-code-review  → Code review tooling                        │  │
+│  │  /git_worktree             → Parallel agent development                 │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
-│  WHEN STUCK                       WHEN CHAT GETS STALE                       │
-│       │                                 │                                    │
-│       ▼                                 ▼                                    │
-│  /escalate                         /migrate                                  │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                           RECOVERY WORKFLOWS                            │  │
+│  │                                                                         │  │
+│  │  /escalate   → Agent stuck, hand off to fresh agent                     │  │
+│  │  /migrate    → Chat stale, move context to new session                  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         VERIFICATION GATES (V3)                               │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  After EVERY TypeScript/TSX edit:     npx tsc --noEmit                       │
+│  Before handoff:                      python scripts/vibe-verify.py          │
+│  Quick check:                         python scripts/vibe-verify.py --quick  │
+│                                                                              │
+│  ❌ If verification fails → STOP, fix, re-run, only then continue            │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## V3 Workflow Lifecycle (RECOMMENDED)
+
+```
+/init_vibecode_genesis_v3    → Creates PRD, Issues (1 per FR), Guidelines template
+         ↓
+/init_vibecode_design        → (Optional) Creates mockups
+         ↓
+/build_vibecode_project_v3   → Scaffolds, builds MUS with verification gates
+         ↓
+[New chat or continue]
+         ↓
+/continue_build              → Picks up where last agent left off
+         ↓
+(repeat /continue_build)
+         ↓
+/finalize_build              → Final verification, handoff report
+```
+
+**Key V3 Features:**
+- `tsc --noEmit` after every file edit
+- 1:1 FR↔Issue correlation
+- Templates from `nextjs-standards` skill
+- `vibe-verify.py` for verification
 
 ---
 
@@ -75,10 +136,11 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 
 | Workflow | Purpose | When to Use | Generates |
 |----------|---------|-------------|-----------|
-| `/init_vibecode_genesis` | The Architect — Plans a new project | Starting a brand new project | `docs/Project_Requirements.md`, `docs/Coding_Guidelines.md`, `docs/Builder_Prompt.md`, GitHub Issues |
+| `/init_vibecode_genesis_v3` | **V3 Architect** — Plans with templates | Starting new project | PRD, Issues (1 per FR), Guidelines template |
 | `/init_vibecode_design` | The Designer — Creates visual system | After Genesis, before Build | `docs/design/design-system.html`, `docs/mockups/*.html` |
-| `/build_vibecode_project` | The Builder — Scaffolds and builds | After Genesis (and optionally Design) | Project structure, MUS features, `docs/Builder_Handoff_Report.md` |
-| `/build_vibecode_project_v2` | The Builder v2 — pnpm + PowerShell safe | Same as above, Windows-optimized | Same as above |
+| `/build_vibecode_project_v3` | **V3 Builder** — With verification gates | After Genesis (and optionally Design) | Project structure, MUS features with verification |
+| `/continue_build` | **Resume work** — Post-build sessions | New chat after initial build | Continues from incomplete FRs |
+| `/finalize_build` | **Final handoff** — Verification + report | When MUS complete | `docs/Builder_Handoff_Report.md` |
 | `/init_smart_ops` | Bootstraps GitHub integration | After Build, when project has `src/` | `src/scripts/smart-ops.ts`, `smart_start.md`, `smart_complete.md` |
 | `/reverse_genesis` | Onboards to existing codebase | Joining an existing project | `docs/autopsy_report.md` |
 | `/spawn-jstar-code-review` | Adds J-Star Reviewer to project | Any project needing code review | `.jstar/` directory, `.env.example` |
@@ -121,15 +183,16 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 
 ## Recommended Flows
 
-### Flow 1: New Project (Full VibeCode)
+### Flow 1: New Project (V3 - RECOMMENDED)
 
 ```
-1. /init_vibecode_genesis    → Get PRD, Guidelines, Issues
+1. /init_vibecode_genesis_v3 → Get PRD, Issues (1 per FR), Templates
 2. /init_vibecode_design     → Get design system, mockups (UI projects)
-3. /build_vibecode_project   → Scaffold and build MUS
-4. /spawn-jstar-code-review  → Add code review tooling
-5. /init_smart_ops           → Set up GitHub automation
-6. /prime_agent              → Start daily work loop
+3. /build_vibecode_project_v3 → Scaffold and build MUS with verification
+4. /continue_build           → Resume in new sessions
+5. /finalize_build           → Final verification and handoff
+6. /spawn-jstar-code-review  → Add code review tooling (optional)
+7. /init_smart_ops           → Set up GitHub automation (optional)
 ```
 
 ### Flow 2: Joining Existing Project
@@ -223,34 +286,36 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 
 ## Parent-Child Relationships
 
-### `/init_vibecode_genesis` is Parent of:
+### `/init_vibecode_genesis_v3` is Parent of:
 - `/init_vibecode_design` (uses the PRD)
-- `/build_vibecode_project` (uses PRD, Guidelines, Builder Prompt)
+- `/build_vibecode_project_v3` (uses PRD, Guidelines, Issues)
 
-### `/build_vibecode_project` is Parent of:
-- `/init_smart_ops` (needs `src/` to exist)
-- `/spawn-jstar-code-review` (needs project structure)
+### `/build_vibecode_project_v3` is Parent of:
+- `/continue_build` (resumes incomplete FRs)
+- `/finalize_build` (generates final handoff)
+
+### `/continue_build` Loops Into:
+- Itself (repeat until all FRs done)
+- `/finalize_build` (when MUS complete)
 
 ### `/init_smart_ops` Generates:
-- `/smart_start` (the actual workflow used daily)
-- `/smart_complete` (the actual workflow used daily)
+- `/smart_start` (GitHub-linked work sessions)
+- `/smart_complete` (marks work done in GitHub)
 
 ### `/spawn-jstar-code-review` Enables:
 - `/review_code` (requires J-Star to be set up)
 
-### `/git_worktree` Enables:
-- `/multi_agent_strategy` (parallel execution depends on isolation)
-
 ### Standalone (No Parent):
-- `/prime_agent` — Can run anytime
-- `/analyze_component` — Can run anytime
-- `/spawn_task` — Can run anytime
-- `/deep_code_audit` — Can run anytime
-- `/sync_docs` — Can run anytime
-- `/escalate` — Run when stuck
-- `/migrate` — Run when chat stale
-- `/reverse_genesis` — Alternative to Genesis for existing projects
-- `/Vercel Ai SDK` — Reference documentation
+- `/prime_agent` — Reload context anytime
+- `/agent_reset` — Reset when agent misbehaves
+- `/continue_build` — Resume in any session
+- `/analyze_component` — Audit any component
+- `/spawn_task` — Break down complex features
+- `/deep_code_audit` — Security/quality audit
+- `/sync_docs` — Update documentation
+- `/escalate` — Hand off to fresh agent
+- `/migrate` — Move context to new session
+- `/reverse_genesis` — Onboard to existing project
 
 ---
 
@@ -325,23 +390,25 @@ The Smart Ops system supports **timeline tracking** for GitHub Projects:
 
 | I want to... | Use this workflow |
 |--------------|-------------------|
-| Start a new project | `/init_vibecode_genesis` |
-| Design the UI | `/init_vibecode_design` |
-| Build the foundation | `/build_vibecode_project` |
-| Add code review tooling | `/spawn-jstar-code-review` |
-| Set up GitHub automation | `/init_smart_ops` |
+| **Start a new project** | `/init_vibecode_genesis_v3` |
+| **Design the UI** | `/init_vibecode_design` |
+| **Build the foundation** | `/build_vibecode_project_v3` |
+| **Resume work (new session)** | `/continue_build` |
+| **Finish and hand off** | `/finalize_build` |
 | Join an existing project | `/reverse_genesis` |
-| Brief the agent on rules | `/prime_agent` |
-| Start a work session | `/smart_start` |
-| End a work session | `/smart_complete` |
+| Reload agent context | `/prime_agent` |
+| Reset misbehaving agent | `/agent_reset` |
+| Set up GitHub automation | `/init_smart_ops` |
+| Start a GitHub-linked task | `/smart_start` |
+| End a GitHub-linked task | `/smart_complete` |
 | Break down a complex feature | `/spawn_task` |
 | Audit a component | `/analyze_component` |
 | Run code review | `/review_code` |
+| Add code review tooling | `/spawn-jstar-code-review` |
 | Deep security audit | `/deep_code_audit` |
 | Update documentation | `/sync_docs` |
 | Set up parallel agents | `/git_worktree` |
-| **Build full project autonomously** | `/vibe-orchestrator` |
-| Plan multi-agent architecture | `/multi_agent_strategy` |
+| Build full project autonomously | `/vibe-orchestrator` |
 | Hand off to fresh agent | `/escalate` |
 | Move to new chat | `/migrate` |
 | Learn AI SDK patterns | `/Vercel Ai SDK` |

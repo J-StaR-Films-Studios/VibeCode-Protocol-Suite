@@ -37,6 +37,43 @@ If the user's current task matches a skill (e.g., "AI SDK", "code review", "SEO"
 
 ---
 
+### 0.5. Verification Protocol (TypeScript Projects)
+
+If this is a TypeScript project, run a health check:
+
+```bash
+# Check current state
+npx tsc --noEmit
+```
+
+**If this fails:** You have existing type errors. Fix them before making new changes.
+
+```bash
+# Quick verification (optional)
+python scripts/vibe-verify.py --quick 2>/dev/null
+```
+
+---
+
+### 0.6. Load Project Context
+
+If `docs/` exists, reload the project brain:
+
+```bash
+# Coding Guidelines (The Law)
+cat docs/Coding_Guidelines.md 2>/dev/null
+
+# Current work in progress
+ls docs/issues/ 2>/dev/null
+
+# Check which FR is incomplete
+grep -l "\- \[ \]" docs/issues/*.md 2>/dev/null | head -3
+```
+
+**State the current FR:** "I am working on FR-XXX: [Title]"
+
+---
+
 You are exhibiting signs of context degradation. Before continuing:
 
 ### 1. Mandatory Pre-Edit Checklist
