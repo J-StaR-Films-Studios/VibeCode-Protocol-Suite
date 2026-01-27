@@ -4,7 +4,23 @@ description: A Detailed Explanation of what the vibe code protocol is
 
 # VibeCode Workflow Guide
 
-This document explains how all workflows in `.agent/workflows/` relate to each other, which ones are "parent" workflows, and the recommended order of operations.
+This document explains how all workflows in `.agent/workflows/` relate to each other, which ones are "parent" workflows, the recommended order of operations, and the relationship between **workflows** and **skills**.
+
+---
+
+## 📦 Workflows vs Skills
+
+Understanding the difference:
+
+| Type | Location | Invocation | Purpose |
+|------|----------|------------|---------|
+| **Workflow** | `.agent/workflows/*.md` | `/workflow-name` (slash command) | Step-by-step procedures the agent follows |
+| **Skill** | `.agent/skills/*/SKILL.md` | Auto-loaded by context | Reusable protocols with scripts/templates |
+
+**Why migrate to a skill?**
+- Skills can include **scripts**, **templates**, and **resources**
+- Skills are **portable** across projects (can be installed globally via `uipro`)
+- Skills are **auto-loaded** when relevant context is detected
 
 ---
 
@@ -15,13 +31,6 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 │                         PROJECT LIFECYCLE (V3)                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────────┐ │
-│  │  🧠 /VIBE-ORCHESTRATOR — THE BRAIN (Autonomous Mode)                    │ │
-│  │  Understands all workflows. Spawns sub-agents. Builds full projects.    │ │
-│  └─────────────────────────────────────────────────────────────────────────┘ │
-│                              │                                               │
-│              ┌───────────────┴───────────────┐                               │
-│              ▼                               ▼                               │
 │  NEW PROJECT                         EXISTING PROJECT                        │
 │       │                                    │                                 │
 │       ▼                                    ▼                                 │
@@ -73,31 +82,13 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
-│  │                           OPTIONAL ADD-ONS                              │  │
+│  │                           VERIFICATION GATES                            │  │
 │  │                                                                         │  │
-│  │  /init_smart_ops           → GitHub automation (smart_start/complete)   │  │
-│  │  /spawn-jstar-code-review  → Code review tooling                        │  │
-│  │  /git_worktree             → Parallel agent development                 │  │
-│  └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌────────────────────────────────────────────────────────────────────────┐  │
-│  │                           RECOVERY WORKFLOWS                            │  │
+│  │  After EVERY TypeScript/TSX edit:     npx tsc --noEmit                  │  │
+│  │  Before handoff:                      python scripts/vibe-verify.py     │  │
 │  │                                                                         │  │
-│  │  /escalate   → Agent stuck, hand off to fresh agent                     │  │
-│  │  /migrate    → Chat stale, move context to new session                  │  │
+│  │  ❌ If verification fails → STOP, fix, re-run, only then continue       │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         VERIFICATION GATES (V3)                               │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  After EVERY TypeScript/TSX edit:     npx tsc --noEmit                       │
-│  Before handoff:                      python scripts/vibe-verify.py          │
-│  Quick check:                         python scripts/vibe-verify.py --quick  │
-│                                                                              │
-│  ❌ If verification fails → STOP, fix, re-run, only then continue            │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -141,7 +132,6 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 | `/build_vibecode_project_v3` | **V3 Builder** — With verification gates | After Genesis (and optionally Design) | Project structure, MUS features with verification |
 | `/continue_build` | **Resume work** — Post-build sessions | New chat after initial build | Continues from incomplete FRs |
 | `/finalize_build` | **Final handoff** — Verification + report | When MUS complete | `docs/Builder_Handoff_Report.md` |
-| `/init_smart_ops` | Bootstraps GitHub integration | After Build, when project has `src/` | `src/scripts/smart-ops.ts`, `smart_start.md`, `smart_complete.md` |
 | `/reverse_genesis` | Onboards to existing codebase | Joining an existing project | `docs/autopsy_report.md` |
 | `/spawn-jstar-code-review` | Adds J-Star Reviewer to project | Any project needing code review | `.jstar/` directory, `.env.example` |
 
@@ -150,34 +140,120 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
 | `/prime_agent` | Load project context | Start of session, before complex work |
-| `/smart_start` | Start work on a feature/bug | Beginning any task |
-| `/smart_complete` | Mark work as done | Finishing any task |
 | `/spawn_task` | Create detailed task prompt | Complex features needing breakdown |
-| `/analyze_component` | Audit component quality | Refactoring, code review |
 | `/sync_docs` | Update feature documentation | After completing code changes |
 
 ### 🔍 Code Quality & Review
 
-| Workflow | Purpose | When to Use |
-|----------|---------|-------------|
-| `/review_code` | Run J-Star review loop | Before commits, quality gates |
-| `/deep_code_audit` | Manual security & logic audit | Major releases, security review |
-| `/Vercel Ai SDK` | Learn AI SDK patterns | Building AI-powered features |
+| Workflow | Purpose | When to Use | Requires |
+|----------|---------|-------------|----------|
+| `/review_code` | Run J-Star review loop | Before commits, quality gates | **J-Star CLI** (`jstar` command) |
 
-### 🔀 Parallel Development (Multi-Agent)
-
-| Workflow | Purpose | When to Use |
-|----------|---------|-------------|
-| `/git_worktree` | Manage isolated dev environments | Multiple agents on same repo |
-| `/vibe-orchestrator` | **The Brain** — Autonomous full project builds | Kilo Code, automated pipelines |
-| `/multi_agent_strategy` | Architecture docs for multi-agent | Planning parallel execution |
+> [!TIP]
+> For **deep security audits**, use the `security-audit` skill instead of searching for `/deep_code_audit`. See [Skill Migrations](#-skill-migrations) below.
 
 ### 🆘 Recovery & Migration
 
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
+| `/agent_reset` | Reset agent mid-conversation | Agent is hallucinating or stuck |
 | `/escalate` | Generate handoff report | Agent is stuck, need fresh perspective |
 | `/migrate` | Transfer context to new chat | Chat is stale, losing context |
+
+---
+
+## ⚠️ Important Clarifications
+
+### `/smart_start` and `/smart_complete` — NOT Standalone Workflows
+
+These are **shell script commands**, not slash-command workflows.
+
+| What They Are | How to Use |
+|---------------|------------|
+| Commands from the **Smart Ops** system | Run via `./scripts/smart-ops.sh` or `.ps1` |
+| Generated by `/init_smart_ops` | **Must run `/init_smart_ops` first** |
+| GitHub-dependent | Requires `gh` CLI + authenticated repo |
+
+**Setup Required:**
+```bash
+# Step 1: Initialize Smart Ops (generates the scripts)
+/init_smart_ops
+
+# Step 2: Use the commands
+./scripts/smart-ops.sh start     # Start a task
+./scripts/smart-ops.sh complete  # Complete a task
+```
+
+> [!IMPORTANT]
+> If you haven't run `/init_smart_ops`, the commands `smart_start` and `smart_complete` will not exist.
+
+### `/review_code` vs Deep Security Audit
+
+| Tool | Automation | When to Use | Requires |
+|------|------------|-------------|----------|
+| `/review_code` | ✅ Automated (J-Star CLI) | Before commits, quick PR checks | `jstar` CLI installed |
+| `security-audit` skill | ❌ Manual phases | Major releases, security reviews | Nothing — pure AI protocol |
+
+**Use `/review_code` for:**
+- Daily commits
+- PR quality gates
+- Quick feedback loops
+
+**Use `security-audit` skill for:**
+- Before major releases
+- Auditing auth/payment flows
+- When manual logic probing is needed
+
+---
+
+## 🛠️ Skill Migrations
+
+These workflows have been **migrated to skills** for better portability and added scripts/resources:
+
+| Old Workflow (Legacy) | New Skill | Why Migrated |
+|----------------------|-----------|--------------|
+| `/analyze_component` | `component-analysis` | Better as protocol, no scripts needed |
+| `/deep_code_audit` | `security-audit` | Manual protocol, no tooling dependency |
+| `/git_worktree` | `git-worktree` | Reusable across projects |
+| `/seo_ready` | `seo-ready` | Portable, includes templates |
+| `/init_smart_ops` + `/smart_start` + `/smart_complete` | `github-ops` | Now includes `publish_issues.ps1` script |
+| YouTube Phase 1-5 workflows | `youtube-pipeline` | Includes scripts + resources folder |
+
+**To use migrated skills:**
+```
+# Skills are auto-loaded by context, but you can invoke directly:
+User: "Audit this component for compliance"  → Loads component-analysis skill
+User: "Run a security audit on this repo"    → Loads security-audit skill
+User: "Set up git worktrees for parallel dev" → Loads git-worktree skill
+```
+
+---
+
+## 📁 LEGACY Folder
+
+The `LEGACY/` folder contains workflows that are:
+1. **Superseded by V3 versions** (e.g., `build_vibecode_project.md` → `build_vibecode_project_v3.md`)
+2. **Migrated to skills** (e.g., `deep_code_audit.md` → `security-audit` skill)
+3. **Deprecated/Broken** (e.g., `vibe-orchestrator.md` — requires non-existent `vibecode` CLI)
+
+| Legacy Workflow | Status | Replacement |
+|-----------------|--------|-------------|
+| `build_vibecode_project.md` | Superseded | `/build_vibecode_project_v3` |
+| `build_vibecode_project_v2.md` | Superseded | `/build_vibecode_project_v3` |
+| `init_vibecode_genesis_v1.md` | Superseded | `/init_vibecode_genesis_v3` |
+| `analyze_component.md` | Migrated | `component-analysis` skill |
+| `deep_code_audit.md` | Migrated | `security-audit` skill |
+| `git_worktree.md` | Migrated | `git-worktree` skill |
+| `seo_ready.md` | Migrated | `seo-ready` skill |
+| `init_smart_ops.md` | Migrated | `github-ops` skill |
+| `vibe-orchestrator.md` | ⚠️ Broken | Requires `vibecode` CLI that doesn't exist |
+| `orchestrate.md` | ⚠️ Broken | Requires `vibecode` CLI that doesn't exist |
+| `gemini-orchestrate.md` | ⚠️ Broken | Requires `vibecode` CLI that doesn't exist |
+| `multi_agent_strategy.md` | Reference | Architecture docs only |
+| YouTube Phase 1-5 workflows | Migrated | `youtube-pipeline` skill |
+
+> [!CAUTION]
+> **`vibe-orchestrator.md`** references a `vibecode spawn` CLI command that was never built. This workflow is **non-functional**. If you want autonomous multi-agent orchestration, it requires building the CLI first.
 
 ---
 
@@ -192,7 +268,6 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 4. /continue_build           → Resume in new sessions
 5. /finalize_build           → Final verification and handoff
 6. /spawn-jstar-code-review  → Add code review tooling (optional)
-7. /init_smart_ops           → Set up GitHub automation (optional)
 ```
 
 ### Flow 2: Joining Existing Project
@@ -200,29 +275,25 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 ```
 1. /reverse_genesis          → Generate autopsy report
 2. /prime_agent              → Load coding/styling context
-3. /smart_start              → Pick up first task
+3. Start working             → Reference the autopsy for architecture
 ```
 
 ### Flow 3: Daily Work Session
 
 ```
 1. /prime_agent              → (Optional) Refresh context
-2. /smart_start              → Declare what you're working on
-3. ... do the work ...
-4. /review_code              → Check code quality before commit
-5. /smart_complete           → Close out the task
+2. ... do the work ...
+3. /review_code              → Check code quality before commit
+4. git commit                → Commit clean code
 ```
 
 ### Flow 4: Complex Feature Implementation
 
 ```
 1. /spawn_task               → Generate detailed task prompt
-2. /smart_start              → Link to GitHub issue
-3. ... implement phases ...
-4. /analyze_component        → Audit any large components
-5. /review_code              → Quality gate before merge
-6. /sync_docs                → Update feature documentation
-7. /smart_complete           → Mark as done
+2. ... implement phases ...
+3. /review_code              → Quality gate before merge
+4. /sync_docs                → Update feature documentation
 ```
 
 ### Flow 5: Agent Recovery
@@ -233,6 +304,9 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 
 # If chat is stale:
 /migrate                     → Generate state snapshot for new session
+
+# If agent is hallucinating:
+/agent_reset                 → Mid-conversation reset
 ```
 
 ### Flow 6: Code Review Loop (Quality Gate)
@@ -248,31 +322,18 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 ### Flow 7: Deep Security Audit
 
 ```
-1. /deep_code_audit          → Full manual audit
-2. Define scope (FULL/FEATURE/DIFF)
-3. Phase 1: Static analysis (Detective)
-4. Phase 2: Data flow tracing (Graph)
-5. Phase 3: Spec vs Code (Auditor)
-6. Phase 4: Logic probing (Judge)
-7. Phase 5: Quality checks (Architect)
-8. Generate report → .jstar/audit_report.md
-9. Fix CRITICAL/HIGH issues
+# Use the security-audit skill (auto-loaded when "security audit" mentioned)
+1. Define scope (FULL/FEATURE/DIFF)
+2. Phase 1: Static analysis (Detective)
+3. Phase 2: Data flow tracing (Graph)
+4. Phase 3: Spec vs Code (Auditor)
+5. Phase 4: Logic probing (Judge)
+6. Phase 5: Quality checks (Architect)
+7. Generate report → .jstar/audit_report.md
+8. Fix CRITICAL/HIGH issues
 ```
 
-### Flow 8: Parallel Development (Multi-Agent)
-
-```
-1. /git_worktree             → Choose [NEW] to create agent environment
-2. Name the agent            → e.g., "feat-auth", "agent-2"
-3. Copy .env + DB            → Migrate context to worktree
-4. pnpm install              → Bootstrap dependencies
-5. Work in isolation         → Each agent has own directory
-6. /review_code              → Quality check in worktree
-7. Merge to main             → Via PR or direct merge
-8. /git_worktree             → Choose [KILL] to teardown
-```
-
-### Flow 9: Documentation Sync
+### Flow 8: Documentation Sync
 
 ```
 1. Complete code changes     → Feature/fix is done
@@ -298,10 +359,6 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 - Itself (repeat until all FRs done)
 - `/finalize_build` (when MUS complete)
 
-### `/init_smart_ops` Generates:
-- `/smart_start` (GitHub-linked work sessions)
-- `/smart_complete` (marks work done in GitHub)
-
 ### `/spawn-jstar-code-review` Enables:
 - `/review_code` (requires J-Star to be set up)
 
@@ -309,9 +366,7 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 - `/prime_agent` — Reload context anytime
 - `/agent_reset` — Reset when agent misbehaves
 - `/continue_build` — Resume in any session
-- `/analyze_component` — Audit any component
 - `/spawn_task` — Break down complex features
-- `/deep_code_audit` — Security/quality audit
 - `/sync_docs` — Update documentation
 - `/escalate` — Hand off to fresh agent
 - `/migrate` — Move context to new session
@@ -319,10 +374,59 @@ This document explains how all workflows in `.agent/workflows/` relate to each o
 
 ---
 
+## Available Skills Reference
+
+These skills are auto-loaded based on context. Location: `.agent/skills/`
+
+| Skill | Description | Trigger Context |
+|-------|-------------|-----------------|
+| `code-review` | J-Star review on staged changes | "review code", before commits |
+| `component-analysis` | Audit React/TS components | "analyze component", refactoring |
+| `git-worktree` | Parallel agent development | "worktree", multi-agent |
+| `github-ops` | Issue sync, projects, labels | GitHub automation, issue creation |
+| `google-trends` | Automated trend research | YouTube research, topic validation |
+| `nextjs-standards` | Coding standards + templates | Next.js projects (auto-detect) |
+| `security-audit` | Deep manual security audit | Security review, major releases |
+| `seo-ready` | SEO optimization for Next.js | SEO, metadata, sitemap |
+| `spawn-task` | Generate detailed task prompts | Complex features |
+| `sync-docs` | Update feature documentation | After code changes |
+| `youtube-pipeline` | Full YouTube production pipeline | Video creation, scripting |
+| `vercel-ai-sdk` | AI SDK patterns for Next.js | Building AI features |
+
+---
+
+## Quick Reference
+
+| I want to... | Use this |
+|--------------|----------|
+| **Start a new project** | `/init_vibecode_genesis_v3` |
+| **Design the UI** | `/init_vibecode_design` |
+| **Build the foundation** | `/build_vibecode_project_v3` |
+| **Resume work (new session)** | `/continue_build` |
+| **Finish and hand off** | `/finalize_build` |
+| Join an existing project | `/reverse_genesis` |
+| Reload agent context | `/prime_agent` |
+| Reset misbehaving agent | `/agent_reset` |
+| Break down a complex feature | `/spawn_task` |
+| Run code review | `/review_code` (requires J-Star) |
+| Add code review tooling | `/spawn-jstar-code-review` |
+| Deep security audit | Use `security-audit` skill |
+| Analyze a component | Use `component-analysis` skill |
+| SEO optimization | Use `seo-ready` skill |
+| Set up parallel agents | Use `git-worktree` skill |
+| Bulk sync GitHub issues | Use `github-ops` skill |
+| Update documentation | `/sync_docs` |
+| Hand off to fresh agent | `/escalate` |
+| Move to new chat | `/migrate` |
+| YouTube video pipeline | Use `youtube-pipeline` skill |
+| Learn AI SDK patterns | `/Vercel Ai SDK` |
+
+---
+
 ## Stack-Specific Notes
 
 ### Universal Shell Script (All Stacks)
-The Smart Ops system now uses a **universal shell script** (`scripts/smart-ops.sh`) that works with ANY project stack:
+The Smart Ops system (via `github-ops` skill) uses **shell scripts** that work with ANY project stack:
 
 | Stack | Works? | Notes |
 |-------|--------|-------|
@@ -331,7 +435,7 @@ The Smart Ops system now uses a **universal shell script** (`scripts/smart-ops.s
 | Rust | ✅ | Shell script works |
 | Go | ✅ | Shell script works |
 | Any Unix/Linux/macOS | ✅ | Native bash |
-| Windows | ✅ | Git Bash, WSL, or PowerShell with bash |
+| Windows | ✅ | Git Bash, WSL, or PowerShell |
 
 ### J-Star Code Reviewer (All Languages)
 The J-Star Reviewer works with **any programming language**:
@@ -343,74 +447,3 @@ The J-Star Reviewer works with **any programming language**:
 | Rust | ✅ | Full support |
 | Go | ✅ | Full support |
 | Any other | ✅ | Uses Gemini for analysis |
-
----
-
-## Timeline Tracking (GitHub Projects)
-
-The Smart Ops system supports **timeline tracking** for GitHub Projects:
-
-### Features:
-- **Start Date** — Automatically set when moving to "In Progress"
-- **Target Date** — Set when creating issues (based on estimate)
-- **Duration Tracking** — Calculate actual vs estimated time on completion
-- **Timeline View** — View in GitHub Projects Roadmap/Timeline
-
-### Setup:
-1. In your GitHub Project, create these fields:
-   - "Start Date" (Date type)
-   - "Target Date" (Date type)
-2. Run `/init_smart_ops` to detect field IDs
-3. The script will auto-populate dates
-
-### Workflow:
-```
-/smart_start → "How long will this take?" → Sets target date
-... work ...
-/smart_complete → Calculates actual duration → Reports variance
-```
-
-### Commands:
-```bash
-# Create issue with 7-day estimate
-./scripts/smart-ops.sh create "Fix login" "Description" "bug" 7
-
-# Set target date manually
-./scripts/smart-ops.sh target <item_id> 14           # 14 days from now
-./scripts/smart-ops.sh target <item_id> 2024-12-25   # Specific date
-
-# Set start date
-./scripts/smart-ops.sh started <item_id>              # Today
-./scripts/smart-ops.sh started <item_id> 2024-12-10  # Specific date
-```
-
----
-
-## Quick Reference
-
-| I want to... | Use this workflow |
-|--------------|-------------------|
-| **Start a new project** | `/init_vibecode_genesis_v3` |
-| **Design the UI** | `/init_vibecode_design` |
-| **Build the foundation** | `/build_vibecode_project_v3` |
-| **Resume work (new session)** | `/continue_build` |
-| **Finish and hand off** | `/finalize_build` |
-| Join an existing project | `/reverse_genesis` |
-| Reload agent context | `/prime_agent` |
-| Reset misbehaving agent | `/agent_reset` |
-| Set up GitHub automation | `/init_smart_ops` |
-| Start a GitHub-linked task | `/smart_start` |
-| End a GitHub-linked task | `/smart_complete` |
-| Break down a complex feature | `/spawn_task` |
-| Audit a component | `/analyze_component` |
-| Run code review | `/review_code` |
-| Add code review tooling | `/spawn-jstar-code-review` |
-| Deep security audit | `/deep_code_audit` |
-| Update documentation | `/sync_docs` |
-| Set up parallel agents | `/git_worktree` |
-| Build full project autonomously | `/vibe-orchestrator` |
-| Hand off to fresh agent | `/escalate` |
-| Move to new chat | `/migrate` |
-| Learn AI SDK patterns | `/Vercel Ai SDK` |
-| Set issue target date | `./scripts/smart-ops.sh target` |
-| Track work duration | `/smart_complete` (auto) |

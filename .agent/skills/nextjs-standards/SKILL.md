@@ -118,6 +118,8 @@ src/
 
 ## Styling (Tailwind v4)
 
+> **Why Tailwind for AI Reliability:** Tailwind colocates styles with UI in a single file. Unlike separate `.css` files, AI agents see the complete context (logic + styles + structure) without jumping between files. This dramatically reduces hallucinations and context fragmentation.
+
 ```css
 @import "tailwindcss";
 
