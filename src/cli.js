@@ -4,7 +4,21 @@ import pc from 'picocolors';
 import figlet from 'figlet';
 import fs from 'fs-extra';
 import path from 'path';
-import { PATHS, getWorkflows, getSkills, copyToDestination, copySpecificWorkflows, copySpecificSkills } from './utils.js';
+import {
+  PATHS,
+  getWorkflows,
+  getSkills,
+  copyToDestination,
+  copySpecificWorkflows,
+  copySpecificSkills,
+  copyAllWorkflows,
+  copyAllSkills,
+  copyAgentReadme,
+  copyAgentYamls,
+  copyLegacyManual,
+  isGitHubAvailable,
+  disableGitHub
+} from './utils.js';
 
 const program = new Command();
 
@@ -81,6 +95,12 @@ async function init() {
   console.log(pc.dim(`\nSpawning resources into: ${destRoot}...\n`));
 
   try {
+    // Check if we can fetch from GitHub
+    const useGitHub = isGitHubAvailable();
+    if (useGitHub) {
+      console.log(pc.cyan('📡 Fetching latest files from GitHub...\n'));
+    }
+
     // 1. Handle .agent Folder
     if (response.components.includes('agent')) {
       const agentDest = path.join(destRoot, '.agent');
@@ -94,18 +114,13 @@ async function init() {
 
       // Handle Workflows
       if (response.workflowMode === 'all') {
-        console.log(pc.green('✔ Copying all workflows...'));
-        await fs.copy(PATHS.workflows, workflowsDest);
+        console.log(pc.green('✔ Downloading all workflows...'));
+        await copyAllWorkflows(workflowsDest, false);
       } else if (response.workflowMode === 'no-legacy') {
-        console.log(pc.green('✔ Copying workflows (skipping legacy)...'));
-        await fs.copy(PATHS.workflows, workflowsDest);
-        // Remove LEGACY folder if it exists in the copy
-        const legacyPath = path.join(workflowsDest, 'LEGACY');
-        if (await fs.pathExists(legacyPath)) {
-          await fs.remove(legacyPath);
-        }
+        console.log(pc.green('✔ Downloading workflows (skipping legacy)...'));
+        await copyAllWorkflows(workflowsDest, true);
       } else if (response.workflowMode === 'custom' && response.selectedWorkflows) {
-        console.log(pc.green(`✔ Copying ${response.selectedWorkflows.length} specific workflows...`));
+        console.log(pc.green(`✔ Downloading ${response.selectedWorkflows.length} specific workflows...`));
         await copySpecificWorkflows(response.selectedWorkflows, workflowsDest);
       }
 
@@ -114,34 +129,29 @@ async function init() {
 
       // Handle Skills
       if (response.skillMode === 'all') {
-        console.log(pc.green('✔ Copying all skills...'));
-        await fs.copy(PATHS.skills, skillsDest);
+        console.log(pc.green('✔ Downloading all skills...'));
+        await copyAllSkills(skillsDest);
       } else if (response.skillMode === 'custom' && response.selectedSkills) {
-        console.log(pc.green(`✔ Copying ${response.selectedSkills.length} specific skills...`));
+        console.log(pc.green(`✔ Downloading ${response.selectedSkills.length} specific skills...`));
         await copySpecificSkills(response.selectedSkills, skillsDest);
       }
 
       // Copy .agent/README.md if it exists
-      const readmeSrc = path.join(PATHS.agent, 'README.md');
-      if (await fs.pathExists(readmeSrc)) {
-        await fs.copy(readmeSrc, path.join(agentDest, 'README.md'));
-      }
+      await copyAgentReadme(path.join(agentDest, 'README.md'));
     }
 
     // 2. Handle Agent YAMLs
     if (response.components.includes('yamls')) {
-      console.log(pc.green('✔ Copying Agent YAMLs...'));
+      console.log(pc.green('✔ Downloading Agent YAMLs...'));
       const yamlDest = path.join(destRoot, 'VibeCode-Agents');
-      await fs.ensureDir(yamlDest);
-      await fs.copy(PATHS.agentsYaml, yamlDest);
+      await copyAgentYamls(yamlDest);
     }
 
     // 3. Handle Legacy Manual
     if (response.components.includes('legacy')) {
-      console.log(pc.green('✔ Copying Legacy Protocols...'));
+      console.log(pc.green('✔ Downloading Legacy Protocols...'));
       const legacyDest = path.join(destRoot, 'Legacy-Protocols');
-      await fs.ensureDir(legacyDest);
-      await fs.copy(PATHS.manual, legacyDest);
+      await copyLegacyManual(legacyDest);
     }
 
     console.log(pc.magenta('\n✨ VibeCode Protocol Suite spawned successfully! ✨'));
