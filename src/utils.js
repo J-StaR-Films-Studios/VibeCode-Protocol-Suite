@@ -56,7 +56,7 @@ export async function copyToDestination(source, dest) {
 export async function copySpecificWorkflows(selectedWorkflows, destFolder) {
   // Ensure dest folder exists
   await fs.ensureDir(destFolder);
-  
+
   for (const workflow of selectedWorkflows) {
     const src = path.join(PATHS.workflows, workflow);
     const dest = path.join(destFolder, workflow);

@@ -88,7 +88,10 @@ async function init() {
       const skillsDest = path.join(agentDest, 'skills');
 
       await fs.ensureDir(agentDest);
-      
+
+      // Ensure workflows destination directory exists
+      await fs.ensureDir(workflowsDest);
+
       // Handle Workflows
       if (response.workflowMode === 'all') {
         console.log(pc.green('✔ Copying all workflows...'));
@@ -99,12 +102,15 @@ async function init() {
         // Remove LEGACY folder if it exists in the copy
         const legacyPath = path.join(workflowsDest, 'LEGACY');
         if (await fs.pathExists(legacyPath)) {
-            await fs.remove(legacyPath);
+          await fs.remove(legacyPath);
         }
       } else if (response.workflowMode === 'custom' && response.selectedWorkflows) {
         console.log(pc.green(`✔ Copying ${response.selectedWorkflows.length} specific workflows...`));
         await copySpecificWorkflows(response.selectedWorkflows, workflowsDest);
       }
+
+      // Ensure skills destination directory exists
+      await fs.ensureDir(skillsDest);
 
       // Handle Skills
       if (response.skillMode === 'all') {
@@ -114,11 +120,11 @@ async function init() {
         console.log(pc.green(`✔ Copying ${response.selectedSkills.length} specific skills...`));
         await copySpecificSkills(response.selectedSkills, skillsDest);
       }
-      
+
       // Copy .agent/README.md if it exists
       const readmeSrc = path.join(PATHS.agent, 'README.md');
       if (await fs.pathExists(readmeSrc)) {
-         await fs.copy(readmeSrc, path.join(agentDest, 'README.md'));
+        await fs.copy(readmeSrc, path.join(agentDest, 'README.md'));
       }
     }
 
@@ -126,6 +132,7 @@ async function init() {
     if (response.components.includes('yamls')) {
       console.log(pc.green('✔ Copying Agent YAMLs...'));
       const yamlDest = path.join(destRoot, 'VibeCode-Agents');
+      await fs.ensureDir(yamlDest);
       await fs.copy(PATHS.agentsYaml, yamlDest);
     }
 
@@ -133,16 +140,17 @@ async function init() {
     if (response.components.includes('legacy')) {
       console.log(pc.green('✔ Copying Legacy Protocols...'));
       const legacyDest = path.join(destRoot, 'Legacy-Protocols');
+      await fs.ensureDir(legacyDest);
       await fs.copy(PATHS.manual, legacyDest);
     }
 
     console.log(pc.magenta('\n✨ VibeCode Protocol Suite spawned successfully! ✨'));
     console.log(pc.white(`\nNext steps:`));
     if (response.components.includes('agent')) {
-        console.log(pc.gray(`1. If using Cursor/Windsurf, the .agent folder is ready.`));
-        console.log(pc.gray(`2. Try typing '/init_vibecode_genesis' in your IDE.`));
+      console.log(pc.gray(`1. If using Cursor/Windsurf, the .agent folder is ready.`));
+      console.log(pc.gray(`2. Try typing '/init_vibecode_genesis' in your IDE.`));
     }
-    
+
   } catch (error) {
     console.error(pc.red('Error during installation:'), error);
   }
