@@ -2,6 +2,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,79 +27,72 @@ export const PATHS = {
 };
 
 /**
- * Fetch file content from GitHub API (which works better than raw.githubusercontent.com in some networks)
- * Handles large files by detecting when content is truncated
+ * Delay utility for rate limiting
+ * @param {number} ms - Milliseconds to delay
+ * @returns {Promise<void>}
+ */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch file content from raw.githubusercontent.com
+ * This avoids GitHub API rate limits (60 requests/hour for unauthenticated)
+ * Raw URLs have much higher limits and work better for file downloads
  * @param {string} relativePath - Path relative to repo root
  * @param {number} retries - Number of retries (default: 3)
  * @returns {Promise<string>} File content
  */
 export async function fetchFromGitHub(relativePath, retries = 3) {
-  // Use GitHub API to get file content (base64 encoded)
-  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${relativePath}?ref=${GITHUB_BRANCH}`;
+  // Use raw GitHub content URL to avoid API rate limits
+  const rawUrl = `${GITHUB_RAW_URL}/${relativePath}`;
 
   return new Promise((resolve, reject) => {
     const attempt = (remainingRetries) => {
-      https.get(apiUrl, {
+      const req = https.get(rawUrl, {
         timeout: 15000,
         headers: {
-          'User-Agent': 'vibesuite-cli',
-          'Accept': 'application/vnd.github.v3+json'
+          'User-Agent': 'vibesuite-cli'
         }
       }, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
-          try {
-            if (res.statusCode === 200) {
-              const json = JSON.parse(data);
-              if (json.content) {
-                // Decode base64 content (handle both single line and multi-line base64)
-                const base64Content = json.content.replace(/\n/g, '');
-                const content = Buffer.from(base64Content, 'base64').toString('utf8');
-                resolve(content);
-              } else if (json.download_url) {
-                // Large files may not have content inline - this is a limitation
-                // For now, reject so fallback to local files can occur
-                reject(new Error('File too large for API fetch'));
-              } else {
-                reject(new Error('No content in response'));
-              }
-            } else if (res.statusCode === 404) {
-              reject(new Error('File not found (404)'));
-            } else if (res.statusCode === 403) {
-              reject(new Error('GitHub API rate limit exceeded (403)'));
-            } else {
-              reject(new Error(`HTTP ${res.statusCode}`));
-            }
-          } catch (e) {
-            reject(new Error('Failed to parse response'));
+          if (res.statusCode === 200) {
+            resolve(data);
+          } else if (res.statusCode === 404) {
+            reject(new Error('File not found (404)'));
+          } else if (res.statusCode === 403) {
+            reject(new Error('Access forbidden (403)'));
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}`));
           }
         });
-      }).on('error', (err) => {
+      });
+
+      req.on('error', async (err) => {
         if (remainingRetries > 0) {
           setTimeout(() => attempt(remainingRetries - 1), 2000);
         } else {
-          reject(err);
+          // Fallback to curl if Node https fails (e.g. proxy/network issues)
+          try {
+            // Ensure we use a timeout with curl too
+            const { stdout } = await execAsync(`curl -sL --max-time 15 "${rawUrl}"`);
+            if (stdout) resolve(stdout);
+            else reject(err);
+          } catch (curlErr) {
+            reject(err); // Return original error if curl also fails
+          }
         }
+      });
+
+      req.on('timeout', () => {
+        req.destroy(new Error('Request timed out'));
       });
     };
 
     attempt(retries);
   });
-}
-
-function handleResponse(res, resolve, reject) {
-  if (res.statusCode === 200) {
-    let data = '';
-    res.on('data', chunk => data += chunk);
-    res.on('end', () => resolve(data));
-  } else if (res.statusCode === 404) {
-    reject(new Error(`File not found (404)`));
-  } else if (res.statusCode === 403) {
-    reject(new Error(`GitHub rate limit exceeded or access forbidden (403)`));
-  } else {
-    reject(new Error(`HTTP ${res.statusCode}`));
-  }
 }
 
 /**
@@ -156,12 +153,15 @@ export async function downloadFromGitHub(relativePath, destPath) {
 
 /**
  * Recursively download a directory from GitHub
+ * Uses API only for directory listings, raw URLs for file downloads
+ * Includes rate limiting delays to avoid hitting API limits
  * @param {string} relativePath - Path relative to repo root
  * @param {string} destPath - Local destination path
  * @param {Function} filter - Optional filter function for items
+ * @param {number} delayMs - Delay between file downloads in ms (default: 100)
  * @returns {Promise<number>} Number of files downloaded
  */
-export async function downloadDirectoryFromGitHub(relativePath, destPath, filter = null) {
+export async function downloadDirectoryFromGitHub(relativePath, destPath, filter = null, delayMs = 100) {
   let count = 0;
 
   try {
@@ -173,10 +173,16 @@ export async function downloadDirectoryFromGitHub(relativePath, destPath, filter
       if (item.type === 'file') {
         const fileDest = path.join(destPath, item.name);
         const success = await downloadFromGitHub(item.path, fileDest);
-        if (success) count++;
+        if (success) {
+          count++;
+          // Add small delay between file downloads to be nice to GitHub
+          if (delayMs > 0) {
+            await delay(delayMs);
+          }
+        }
       } else if (item.type === 'dir') {
         const subDirDest = path.join(destPath, item.name);
-        const subCount = await downloadDirectoryFromGitHub(item.path, subDirDest, filter);
+        const subCount = await downloadDirectoryFromGitHub(item.path, subDirDest, filter, delayMs);
         count += subCount;
       }
     }
