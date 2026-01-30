@@ -1,4 +1,5 @@
 ---
+name: vercel-ai-sdk
 description: Learn how to build reliable ai agents using vercel AI SDK and Next.js
 ---
 
