@@ -135,6 +135,34 @@ Understanding the difference:
 | `/reverse_genesis` | Onboards to existing codebase | Joining an existing project | `docs/autopsy_report.md` |
 | `/spawn-jstar-code-review` | Adds J-Star Reviewer to project | Any project needing code review | `.jstar/` directory, `.env.example` |
 
+### 🎯 Mode Workflows (Specialized Roles)
+
+Inspired by KiloCode's mode system, these workflows provide specialized capabilities:
+
+| Workflow | Purpose | When to Use |
+|----------|---------|-------------|
+| `/orchestrator` | **Coordinate complex projects** — Delegate to sub-agents | Multi-step projects requiring coordination across domains |
+| `/architect` | **Plan and design** — Create technical specifications | Before implementation, designing systems, breaking down complex problems |
+| `/code` | **Write and refactor code** — Full implementation access | Implementing features, fixing bugs, creating files |
+| `/debug` | **Diagnose issues** — Systematic problem solving | Troubleshooting errors, investigating bugs, analyzing failures |
+| `/ask` | **Explain and analyze** — Answer questions without changes | Understanding concepts, analyzing code, getting recommendations |
+| `/review` | **Code review** — Quality assessment before commits | Reviewing changes, pre-commit checks, PR analysis |
+
+**Mode Workflow Relationships:**
+```
+/orchestrator ──► delegates to ──► /architect, /code, /debug, /review
+     │
+     └── monitors completion ◄─── .done files in docs/tasks/completed/
+
+/architect ──► designs ──► hands off to ──► /code
+
+/code ──► implements ──► requests review ──► /review
+
+/debug ──► investigates ──► hands off fix to ──► /code
+
+/ask ──► analyzes ──► can switch to ──► /code (if implementation needed)
+```
+
 ### 🔄 Daily Development (Run Often)
 
 | Workflow | Purpose | When to Use |
@@ -148,9 +176,12 @@ Understanding the difference:
 | Workflow | Purpose | When to Use | Requires |
 |----------|---------|-------------|----------|
 | `/review_code` | Run J-Star review loop | Before commits, quality gates | **J-Star CLI** (`jstar` command) |
+| `/review` | Manual code review | Pre-commit review without J-Star | Nothing — pure AI review |
 
 > [!TIP]
 > For **deep security audits**, use the `security-audit` skill instead of searching for `/deep_code_audit`. See [Skill Migrations](#-skill-migrations) below.
+> 
+> For **manual code review** without J-Star CLI setup, use `/review` mode workflow.
 
 ### 🆘 Recovery & Migration
 
@@ -343,6 +374,30 @@ The `LEGACY/` folder contains workflows that are:
 5. Verify file paths         → Ensure links work
 ```
 
+### Flow 9: Multi-Agent Orchestration (NEW)
+
+For complex projects requiring coordination across multiple specialized agents:
+
+```
+1. /orchestrator             → Break down project into subtasks
+2. Create task files         → docs/tasks/pending/TASK-XXX.md
+3. Spawn sub-agents          → User opens new chats with task assignments
+4. Sub-agents work           → Each completes their task, creates .done file
+5. Review completions        → Return to orchestrator, review all .done files
+6. Synthesize results        → Orchestrator creates summary report
+7. Iterate if needed         → Create new tasks for remaining work
+```
+
+**Task Folder Structure:**
+```
+docs/tasks/
+├── pending/           # Tasks waiting to be worked on
+├── in-progress/       # Tasks currently being worked on
+└── completed/         # Tasks that are done
+    ├── TASK-001.md    # Original task file
+    └── TASK-001.done  # Completion marker with summary
+```
+
 ---
 
 ## Parent-Child Relationships
@@ -404,11 +459,17 @@ These skills are auto-loaded based on context. Location: `.agent/skills/`
 | **Build the foundation** | `/build_vibecode_project_v3` |
 | **Resume work (new session)** | `/continue_build` |
 | **Finish and hand off** | `/finalize_build` |
+| **Coordinate multi-agent work** | `/orchestrator` |
+| **Plan before coding** | `/architect` |
+| **Implement features** | `/code` |
+| **Debug issues** | `/debug` |
+| **Ask questions** | `/ask` |
+| **Review code (manual)** | `/review` |
 | Join an existing project | `/reverse_genesis` |
 | Reload agent context | `/prime_agent` |
 | Reset misbehaving agent | `/agent_reset` |
 | Break down a complex feature | `/spawn_task` |
-| Run code review | `/review_code` (requires J-Star) |
+| Run code review (J-Star) | `/review_code` (requires J-Star) |
 | Add code review tooling | `/spawn-jstar-code-review` |
 | Deep security audit | Use `security-audit` skill |
 | Analyze a component | Use `component-analysis` skill |
