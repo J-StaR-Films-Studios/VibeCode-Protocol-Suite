@@ -50,7 +50,7 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
   return new Promise((resolve, reject) => {
     const attempt = (remainingRetries) => {
       const req = https.get(rawUrl, {
-        timeout: 15000,
+        timeout: 120000, // 2 minutes
         headers: {
           'User-Agent': 'vibesuite-cli'
         }
@@ -77,11 +77,12 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
           // Fallback to curl if Node https fails (e.g. proxy/network issues)
           try {
             // Ensure we use a timeout with curl too
-            const { stdout } = await execAsync(`curl -sL --max-time 15 "${rawUrl}"`);
+            const { stdout } = await execAsync(`curl -sL --max-time 120 "${rawUrl}"`);
             if (stdout) resolve(stdout);
             else reject(err);
           } catch (curlErr) {
-            reject(err); // Return original error if curl also fails
+            // Reject with both errors so we know what happened
+            reject(new Error(`HTTPS: ${err.message} | Curl: ${curlErr.message}`));
           }
         }
       });
@@ -161,7 +162,7 @@ export async function downloadFromGitHub(relativePath, destPath) {
  * @param {number} delayMs - Delay between file downloads in ms (default: 100)
  * @returns {Promise<number>} Number of files downloaded
  */
-export async function downloadDirectoryFromGitHub(relativePath, destPath, filter = null, delayMs = 100) {
+export async function downloadDirectoryFromGitHub(relativePath, destPath, filter = null, delayMs = 250) {
   let count = 0;
 
   try {
