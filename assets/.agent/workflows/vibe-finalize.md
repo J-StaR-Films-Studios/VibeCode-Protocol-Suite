@@ -162,7 +162,7 @@ NEXTAUTH_SECRET=
    - FR-005: [Title]
 3. Set up CI/CD (if not done)
 
-To continue development: `/continue_build`
+To continue development: `/vibe-continueBuild`
 ```
 
 ---
@@ -202,6 +202,7 @@ See `docs/Builder_Handoff_Report.md` for full details.
 3. Deploy to Vercel/Railway/etc.
 
 **To continue (Future features):**
-Run `/continue_build` in a new session.
+Run `/vibe-continueBuild` in a new session.
 
 *Vibes immaculate. Ship it.* 🚀"
+

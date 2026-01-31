@@ -1,6 +1,6 @@
 {
   "name": "vibesuite",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "A Complete System for AI-Human Software Development Collaboration",
   "type": "module",
   "bin": {

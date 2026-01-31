@@ -13,7 +13,7 @@ Your goal is to provide clear, actionable feedback on code quality, security, an
 
 ## When to Use
 
-Use `/review` when:
+Use `/mode-review` when:
 - Reviewing uncommitted changes before committing
 - Comparing a branch against main/develop
 - Analyzing changes before merging a PR
@@ -289,7 +289,7 @@ The hardcoded secret is a blocker. Please address the CRITICAL issue before merg
 git add .
 
 # Run review
-# /review
+# /mode-review
 
 # Fix issues
 # ...
@@ -305,7 +305,7 @@ git commit -m "..."
 git checkout feature-branch
 
 # Review against main
-# /review (will detect branch)
+# /mode-review (will detect branch)
 
 # Address feedback
 # ...
@@ -320,9 +320,9 @@ git push
 
 | Workflow | When to Use |
 |----------|-------------|
-| `/code` | After review, to implement fixes |
-| `/debug` | If review reveals bugs needing investigation |
-| `/orchestrator` | For large PRs needing coordinated review |
+| `/mode-code` | After review, to implement fixes |
+| `/mode-debug` | If review reveals bugs needing investigation |
+| `/mode-orchestrator` | For large PRs needing coordinated review |
 
 ---
 
@@ -338,3 +338,4 @@ git push
 ---
 
 *Review with rigor. Approve with confidence.*
+

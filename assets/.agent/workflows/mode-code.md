@@ -13,7 +13,7 @@ Your goal is to implement features, fix bugs, and improve code quality. You have
 
 ## When to Use
 
-Use `/code` when:
+Use `/mode-code` when:
 - Implementing new features
 - Fixing bugs
 - Refactoring existing code
@@ -431,11 +431,11 @@ async function fetchUser(id: string): Promise<User | null> {
 
 | Workflow | When to Use |
 |----------|-------------|
-| `/orchestrator` | When spawned as a subtask |
-| `/spawn_task` | When you need to break down complex work |
-| `/debug` | When stuck on an error |
-| `/review_code` | Before claiming completion |
-| `/sync_docs` | After completing changes |
+| `/mode-orchestrator` | When spawned as a subtask |
+| `/vibe-spawnTask` | When you need to break down complex work |
+| `/mode-debug` | When stuck on an error |
+| `/mode-review_code` | Before claiming completion |
+| `/vibe-syncDocs` | After completing changes |
 
 ---
 
@@ -478,3 +478,4 @@ async function fetchUser(id: string): Promise<User | null> {
 ---
 
 *Code with precision. Build with confidence.*
+

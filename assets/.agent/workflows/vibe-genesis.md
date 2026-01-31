@@ -184,7 +184,8 @@ The Blueprints are drawn. The Roadmap is set.
 - Verification script
 
 **What's next?**
-- **Option A (Recommended for UI projects):** Run `/init_vibecode_design` to define the visual system first.
-- **Option B (Code-first):** Run `/build_vibecode_project_v3` to start scaffolding.
+- **Option A (Recommended for UI projects):** Run `/vibe-design` to define the visual system first.
+- **Option B (Code-first):** Run `/vibe-build` to start scaffolding.
 
 *Code with the flow. Code with the vibe.*"
+

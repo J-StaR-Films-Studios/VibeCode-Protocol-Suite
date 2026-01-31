@@ -44,7 +44,7 @@ Understanding the difference:
 │  ╚══════════╤════════════╝                │                                  │
 │             ▼                             │                                  │
 │  ┌───────────────────────┐                │                                  │
-│  │ /init_vibecode_design │ (Optional)     │                                  │
+│  │ /vibe-design │ (Optional)     │                                  │
 │  │ • Design system       │                │                                  │
 │  │ • UI mockups          │                │                                  │
 │  └───────────┬───────────┘                │                                  │
@@ -63,7 +63,7 @@ Understanding the difference:
 │  │                    CONTINUATION LOOP (New Sessions)                     │  │
 │  │                                                                         │  │
 │  │   ╔═════════════════════╗      ╔═════════════════════╗                  │  │
-│  │   ║   /continue_build   ║─────►║   /finalize_build   ║                  │  │
+│  │   ║   /vibe-continueBuild   ║─────►║   /vibe-finalize   ║                  │  │
 │  │   ║                     ║      ║                     ║                  │  │
 │  │   ║ • Context recovery  ║      ║ • Full verification ║                  │  │
 │  │   ║ • Verify prev work  ║      ║ • Acceptance audit  ║                  │  │
@@ -77,7 +77,7 @@ Understanding the difference:
 │  │              ▼                                                          │  │
 │  │   ┌─────────────────────────────────────────────────────────┐           │  │
 │  │   │ IF AGENT MISBEHAVES:                                    │           │  │
-│  │   │    /agent_reset ──► /prime_agent ──► resume work        │           │  │
+│  │   │    /agent_reset ──► /vibe-primeAgent ──► resume work        │           │  │
 │  │   └─────────────────────────────────────────────────────────┘           │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
@@ -98,19 +98,19 @@ Understanding the difference:
 ## V3 Workflow Lifecycle (RECOMMENDED)
 
 ```
-/init_vibecode_genesis_v3    → Creates PRD, Issues (1 per FR), Guidelines template
+/vibe-genesis    → Creates PRD, Issues (1 per FR), Guidelines template
          ↓
-/init_vibecode_design        → (Optional) Creates mockups
+/vibe-design        → (Optional) Creates mockups
          ↓
-/build_vibecode_project_v3   → Scaffolds, builds MUS with verification gates
+/vibe-build   → Scaffolds, builds MUS with verification gates
          ↓
 [New chat or continue]
          ↓
-/continue_build              → Picks up where last agent left off
+/vibe-continueBuild              → Picks up where last agent left off
          ↓
-(repeat /continue_build)
+(repeat /vibe-continueBuild)
          ↓
-/finalize_build              → Final verification, handoff report
+/vibe-finalize              → Final verification, handoff report
 ```
 
 **Key V3 Features:**
@@ -127,11 +127,11 @@ Understanding the difference:
 
 | Workflow | Purpose | When to Use | Generates |
 |----------|---------|-------------|-----------|
-| `/init_vibecode_genesis_v3` | **V3 Architect** — Plans with templates | Starting new project | PRD, Issues (1 per FR), Guidelines template |
-| `/init_vibecode_design` | The Designer — Creates visual system | After Genesis, before Build | `docs/design/design-system.html`, `docs/mockups/*.html` |
-| `/build_vibecode_project_v3` | **V3 Builder** — With verification gates | After Genesis (and optionally Design) | Project structure, MUS features with verification |
-| `/continue_build` | **Resume work** — Post-build sessions | New chat after initial build | Continues from incomplete FRs |
-| `/finalize_build` | **Final handoff** — Verification + report | When MUS complete | `docs/Builder_Handoff_Report.md` |
+| `/vibe-genesis` | **V3 Architect** — Plans with templates | Starting new project | PRD, Issues (1 per FR), Guidelines template |
+| `/vibe-design` | The Designer — Creates visual system | After Genesis, before Build | `docs/design/design-system.html`, `docs/mockups/*.html` |
+| `/vibe-build` | **V3 Builder** — With verification gates | After Genesis (and optionally Design) | Project structure, MUS features with verification |
+| `/vibe-continueBuild` | **Resume work** — Post-build sessions | New chat after initial build | Continues from incomplete FRs |
+| `/vibe-finalize` | **Final handoff** — Verification + report | When MUS complete | `docs/Builder_Handoff_Report.md` |
 | `/reverse_genesis` | Onboards to existing codebase | Joining an existing project | `docs/autopsy_report.md` |
 | `/spawn-jstar-code-review` | Adds J-Star Reviewer to project | Any project needing code review | `.jstar/` directory, `.env.example` |
 
@@ -141,47 +141,47 @@ Inspired by KiloCode's mode system, these workflows provide specialized capabili
 
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
-| `/orchestrator` | **Coordinate complex projects** — Delegate to sub-agents | Multi-step projects requiring coordination across domains |
-| `/architect` | **Plan and design** — Create technical specifications | Before implementation, designing systems, breaking down complex problems |
-| `/code` | **Write and refactor code** — Full implementation access | Implementing features, fixing bugs, creating files |
-| `/debug` | **Diagnose issues** — Systematic problem solving | Troubleshooting errors, investigating bugs, analyzing failures |
-| `/ask` | **Explain and analyze** — Answer questions without changes | Understanding concepts, analyzing code, getting recommendations |
-| `/review` | **Code review** — Quality assessment before commits | Reviewing changes, pre-commit checks, PR analysis |
+| `/mode-orchestrator` | **Coordinate complex projects** — Delegate to sub-agents | Multi-step projects requiring coordination across domains |
+| `/mode-architect` | **Plan and design** — Create technical specifications | Before implementation, designing systems, breaking down complex problems |
+| `/mode-code` | **Write and refactor code** — Full implementation access | Implementing features, fixing bugs, creating files |
+| `/mode-debug` | **Diagnose issues** — Systematic problem solving | Troubleshooting errors, investigating bugs, analyzing failures |
+| `/mode-ask` | **Explain and analyze** — Answer questions without changes | Understanding concepts, analyzing code, getting recommendations |
+| `/mode-review` | **Code review** — Quality assessment before commits | Reviewing changes, pre-commit checks, PR analysis |
 
 **Mode Workflow Relationships:**
 ```
-/orchestrator ──► delegates to ──► /architect, /code, /debug, /review
+/mode-orchestrator ──► delegates to ──► /mode-architect, /mode-code, /mode-debug, /mode-review
      │
      └── monitors completion ◄─── .done files in docs/tasks/completed/
 
-/architect ──► designs ──► hands off to ──► /code
+/mode-architect ──► designs ──► hands off to ──► /mode-code
 
-/code ──► implements ──► requests review ──► /review
+/mode-code ──► implements ──► requests review ──► /mode-review
 
-/debug ──► investigates ──► hands off fix to ──► /code
+/mode-debug ──► investigates ──► hands off fix to ──► /mode-code
 
-/ask ──► analyzes ──► can switch to ──► /code (if implementation needed)
+/mode-ask ──► analyzes ──► can switch to ──► /mode-code (if implementation needed)
 ```
 
 ### 🔄 Daily Development (Run Often)
 
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
-| `/prime_agent` | Load project context | Start of session, before complex work |
-| `/spawn_task` | Create detailed task prompt | Complex features needing breakdown |
-| `/sync_docs` | Update feature documentation | After completing code changes |
+| `/vibe-primeAgent` | Load project context | Start of session, before complex work |
+| `/vibe-spawnTask` | Create detailed task prompt | Complex features needing breakdown |
+| `/vibe-syncDocs` | Update feature documentation | After completing code changes |
 
 ### 🔍 Code Quality & Review
 
 | Workflow | Purpose | When to Use | Requires |
 |----------|---------|-------------|----------|
-| `/review_code` | Run J-Star review loop | Before commits, quality gates | **J-Star CLI** (`jstar` command) |
-| `/review` | Manual code review | Pre-commit review without J-Star | Nothing — pure AI review |
+| `/mode-review_code` | Run J-Star review loop | Before commits, quality gates | **J-Star CLI** (`jstar` command) |
+| `/mode-review` | Manual code review | Pre-commit review without J-Star | Nothing — pure AI review |
 
 > [!TIP]
 > For **deep security audits**, use the `security-audit` skill instead of searching for `/deep_code_audit`. See [Skill Migrations](#-skill-migrations) below.
 > 
-> For **manual code review** without J-Star CLI setup, use `/review` mode workflow.
+> For **manual code review** without J-Star CLI setup, use `/mode-review` mode workflow.
 
 ### 🆘 Recovery & Migration
 
@@ -218,14 +218,14 @@ These are **shell script commands**, not slash-command workflows.
 > [!IMPORTANT]
 > If you haven't run `/init_smart_ops`, the commands `smart_start` and `smart_complete` will not exist.
 
-### `/review_code` vs Deep Security Audit
+### `/mode-review_code` vs Deep Security Audit
 
 | Tool | Automation | When to Use | Requires |
 |------|------------|-------------|----------|
-| `/review_code` | ✅ Automated (J-Star CLI) | Before commits, quick PR checks | `jstar` CLI installed |
+| `/mode-review_code` | ✅ Automated (J-Star CLI) | Before commits, quick PR checks | `jstar` CLI installed |
 | `security-audit` skill | ❌ Manual phases | Major releases, security reviews | Nothing — pure AI protocol |
 
-**Use `/review_code` for:**
+**Use `/mode-review_code` for:**
 - Daily commits
 - PR quality gates
 - Quick feedback loops
@@ -269,9 +269,9 @@ The `LEGACY/` folder contains workflows that are:
 
 | Legacy Workflow | Status | Replacement |
 |-----------------|--------|-------------|
-| `build_vibecode_project.md` | Superseded | `/build_vibecode_project_v3` |
-| `build_vibecode_project_v2.md` | Superseded | `/build_vibecode_project_v3` |
-| `init_vibecode_genesis_v1.md` | Superseded | `/init_vibecode_genesis_v3` |
+| `build_vibecode_project.md` | Superseded | `/vibe-build` |
+| `build_vibecode_project_v2.md` | Superseded | `/vibe-build` |
+| `init_vibecode_genesis_v1.md` | Superseded | `/vibe-genesis` |
 | `analyze_component.md` | Migrated | `component-analysis` skill |
 | `deep_code_audit.md` | Migrated | `security-audit` skill |
 | `git_worktree.md` | Migrated | `git-worktree` skill |
@@ -293,11 +293,11 @@ The `LEGACY/` folder contains workflows that are:
 ### Flow 1: New Project (V3 - RECOMMENDED)
 
 ```
-1. /init_vibecode_genesis_v3 → Get PRD, Issues (1 per FR), Templates
-2. /init_vibecode_design     → Get design system, mockups (UI projects)
-3. /build_vibecode_project_v3 → Scaffold and build MUS with verification
-4. /continue_build           → Resume in new sessions
-5. /finalize_build           → Final verification and handoff
+1. /vibe-genesis → Get PRD, Issues (1 per FR), Templates
+2. /vibe-design     → Get design system, mockups (UI projects)
+3. /vibe-build → Scaffold and build MUS with verification
+4. /vibe-continueBuild           → Resume in new sessions
+5. /vibe-finalize           → Final verification and handoff
 6. /spawn-jstar-code-review  → Add code review tooling (optional)
 ```
 
@@ -305,26 +305,26 @@ The `LEGACY/` folder contains workflows that are:
 
 ```
 1. /reverse_genesis          → Generate autopsy report
-2. /prime_agent              → Load coding/styling context
+2. /vibe-primeAgent              → Load coding/styling context
 3. Start working             → Reference the autopsy for architecture
 ```
 
 ### Flow 3: Daily Work Session
 
 ```
-1. /prime_agent              → (Optional) Refresh context
+1. /vibe-primeAgent              → (Optional) Refresh context
 2. ... do the work ...
-3. /review_code              → Check code quality before commit
+3. /mode-review_code              → Check code quality before commit
 4. git commit                → Commit clean code
 ```
 
 ### Flow 4: Complex Feature Implementation
 
 ```
-1. /spawn_task               → Generate detailed task prompt
+1. /vibe-spawnTask               → Generate detailed task prompt
 2. ... implement phases ...
-3. /review_code              → Quality gate before merge
-4. /sync_docs                → Update feature documentation
+3. /mode-review_code              → Quality gate before merge
+4. /vibe-syncDocs                → Update feature documentation
 ```
 
 ### Flow 5: Agent Recovery
@@ -344,7 +344,7 @@ The `LEGACY/` folder contains workflows that are:
 
 ```
 1. git add .                 → Stage changes
-2. /review_code              → Run J-Star review
+2. /mode-review_code              → Run J-Star review
 3. Fix P0/P1 issues          → Address critical findings
 4. Repeat until clean        → Max 3 loops
 5. Commit                    → Code is ready
@@ -368,7 +368,7 @@ The `LEGACY/` folder contains workflows that are:
 
 ```
 1. Complete code changes     → Feature/fix is done
-2. /sync_docs                → Identify impacted docs
+2. /vibe-syncDocs                → Identify impacted docs
 3. UPDATE or CREATE          → Modify existing or add new doc
 4. Follow template           → Consistent structure
 5. Verify file paths         → Ensure links work
@@ -379,50 +379,76 @@ The `LEGACY/` folder contains workflows that are:
 For complex projects requiring coordination across multiple specialized agents:
 
 ```
-1. /orchestrator             → Break down project into subtasks
-2. Create task files         → docs/tasks/pending/TASK-XXX.md
-3. Spawn sub-agents          → User opens new chats with task assignments
-4. Sub-agents work           → Each completes their task, creates .done file
-5. Review completions        → Return to orchestrator, review all .done files
-6. Synthesize results        → Orchestrator creates summary report
-7. Iterate if needed         → Create new tasks for remaining work
+1. /mode-orchestrator             → Break down project into subtasks
+2. Create session folder       → docs/tasks/orchestrator-sessions/[ID]/
+3. Create task files           → pending/01_subtask_name.task.md
+4. Spawn sub-agents            → User opens new chats with task assignments
+5. Sub-agents work             → Each completes their task, creates .result.md file
+6. Review completions          → Return to orchestrator, review all .result.md files
+7. Synthesize results          → Orchestrator creates summary report
+8. Iterate if needed           → Create new tasks for remaining work
 ```
+
+**Session ID Format:** `orch-YYYYMMDD-HHMMSS` (e.g., `orch-20250131-143022`)
 
 **Task Folder Structure:**
 ```
 docs/tasks/
-├── pending/           # Tasks waiting to be worked on
-├── in-progress/       # Tasks currently being worked on
-└── completed/         # Tasks that are done
-    ├── TASK-001.md    # Original task file
-    └── TASK-001.done  # Completion marker with summary
+└── orchestrator-sessions/           # All orchestrator sessions
+    ├── orch-20250131-143022/       # Session 1 (timestamp-based ID)
+    │   ├── master_plan.md          # Overview of all tasks
+    │   ├── pending/                # Tasks waiting to start
+    │   │   └── 01_genesis.task.md
+    │   ├── in-progress/            # Tasks currently being worked on
+    │   └── completed/              # Finished tasks with .result.md files
+    │       ├── 01_genesis.result.md
+    │       └── 02_design.result.md
+    ├── orch-20250131-154511/       # Session 2
+    └── ...
 ```
+
+**Task File Naming Convention:**
+- **Pending:** `01_subtask_name.task.md` (sequential number + descriptive name)
+- **Completed:** `01_subtask_name.result.md` (same name, `.result.md` extension)
+
+**Workflow:**
+1. **Orchestrator** creates tasks in `pending/` with `.task.md` extension
+2. **User** spawns sub-agents in new chats, assigning specific task files
+3. **Sub-agents** work on tasks and create `.result.md` files in `completed/`
+4. **Orchestrator** reviews all `.result.md` files and synthesizes results
+5. **Iterate** if needed by creating new tasks
+
+**Key Features:**
+- **Isolation:** Each orchestrator session has its own folder
+- **Continuity:** Easy to resume by referencing session ID
+- **Organization:** All related tasks grouped under one session
+- **Tracking:** `master_plan.md` shows progress across all tasks
 
 ---
 
 ## Parent-Child Relationships
 
-### `/init_vibecode_genesis_v3` is Parent of:
-- `/init_vibecode_design` (uses the PRD)
-- `/build_vibecode_project_v3` (uses PRD, Guidelines, Issues)
+### `/vibe-genesis` is Parent of:
+- `/vibe-design` (uses the PRD)
+- `/vibe-build` (uses PRD, Guidelines, Issues)
 
-### `/build_vibecode_project_v3` is Parent of:
-- `/continue_build` (resumes incomplete FRs)
-- `/finalize_build` (generates final handoff)
+### `/vibe-build` is Parent of:
+- `/vibe-continueBuild` (resumes incomplete FRs)
+- `/vibe-finalize` (generates final handoff)
 
-### `/continue_build` Loops Into:
+### `/vibe-continueBuild` Loops Into:
 - Itself (repeat until all FRs done)
-- `/finalize_build` (when MUS complete)
+- `/vibe-finalize` (when MUS complete)
 
 ### `/spawn-jstar-code-review` Enables:
-- `/review_code` (requires J-Star to be set up)
+- `/mode-review_code` (requires J-Star to be set up)
 
 ### Standalone (No Parent):
-- `/prime_agent` — Reload context anytime
+- `/vibe-primeAgent` — Reload context anytime
 - `/agent_reset` — Reset when agent misbehaves
-- `/continue_build` — Resume in any session
-- `/spawn_task` — Break down complex features
-- `/sync_docs` — Update documentation
+- `/vibe-continueBuild` — Resume in any session
+- `/vibe-spawnTask` — Break down complex features
+- `/vibe-syncDocs` — Update documentation
 - `/escalate` — Hand off to fresh agent
 - `/migrate` — Move context to new session
 - `/reverse_genesis` — Onboard to existing project
@@ -454,29 +480,29 @@ These skills are auto-loaded based on context. Location: `.agent/skills/`
 
 | I want to... | Use this |
 |--------------|----------|
-| **Start a new project** | `/init_vibecode_genesis_v3` |
-| **Design the UI** | `/init_vibecode_design` |
-| **Build the foundation** | `/build_vibecode_project_v3` |
-| **Resume work (new session)** | `/continue_build` |
-| **Finish and hand off** | `/finalize_build` |
-| **Coordinate multi-agent work** | `/orchestrator` |
-| **Plan before coding** | `/architect` |
-| **Implement features** | `/code` |
-| **Debug issues** | `/debug` |
-| **Ask questions** | `/ask` |
-| **Review code (manual)** | `/review` |
+| **Start a new project** | `/vibe-genesis` |
+| **Design the UI** | `/vibe-design` |
+| **Build the foundation** | `/vibe-build` |
+| **Resume work (new session)** | `/vibe-continueBuild` |
+| **Finish and hand off** | `/vibe-finalize` |
+| **Coordinate multi-agent work** | `/mode-orchestrator` |
+| **Plan before coding** | `/mode-architect` |
+| **Implement features** | `/mode-code` |
+| **Debug issues** | `/mode-debug` |
+| **Ask questions** | `/mode-ask` |
+| **Review code (manual)** | `/mode-review` |
 | Join an existing project | `/reverse_genesis` |
-| Reload agent context | `/prime_agent` |
+| Reload agent context | `/vibe-primeAgent` |
 | Reset misbehaving agent | `/agent_reset` |
-| Break down a complex feature | `/spawn_task` |
-| Run code review (J-Star) | `/review_code` (requires J-Star) |
+| Break down a complex feature | `/vibe-spawnTask` |
+| Run code review (J-Star) | `/mode-review_code` (requires J-Star) |
 | Add code review tooling | `/spawn-jstar-code-review` |
 | Deep security audit | Use `security-audit` skill |
 | Analyze a component | Use `component-analysis` skill |
 | SEO optimization | Use `seo-ready` skill |
 | Set up parallel agents | Use `git-worktree` skill |
 | Bulk sync GitHub issues | Use `github-ops` skill |
-| Update documentation | `/sync_docs` |
+| Update documentation | `/vibe-syncDocs` |
 | Hand off to fresh agent | `/escalate` |
 | Move to new chat | `/migrate` |
 | YouTube video pipeline | Use `youtube-pipeline` skill |
@@ -508,3 +534,4 @@ The J-Star Reviewer works with **any programming language**:
 | Rust | ✅ | Full support |
 | Go | ✅ | Full support |
 | Any other | ✅ | Uses Gemini for analysis |
+

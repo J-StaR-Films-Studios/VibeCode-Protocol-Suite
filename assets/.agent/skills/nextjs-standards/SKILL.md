@@ -12,7 +12,7 @@ description: Comprehensive coding standards, verification protocols, and templat
 - Starting a new Next.js project
 - Before any TypeScript/React file edit
 - When context seems lost mid-session
-- After `/agent_reset` or `/prime_agent`
+- After `/agent_reset` or `/vibe-primeAgent`
 
 ---
 
@@ -191,3 +191,4 @@ git diff                      # See what changed
 git checkout -- <file>        # Revert specific file
 git stash                     # Save and revert all
 ```
+

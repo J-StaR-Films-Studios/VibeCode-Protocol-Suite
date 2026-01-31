@@ -221,7 +221,7 @@ pnpm build  # Production build
 - [ ] FR-XXX: [Title]
 - [ ] FR-XXX: [Title]
 
-To continue development, run `/continue_build` in a new session.
+To continue development, run `/vibe-continueBuild` in a new session.
 ```
 
 ---
@@ -243,8 +243,8 @@ To continue development, run `/continue_build` in a new session.
 See `docs/Builder_Handoff_Report.md` for details.
 
 **To continue:**
-- `/continue_build` — Implement remaining features
-- `/finalize_build` — Generate final handoff
+- `/vibe-continueBuild` — Implement remaining features
+- `/vibe-finalize` — Generate final handoff
 
 *Vibe complete. Code deployed.*"
 
@@ -268,3 +268,4 @@ git stash
 # Restore later
 git stash pop
 ```
+

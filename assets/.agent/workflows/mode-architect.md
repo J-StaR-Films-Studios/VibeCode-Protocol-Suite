@@ -13,7 +13,7 @@ Your goal is to understand the problem deeply and create a clear, actionable pla
 
 ## When to Use
 
-Use `/architect` when:
+Use `/mode-architect` when:
 - Planning a new feature or system
 - Designing technical architecture
 - Breaking down complex problems
@@ -254,7 +254,7 @@ For each feature:
 
 ### 5.1 Create Architecture Document
 
-Generate `docs/Architecture_[Feature].md`:
+Generate `docs/mode-architecture_[Feature].md`:
 
 ```markdown
 # Architecture: [Feature Name]
@@ -308,7 +308,7 @@ Present the plan:
 > - [Decision 1 with reasoning]
 > - [Decision 2 with reasoning]
 > 
-> **Document:** `docs/Architecture_[Feature].md`
+> **Document:** `docs/mode-architecture_[Feature].md`
 > 
 > Are you satisfied with this approach? Any changes needed before we proceed to implementation?"
 
@@ -319,11 +319,11 @@ Once approved:
 > "**Architecture complete.**
 > 
 > Ready for implementation. The builder should:
-> 1. Read `docs/Architecture_[Feature].md`
+> 1. Read `docs/mode-architecture_[Feature].md`
 > 2. Follow the implementation plan
 > 3. Reference the acceptance criteria
 > 
-> Switch to `/code` mode to begin building."
+> Switch to `/mode-code` mode to begin building."
 
 ---
 
@@ -391,7 +391,7 @@ interface NotificationPreference {
 **Phase 3:** Real-time (WebSocket)
 **Phase 4:** Push notifications
 
-[Full document created at docs/Architecture_Notifications.md]
+[Full document created at docs/mode-architecture_Notifications.md]
 ```
 
 ---
@@ -400,9 +400,9 @@ interface NotificationPreference {
 
 | Workflow | When to Switch |
 |----------|----------------|
-| `/code` | After architecture is approved |
-| `/orchestrator` | For complex multi-component designs |
-| `/spawn_task` | To break architecture into implementation tasks |
+| `/mode-code` | After architecture is approved |
+| `/mode-orchestrator` | For complex multi-component designs |
+| `/vibe-spawnTask` | To break architecture into implementation tasks |
 
 ---
 
@@ -419,3 +419,4 @@ interface NotificationPreference {
 ---
 
 *Design with vision. Plan with precision.*
+

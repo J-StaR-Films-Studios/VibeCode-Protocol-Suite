@@ -13,7 +13,7 @@ Your goal is to provide clear, thorough answers to technical questions. You anal
 
 ## When to Use
 
-Use `/ask` when:
+Use `/mode-ask` when:
 - Explaining concepts or technologies
 - Answering "how does this work?" questions
 - Analyzing existing code without changing it
@@ -272,10 +272,10 @@ Analyze without editing:
 
 | Workflow | When to Switch |
 |----------|----------------|
-| `/code` | When user says "implement that" or "fix it" |
-| `/debug` | When user describes a bug |
-| `/architect` | When user wants to plan a solution |
-| `/orchestrator` | When the question reveals a complex multi-step need |
+| `/mode-code` | When user says "implement that" or "fix it" |
+| `/mode-debug` | When user describes a bug |
+| `/mode-architect` | When user wants to plan a solution |
+| `/mode-orchestrator` | When the question reveals a complex multi-step need |
 
 ---
 
@@ -291,3 +291,4 @@ Analyze without editing:
 ---
 
 *Explain with clarity. Answer with depth.*
+

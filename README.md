@@ -63,17 +63,29 @@ Everything you need is in the **`.agent/`** folder.
 ```
 .agent/
 ├── workflows/          # Executable step-by-step workflows
-│   ├── init_vibecode_genesis.md    # Start new projects
-│   ├── init_vibecode_design.md     # Generate design systems
-│   ├── build_vibecode_project.md   # Execute the build
-│   ├── reverse_genesis.md          # Onboard to existing codebases
-│   ├── orchestrate.md              # Parallel agent orchestration
+│   ├── vibe-genesis.md         # Start new projects (V3)
+│   ├── vibe-design.md          # Generate design systems
+│   ├── vibe-build.md           # Execute the build
+│   ├── vibe-continueBuild.md   # Resume work in new sessions
+│   ├── vibe-finalize.md        # Final verification & handoff
+│   ├── vibe-spawnTask.md       # Break down complex features
+│   ├── vibe-syncDocs.md        # Update documentation
+│   ├── vibe-primeAgent.md      # Load project context
+│   ├── reverse_genesis.md      # Onboard to existing codebases
+│   │
+│   ├── mode-orchestrator.md    # Coordinate multi-agent projects
+│   ├── mode-architect.md       # Plan and design systems
+│   ├── mode-code.md            # Write and refactor code
+│   ├── mode-debug.md           # Diagnose issues
+│   ├── mode-ask.md             # Explain and analyze
+│   ├── mode-review.md          # Code review (manual)
 │   └── ...
 │
 └── skills/             # Implicit capabilities (auto-activated)
     ├── prime-agent/        # Load project context
     ├── code-review/        # J-Star code review loop
     ├── security-audit/     # Deep security analysis
+    ├── nextjs-standards/   # Next.js coding standards
     ├── vercel-ai-sdk/      # AI SDK reference docs
     ├── youtube-pipeline/   # Video production workflow
     └── ...
@@ -81,15 +93,33 @@ Everything you need is in the **`.agent/`** folder.
 
 ### Key Workflows
 
+#### 🏗️ Project Lifecycle (V3)
 | Slash Command | What It Does |
 |---------------|--------------|
-| `/init_vibecode_genesis` | Architect a new project with plans, docs, and roadmap |
-| `/init_vibecode_design` | Generate design system and page mockups |
-| `/build_vibecode_project_v2` | Scaffold and build the project (pnpm/PowerShell safe) |
+| `/vibe-genesis` | Architect a new project with PRD, Issues, and Guidelines |
+| `/vibe-design` | Generate design system and page mockups |
+| `/vibe-build` | Scaffold and build the project with verification gates |
+| `/vibe-continueBuild` | Resume work in a new chat session |
+| `/vibe-finalize` | Final verification and handoff report |
 | `/reverse_genesis` | Onboard AI to an existing codebase |
-| `/orchestrate` | Autonomous multi-agent project builder |
-| `/vibe-orchestrator` | Master brain protocol for complex orchestration |
-| `/review_code` | Run J-Star code review loop |
+
+#### 🎯 Mode Workflows (Specialized Roles)
+| Slash Command | What It Does |
+|---------------|--------------|
+| `/mode-orchestrator` | Coordinate complex multi-agent projects |
+| `/mode-architect` | Plan and design technical systems |
+| `/mode-code` | Write and refactor code |
+| `/mode-debug` | Diagnose and troubleshoot issues |
+| `/mode-ask` | Explain and analyze without making changes |
+| `/mode-review` | Manual code review before commits |
+
+#### 🔄 Daily Development
+| Slash Command | What It Does |
+|---------------|--------------|
+| `/vibe-primeAgent` | Load project context at start of session |
+| `/vibe-spawnTask` | Break down complex features into tasks |
+| `/vibe-syncDocs` | Update documentation after code changes |
+| `/mode-review_code` | Run J-Star automated code review |
 | `/escalate` | Generate escalation report when stuck |
 | `/migrate` | Transfer context to a new chat session |
 
@@ -140,21 +170,57 @@ The **`Deep_Source_Prompts/`** folder contains the **reference documentation** a
 
 ## 🎯 The VibeCode Philosophy
 
-- **Structured Collaboration**: Clear roles for different AI agents (Orchestrator, Builder, In-IDE Assistant, Design Agent)
+- **Structured Collaboration**: Clear roles for different AI agents (Genesis, Designer, Builder, Orchestrator, Architect, Coder, Debugger)
 - **End-to-End Workflows**: From project genesis to debugging escalations
 - **Documentation-Driven**: Every project gets proper docs, issues, and roadmaps
+- **Multi-Agent Orchestration**: Coordinate specialized agents for complex projects
 - **Scalable**: Works for tiny scripts or enterprise applications
+
+## 🆕 What's New (V3 + Mode Workflows)
+
+### V3 Project Workflows
+The V3 workflows introduce verification gates, TypeScript strict mode, and better continuation support:
+- `tsc --noEmit` after every file edit
+- 1:1 Feature Requirement ↔ Issue correlation
+- Templates from `nextjs-standards` skill
+- Seamless session continuation with `/vibe-continueBuild`
+
+### Mode Workflows (KiloCode-Inspired)
+New specialized mode workflows for targeted tasks:
+- `/mode-orchestrator` - Coordinate multi-agent projects with session-based task management
+- `/mode-architect` - Plan and design before coding
+- `/mode-code` - Focused implementation mode
+- `/mode-debug` - Systematic troubleshooting
+- `/mode-ask` - Analysis without changes
+- `/mode-review` - Quality assessment
+
+### Naming Convention
+- **`vibe-*`** workflows = Project lifecycle (genesis, design, build, continue, finalize)
+- **`mode-*`** workflows = Specialized agent modes (orchestrator, architect, code, debug, ask, review)
+- **Skills** = Reusable capabilities with auto-loading (in `.agent/skills/`)
 
 ---
 
 ## 👥 Your AI Team
 
-| Role | Responsibility | When to Use |
-|------|---------------|-------------|
-| **AI Orchestrator** | Strategic planning, architecture, documentation | Project planning, debugging complex issues |
-| **Builder Agent** | Initial code implementation | Taking Orchestrator plans and building the foundation |
-| **In-IDE Assistant** | Tactical coding, refactoring | Writing functions, fixing bugs in existing code |
-| **Design Agent** | Visual design, UI/UX | Creating mockups, design systems |
+### Project Workflows (Vibe Series)
+| Role | Workflow | Responsibility | When to Use |
+|------|----------|---------------|-------------|
+| **Genesis** | `/vibe-genesis` | Strategic planning, PRD creation, issue generation | Starting new projects |
+| **Designer** | `/vibe-design` | Visual design systems, UI mockups | Before implementation |
+| **Builder** | `/vibe-build` | Initial code implementation with verification | Building the foundation |
+| **Continuer** | `/vibe-continueBuild` | Resume work in new sessions | Continuing after breaks |
+| **Finalizer** | `/vibe-finalize` | Verification, handoff reports | Project completion |
+
+### Mode Workflows (Specialized Modes)
+| Role | Workflow | Responsibility | When to Use |
+|------|----------|---------------|-------------|
+| **Orchestrator** | `/mode-orchestrator` | Coordinate multi-agent projects, delegate tasks | Complex projects requiring coordination |
+| **Architect** | `/mode-architect` | Technical planning, system design | Before coding complex features |
+| **Coder** | `/mode-code` | Write, refactor, implement code | Day-to-day coding tasks |
+| **Debugger** | `/mode-debug` | Systematic issue diagnosis | When bugs are hard to find |
+| **Analyst** | `/mode-ask` | Explain, analyze, recommend | Understanding code without changes |
+| **Reviewer** | `/mode-review` | Code quality assessment | Pre-commit quality gates |
 
 ---
 
@@ -165,14 +231,32 @@ The **`Deep_Source_Prompts/`** folder contains the **reference documentation** a
 # 1. Copy .agent folder to your project root
 cp -r path/to/VibeCode-Protocol-Suite/.agent ./
 
-# 2. Start a new project
-# Type: /init_vibecode_genesis
+# 2. Start a new project (V3 Workflow)
+# Type: /vibe-genesis
 
 # 3. Generate design system
-# Type: /init_vibecode_design
+# Type: /vibe-design
 
 # 4. Build the project
-# Type: /build_vibecode_project_v2
+# Type: /vibe-build
+
+# 5. Continue in new sessions
+# Type: /vibe-continueBuild
+
+# 6. Finalize and handoff
+# Type: /vibe-finalize
+```
+
+### For Complex Multi-Agent Projects
+```bash
+# Use the orchestrator to coordinate multiple specialized agents
+# Type: /mode-orchestrator
+
+# The orchestrator will:
+# 1. Break down your project into subtasks
+# 2. Create task files in docs/tasks/orchestrator-sessions/[ID]/
+# 3. Guide you to spawn sub-agents for each task
+# 4. Track completion and synthesize results
 ```
 
 ### For Browser AI Users

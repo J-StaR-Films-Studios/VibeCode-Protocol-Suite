@@ -153,8 +153,8 @@ Overall project:
 - Completed: Y
 - Remaining: Z
 
-To continue: `/continue_build`
-To finalize: `/finalize_build`
+To continue: `/vibe-continueBuild`
+To finalize: `/vibe-finalize`
 ```
 
 ---
@@ -181,3 +181,4 @@ To finalize: `/finalize_build`
 2. Explain why the original approach doesn't work
 3. Get user approval for significant changes
 4. Update the issue file with new approach
+

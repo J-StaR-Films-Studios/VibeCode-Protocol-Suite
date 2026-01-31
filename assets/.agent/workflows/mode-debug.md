@@ -13,7 +13,7 @@ Your goal is to identify the root cause of bugs and issues through systematic an
 
 ## When to Use
 
-Use `/debug` when:
+Use `/mode-debug` when:
 - Troubleshooting errors or exceptions
 - Investigating unexpected behavior
 - Diagnosing performance issues
@@ -370,10 +370,10 @@ watch: state.users.length
 
 | Workflow | When to Use |
 |----------|-------------|
-| `/code` | After diagnosis, for implementing the fix |
-| `/orchestrator` | When bug spans multiple components |
-| `/review_code` | After fix, to ensure quality |
-| `/spawn_task` | For complex bugs needing deep investigation |
+| `/mode-code` | After diagnosis, for implementing the fix |
+| `/mode-orchestrator` | When bug spans multiple components |
+| `/mode-review_code` | After fix, to ensure quality |
+| `/vibe-spawnTask` | For complex bugs needing deep investigation |
 
 ---
 
@@ -404,3 +404,4 @@ watch: state.users.length
 ---
 
 *Debug with discipline. Fix with confidence.*
+
