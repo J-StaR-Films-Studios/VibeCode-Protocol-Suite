@@ -1,6 +1,6 @@
 {
   "name": "vibesuite",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "A Complete System for AI-Human Software Development Collaboration",
   "type": "module",
   "bin": {
@@ -9,9 +9,7 @@
   "files": [
     "bin",
     "src",
-    ".agent",
-    "VibeCode-Agents (e.g Kilo-code)",
-    "Legacy (Manual Method)"
+    "assets"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

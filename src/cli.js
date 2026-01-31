@@ -16,8 +16,10 @@ import {
   copyAgentReadme,
   copyAgentYamls,
   copyLegacyManual,
-  isGitHubAvailable,
-  disableGitHub
+  updateWorkflows,
+  updateSkills,
+  updateAgentYamls,
+  updateLegacyManual
 } from './utils.js';
 
 const program = new Command();
@@ -95,11 +97,8 @@ async function init() {
   console.log(pc.dim(`\nSpawning resources into: ${destRoot}...\n`));
 
   try {
-    // Check if we can fetch from GitHub
-    const useGitHub = isGitHubAvailable();
-    if (useGitHub) {
-      console.log(pc.cyan('📡 Fetching latest files from GitHub...\n'));
-    }
+    // 0. Install from local assets
+    console.log(pc.cyan('📦 Installing from local bundle...\n'));
 
     // 1. Handle .agent Folder
     if (response.components.includes('agent')) {
@@ -173,5 +172,46 @@ program
   .command('init')
   .description('Initialize VibeCode in the current directory')
   .action(init);
+
+program
+  .command('update')
+  .description('Update resources from GitHub (Overwrites local files)')
+  .action(async () => {
+    console.log(pc.magenta('📡 VibeSuite Update Protocol'));
+
+    const response = await prompts([
+      {
+        type: 'multiselect',
+        name: 'components',
+        message: 'What components do you want to update from GitHub?',
+        choices: [
+          { title: '.agent (Workflows & Skills)', value: 'agent', selected: true },
+          { title: 'Agent YAMLs', value: 'yamls' },
+          { title: 'Legacy Protocols', value: 'legacy' }
+        ],
+        hint: '- Space to select. Return to submit'
+      }
+    ]);
+
+    if (!response.components || response.components.length === 0) return;
+
+    const destRoot = process.cwd();
+
+    if (response.components.includes('agent')) {
+      const agentDest = path.join(destRoot, '.agent');
+      await updateWorkflows(path.join(agentDest, 'workflows'));
+      await updateSkills(path.join(agentDest, 'skills'));
+    }
+
+    if (response.components.includes('yamls')) {
+      await updateAgentYamls(path.join(destRoot, 'VibeCode-Agents'));
+    }
+
+    if (response.components.includes('legacy')) {
+      await updateLegacyManual(path.join(destRoot, 'Legacy-Protocols'));
+    }
+
+    console.log(pc.magenta('\n✨ Resources updated from GitHub successfully!'));
+  });
 
 program.parse();

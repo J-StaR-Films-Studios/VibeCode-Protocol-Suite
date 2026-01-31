@@ -197,6 +197,11 @@ This is a living system! If you discover improvements:
 
 ---
 
+## 🙏 Acknowledgements
+
+- **UI/UX Pro Max Skill**: Shoutout to [Next Level Builder](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) for the incredible UI/UX skill. We've integrated it directly into VibeSuite to bring premium design intelligence to your workflows.
+- **Remotion Skill**: Official skill from [Remotion](https://github.com/remotion-dev/skills/tree/main/skills/remotion) for programmatic video creation in React.
+
 ## 📄 License
 
 This repository contains workflow protocols and prompts. Feel free to use, modify, and share. The goal is to improve AI-human collaboration for everyone.

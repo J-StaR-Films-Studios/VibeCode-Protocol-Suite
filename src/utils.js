@@ -7,6 +7,10 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+// Reduced timeout to fail fast on bad connections
+const FETCH_TIMEOUT = 10000;
+const CURL_TIMEOUT = 10;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 // Root of the package - utils.js is in src/, so package root is one level up from src/
@@ -19,12 +23,56 @@ const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHU
 
 export const PATHS = {
   root: PACKAGE_ROOT,
-  agent: path.join(PACKAGE_ROOT, '.agent'),
-  workflows: path.join(PACKAGE_ROOT, '.agent', 'workflows'),
-  skills: path.join(PACKAGE_ROOT, '.agent', 'skills'),
-  agentsYaml: path.join(PACKAGE_ROOT, 'VibeCode-Agents (e.g Kilo-code)'),
-  manual: path.join(PACKAGE_ROOT, 'Legacy (Manual Method)'),
+  assets: path.join(PACKAGE_ROOT, 'assets'),
+  agent: path.join(PACKAGE_ROOT, 'assets', '.agent'),
+  workflows: path.join(PACKAGE_ROOT, 'assets', '.agent', 'workflows'),
+  skills: path.join(PACKAGE_ROOT, 'assets', '.agent', 'skills'),
+  agentsYaml: path.join(PACKAGE_ROOT, 'assets', 'VibeCode-Agents'),
+  manual: path.join(PACKAGE_ROOT, 'assets', 'Legacy'),
 };
+
+/**
+ * Copies bundled resources from the npm package to the target directory.
+ * No network required!
+ */
+export async function installResources(targetDir) {
+  // Path to the 'assets' folder inside your vibesuite package
+  const sourceDir = PATHS.assets;
+
+  try {
+    // Check if source exists (sanity check for your dev environment)
+    if (!fs.existsSync(sourceDir)) {
+      throw new Error(`Critical Error: Source assets not found at ${sourceDir}`);
+    }
+
+    // Copying everything (Workflows, Skills, YAMLs)
+    // We copy specific subfolders to match the expected structure in the user's project
+
+    // 1. .agent folder
+    await fs.copy(PATHS.agent, path.join(targetDir, '.agent'), {
+      overwrite: true,
+      errorOnExist: false,
+    });
+
+    // 2. VibeCode-Agents
+    await fs.copy(PATHS.agentsYaml, path.join(targetDir, 'VibeCode-Agents'), {
+      overwrite: true,
+      errorOnExist: false,
+    });
+
+    // 3. Legacy Protocols
+    await fs.copy(PATHS.manual, path.join(targetDir, 'Legacy-Protocols'), {
+      overwrite: true,
+      errorOnExist: false,
+    });
+
+    console.log("✨ VibeSuite resources deployed successfully from local bundle!");
+    return true;
+  } catch (err) {
+    console.error("❌ Installation failed:", err.message);
+    return false;
+  }
+}
 
 /**
  * Delay utility for rate limiting
@@ -50,7 +98,7 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
   return new Promise((resolve, reject) => {
     const attempt = (remainingRetries) => {
       const req = https.get(rawUrl, {
-        timeout: 120000, // 2 minutes
+        timeout: FETCH_TIMEOUT,
         headers: {
           'User-Agent': 'vibesuite-cli'
         }
@@ -77,7 +125,7 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
           // Fallback to curl if Node https fails (e.g. proxy/network issues)
           try {
             // Ensure we use a timeout with curl too
-            const { stdout } = await execAsync(`curl -sL --max-time 120 "${rawUrl}"`);
+            const { stdout } = await execAsync(`curl -sL --max-time ${CURL_TIMEOUT} "${rawUrl}"`);
             if (stdout) resolve(stdout);
             else reject(err);
           } catch (curlErr) {
@@ -148,6 +196,18 @@ export async function downloadFromGitHub(relativePath, destPath) {
     return true;
   } catch (error) {
     console.error(`Failed to download ${relativePath}: ${error.message}`);
+
+    // Fail fast on network errors
+    const isNetworkError = error.message.includes('ECONNRESET') ||
+      error.message.includes('timed out') ||
+      error.message.includes('Curl') ||
+      error.message.includes('ETIMEDOUT');
+
+    if (isNetworkError && useGitHub) {
+      logGitHubError(`Network instability detected (${error.message}). Disabling GitHub fetch.`);
+      disableGitHub();
+    }
+
     return false;
   }
 }
@@ -169,6 +229,7 @@ export async function downloadDirectoryFromGitHub(relativePath, destPath, filter
     const items = await fetchDirectoryListing(relativePath);
 
     for (const item of items) {
+      if (!useGitHub) break; // Allow aborting if we disabled GitHub midway
       if (filter && !filter(item)) continue;
 
       if (item.type === 'file') {
@@ -225,41 +286,18 @@ export function logGitHubError(message) {
 }
 
 export async function getWorkflows() {
-  if (useGitHub) {
-    try {
-      const items = await fetchDirectoryListing('.agent/workflows');
-      return items
-        .filter(item => item.type === 'file' && item.name.endsWith('.md'))
-        .map(item => item.name);
-    } catch (error) {
-      logGitHubError(`GitHub fetch failed: ${error.message}`);
-      disableGitHub();
-    }
-  }
-
-  // Fallback to local
+  // Always read from local package assets
   try {
     const files = await fs.readdir(PATHS.workflows);
     return files.filter(f => f.endsWith('.md'));
   } catch (error) {
+    console.warn("Could not read local workflows:", error.message);
     return [];
   }
 }
 
 export async function getSkills() {
-  if (useGitHub) {
-    try {
-      const items = await fetchDirectoryListing('.agent/skills');
-      return items
-        .filter(item => item.type === 'dir')
-        .map(item => item.name);
-    } catch (error) {
-      logGitHubError(`GitHub fetch failed: ${error.message}`);
-      disableGitHub();
-    }
-  }
-
-  // Fallback to local
+  // Always read from local package assets
   try {
     const files = await fs.readdir(PATHS.skills);
     const skills = [];
@@ -271,6 +309,7 @@ export async function getSkills() {
     }
     return skills;
   } catch (error) {
+    console.warn("Could not read local skills:", error.message);
     return [];
   }
 }
@@ -290,23 +329,15 @@ export async function copySpecificWorkflows(selectedWorkflows, destFolder) {
   await fs.ensureDir(destFolder);
 
   for (const workflow of selectedWorkflows) {
-    if (useGitHub) {
-      try {
-        const success = await downloadFromGitHub(
-          `.agent/workflows/${workflow}`,
-          path.join(destFolder, workflow)
-        );
-        if (success) continue;
-      } catch (error) {
-        logGitHubError(`GitHub fetch failed: ${error.message}`);
-        disableGitHub();
-      }
-    }
-
-    // Fallback to local
     const src = path.join(PATHS.workflows, workflow);
     const dest = path.join(destFolder, workflow);
-    await fs.copy(src, dest, { overwrite: true });
+    // Silent fail/warn if missing handled by fs.copy throwing? 
+    // better to try/catch
+    try {
+      await fs.copy(src, dest, { overwrite: true });
+    } catch (e) {
+      console.warn(`Failed to copy workflow ${workflow}: ${e.message}`);
+    }
   }
 }
 
@@ -315,23 +346,14 @@ export async function copySpecificSkills(selectedSkills, destFolder) {
   await fs.ensureDir(destFolder);
 
   for (const skill of selectedSkills) {
-    if (useGitHub) {
-      try {
-        const count = await downloadDirectoryFromGitHub(
-          `.agent/skills/${skill}`,
-          path.join(destFolder, skill)
-        );
-        if (count > 0) continue;
-      } catch (error) {
-        logGitHubError(`GitHub fetch failed: ${error.message}`);
-        disableGitHub();
-      }
-    }
-
-    // Fallback to local
     const src = path.join(PATHS.skills, skill);
     const dest = path.join(destFolder, skill);
-    await fs.copy(src, dest, { overwrite: true });
+
+    try {
+      await fs.copy(src, dest, { overwrite: true });
+    } catch (e) {
+      console.warn(`Failed to copy skill ${skill}: ${e.message}`);
+    }
   }
 }
 
@@ -343,18 +365,7 @@ export async function copySpecificSkills(selectedSkills, destFolder) {
 export async function copyAllWorkflows(destFolder, skipLegacy = false) {
   await fs.ensureDir(destFolder);
 
-  if (useGitHub) {
-    try {
-      const filter = skipLegacy ? (item) => item.name !== 'LEGACY' : null;
-      const count = await downloadDirectoryFromGitHub('.agent/workflows', destFolder, filter);
-      if (count > 0) return;
-    } catch (error) {
-      logGitHubError(`GitHub fetch failed: ${error.message}`);
-      disableGitHub();
-    }
-  }
-
-  // Fallback to local
+  // Local Copy
   await fs.copy(PATHS.workflows, destFolder);
   if (skipLegacy) {
     const legacyPath = path.join(destFolder, 'LEGACY');
@@ -370,18 +381,7 @@ export async function copyAllWorkflows(destFolder, skipLegacy = false) {
  */
 export async function copyAllSkills(destFolder) {
   await fs.ensureDir(destFolder);
-
-  if (useGitHub) {
-    try {
-      const count = await downloadDirectoryFromGitHub('.agent/skills', destFolder);
-      if (count > 0) return;
-    } catch (error) {
-      logGitHubError(`GitHub fetch failed: ${error.message}`);
-      disableGitHub();
-    }
-  }
-
-  // Fallback to local
+  // Local Copy Only
   await fs.copy(PATHS.skills, destFolder);
 }
 
@@ -390,16 +390,6 @@ export async function copyAllSkills(destFolder) {
  * @param {string} destPath - Destination path for README.md
  */
 export async function copyAgentReadme(destPath) {
-  if (useGitHub) {
-    try {
-      const success = await downloadFromGitHub('.agent/README.md', destPath);
-      if (success) return;
-    } catch (error) {
-      // README is optional, silently fall back
-    }
-  }
-
-  // Fallback to local
   const readmeSrc = path.join(PATHS.agent, 'README.md');
   if (await fs.pathExists(readmeSrc)) {
     await fs.copy(readmeSrc, destPath);
@@ -412,44 +402,46 @@ export async function copyAgentReadme(destPath) {
  */
 export async function copyAgentYamls(destFolder) {
   await fs.ensureDir(destFolder);
-
-  if (useGitHub) {
-    try {
-      const count = await downloadDirectoryFromGitHub(
-        'VibeCode-Agents (e.g Kilo-code)',
-        destFolder
-      );
-      if (count > 0) return;
-    } catch (error) {
-      logGitHubError(`GitHub fetch failed: ${error.message}`);
-      disableGitHub();
-    }
-  }
-
-  // Fallback to local
   await fs.copy(PATHS.agentsYaml, destFolder);
 }
 
-/**
- * Copy Legacy Manual from GitHub or local fallback
- * @param {string} destFolder - Destination folder
- */
 export async function copyLegacyManual(destFolder) {
   await fs.ensureDir(destFolder);
-
-  if (useGitHub) {
-    try {
-      const count = await downloadDirectoryFromGitHub(
-        'Legacy (Manual Method)',
-        destFolder
-      );
-      if (count > 0) return;
-    } catch (error) {
-      logGitHubError(`GitHub fetch failed: ${error.message}`);
-      disableGitHub();
-    }
-  }
-
-  // Fallback to local
   await fs.copy(PATHS.manual, destFolder);
+}
+
+/**
+ * Update Workflows from GitHub
+ */
+export async function updateWorkflows(destFolder) {
+  console.log('📡 Fetching latest workflows from GitHub...');
+  await fs.ensureDir(destFolder);
+  await downloadDirectoryFromGitHub('.agent/workflows', destFolder);
+}
+
+/**
+ * Update Skills from GitHub
+ */
+export async function updateSkills(destFolder) {
+  console.log('📡 Fetching latest skills from GitHub...');
+  await fs.ensureDir(destFolder);
+  await downloadDirectoryFromGitHub('.agent/skills', destFolder);
+}
+
+/**
+ * Update Agent YAMLs from GitHub
+ */
+export async function updateAgentYamls(destFolder) {
+  console.log('📡 Fetching latest Agent YAMLs from GitHub...');
+  await fs.ensureDir(destFolder);
+  await downloadDirectoryFromGitHub('VibeCode-Agents (e.g Kilo-code)', destFolder);
+}
+
+/**
+ * Update Legacy Protocols from GitHub
+ */
+export async function updateLegacyManual(destFolder) {
+  console.log('📡 Fetching latest Legacy Protocols from GitHub...');
+  await fs.ensureDir(destFolder);
+  await downloadDirectoryFromGitHub('Legacy (Manual Method)', destFolder);
 }

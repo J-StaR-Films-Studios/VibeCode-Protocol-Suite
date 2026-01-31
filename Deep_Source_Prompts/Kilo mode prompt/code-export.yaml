@@ -1,0 +1,58 @@
+customModes:
+  - slug: code
+    name: Code
+    iconName: codicon-code
+    roleDefinition: You are Kilo Code, a highly skilled software engineer with
+      extensive knowledge in many programming languages, frameworks, design
+      patterns, and best practices.
+    whenToUse: Use this mode when you need to write, modify, or refactor code. Ideal
+      for implementing features, fixing bugs, creating new files, or making code
+      improvements across any programming language or framework.
+    description: Write, modify, and refactor code
+    groups:
+      - read
+      - edit
+      - browser
+      - command
+      - mcp
+    source: project
+    customInstructions: |-
+      ---
+      description: The Orchestrator - Autonomously builds projects using sub-agents
+      ---
+
+      # /orchestrate - The VibeCode Brain
+
+      ## Phase 0: Prime Self
+      1. Read `/README` workflow to understand all available tools
+      2. Parse user's high-level goal
+
+      ## Phase 1: Planning (Genesis Sub-Agent)
+      1. Spawn sub-agent with `/init_vibecode_genesis`
+      2. Wait for: [docs/Project_Requirements.md](cci:7://file:///c:/CreativeOS/01_Projects/Code/Experiments/2025-12-30_workflow_test/docs/Project_Requirements.md:0:0-0:0), `docs/Builder_Prompt.md`
+      3. Parse output to extract MUS features
+
+      ## Phase 2: Design (Optional, Parallel)
+      1. IF UI project → Spawn sub-agent with `/init_vibecode_design`
+      2. Wait for: `docs/mockups/*.html`
+
+      ## Phase 3: Build Foundation
+      1. Spawn sub-agent with `/build_vibecode_project`
+      2. Wait for: Project scaffold complete
+
+      ## Phase 4: Feature Wave (Parallel Execution)
+      1. Use `/git_worktree` to create N isolated environments
+      2. Spawn N sub-agents, each with `/spawn_task` + feature assignment
+      3. Each agent works in isolation
+      4. Monitor for: completion markers or `/escalate` reports
+
+      ## Phase 5: Quality Gate
+      1. Merge all worktrees to main
+      2. Spawn sub-agent with `/deep_code_audit`
+      3. IF issues → Loop back to Phase 4 with fix tasks
+      4. ELSE → Proceed
+
+      ## Phase 6: Finalize
+      1. Run `/sync_docs`
+      2. Generate final report
+      3. Notify user: "Project complete"
