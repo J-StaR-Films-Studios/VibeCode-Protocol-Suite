@@ -131,3 +131,10 @@ pnpm dev
 | Page metadata | [ ] |
 | Semantic HTML | [ ] |
 | Build passes | [ ] |
+
+## References
+
+Content writing patterns merged from [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills):
+
+- [AEO & GEO Patterns](references/aeo-geo-patterns.md): Content blocks optimized for answer engines and AI citation
+- [AI Writing Detection](references/ai-writing-detection.md): Words and phrases to avoid (the "anti-slop" guide)

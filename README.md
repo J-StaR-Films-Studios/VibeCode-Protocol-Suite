@@ -27,6 +27,33 @@ This interactive CLI will let you choose exactly what you need:
 
 ---
 
+## 📦 Install Skills (New Standard)
+
+Use the new standard `skills` command to pull capabilities directly from the VibeCode Suite.
+
+### Interactive Search & Install
+```bash
+# Using pnpm
+pnpm dlx skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
+
+# Using npx
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
+```
+
+### Core Essentials (Recommended)
+Coding-focused skills for everyday development:
+```bash
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-sdk --skill code-review --skill component-analysis --skill nextjs-standards --skill security-audit --skill spawn-task --skill sync-docs
+```
+
+### Full Suite (All Skills)
+Everything including SEO, video, research, and workflow tools:
+```bash
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill ai-avatar-video --skill ai-marketing-videos --skill ai-podcast-creation --skill ai-product-photography --skill ai-sdk --skill ai-social-media-content --skill ai-voice-cloning --skill algorithmic-art --skill audit-website --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
+```
+
+---
+
 ## 🌟 What is VibeCode?
 
 VibeCode isn't just a collection of prompts—it's a **complete workflow system** for collaborating with AI to build software. Think of yourself as the Visionary/CEO, and your AI assistants as a specialized, high-performance development team.
@@ -283,8 +310,17 @@ This is a living system! If you discover improvements:
 
 ## 🙏 Acknowledgements
 
-- **UI/UX Pro Max Skill**: Shoutout to [Next Level Builder](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) for the incredible UI/UX skill. We've integrated it directly into VibeSuite to bring premium design intelligence to your workflows.
-- **Remotion Skill**: Official skill from [Remotion](https://github.com/remotion-dev/skills/tree/main/skills/remotion) for programmatic video creation in React.
+- **Anthropic Skills**: From [anthropics/skills](https://github.com/anthropics/skills) — a massive collection including **Office Suite** (PDF/DOCX/PPTX/XLSX), **Frontend Design**, **Webapp Testing**, **Algorithmic Art**, **Monorepo Management**, and **Skill Creator**.
+- **Inference.sh Skills**: From [inference.sh/skills](https://github.com/inference-sh/skills) — complete media & automation suite including **Marketing Videos**, **Voice Cloning**, **Social Content**, **Twitter Automation**, **Product Photography**, and **Prompt Engineering**.
+- **Marketing Skills**: From [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills) — the complete marketer's toolkit: **Copywriting**, **Pricing Strategy**, **Social Strategy**, **Programmatic SEO**, and **Marketing Ideas**.
+- **Expo Skills**: From [Expo](https://github.com/expo/skills) — **Building Native UI** (React Native/Expo Router) and **Upgrading Expo** guide.
+- **Vercel AI SDK**: From [vercel/ai](https://github.com/vercel/ai) — **AI SDK** reference and **Web Design Guidelines**.
+- **UI/UX Pro Max**: From [Next Level Builder](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) — premium design intelligence.
+- **Remotion**: From [Remotion](https://github.com/remotion-dev/skills) — programmatic video creation.
+- **Subagent Development**: From [obra/superpowers](https://github.com/obra/superpowers) — advanced implementation planning.
+- **Context7**: From [upstash/context7](https://github.com/upstash/context7) — fresh library documentation fetcher.
+- **Audit Website**: From [squirrelscan/skills](https://github.com/squirrelscan/skills) — professional website auditor.
+- **Gemini CLI**: Custom VibeCode skill for large-context processing with Gemini 3 Pro.
 
 ## 📄 License
 

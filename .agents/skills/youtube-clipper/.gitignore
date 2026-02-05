@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Outputs
+youtube-clips/
+outputs/
+downloads/
+temp/
+tmp/
+
+# Test files
+*.mp4
+*.webm
+*.mkv
+*.avi
+*.vtt
+*.srt
+test_*.py
+*_test.py
+
+# Logs
+*.log
+logs/
