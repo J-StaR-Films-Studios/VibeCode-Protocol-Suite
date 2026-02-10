@@ -43,13 +43,19 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 ### Core Essentials (Recommended)
 Coding-focused skills for everyday development:
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-sdk --skill code-review --skill component-analysis --skill nextjs-standards --skill security-audit --skill spawn-task --skill sync-docs
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-sdk --skill code-review --skill component-analysis --skill nextjs-standards --skill security-audit --skill spawn-task --skill stitch --skill sync-docs
 ```
 
-### Full Suite (All Skills)
-Everything including SEO, video, research, and workflow tools:
+### AI Media Suite (Paid / Advanced)
+Specialized skills requiring API keys or paid services:
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill ai-avatar-video --skill ai-marketing-videos --skill ai-podcast-creation --skill ai-product-photography --skill ai-sdk --skill ai-social-media-content --skill ai-voice-cloning --skill algorithmic-art --skill audit-website --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-avatar-video --skill ai-marketing-videos --skill ai-podcast-creation --skill ai-product-photography --skill ai-social-media-content --skill ai-voice-cloning
+```
+
+### Full Standard Suite (Free)
+Everything else (SEO, research, workflow tools):
+```bash
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill algorithmic-art --skill audit-website --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
 
 ---
@@ -321,6 +327,7 @@ This is a living system! If you discover improvements:
 - **Context7**: From [upstash/context7](https://github.com/upstash/context7) — fresh library documentation fetcher.
 - **Audit Website**: From [squirrelscan/skills](https://github.com/squirrelscan/skills) — professional website auditor.
 - **Gemini CLI**: Custom VibeCode skill for large-context processing with Gemini 3 Pro.
+- **Google Stitch Skills**: From [google-labs-code/stitch-skills](https://github.com/google-labs-code/stitch-skills) — Design-to-code suite including **design-md**, **enhance-prompt**, **stitch-loop**, **react-components**, and **shadcn-ui**.
 
 ## 📄 License
 
