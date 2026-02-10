@@ -47,6 +47,7 @@ async function init() {
       name: 'workflowMode',
       message: 'How should we install Workflows?',
       choices: [
+        { title: 'Install Core Workflows (Recommended)', value: 'core' },
         { title: 'Install All Workflows', value: 'all' },
         { title: 'Install All (Exclude Legacy)', value: 'no-legacy' },
         { title: 'Select Specific Workflows', value: 'custom' }
@@ -68,6 +69,7 @@ async function init() {
       name: 'skillMode',
       message: 'How should we install Skills?',
       choices: [
+        { title: 'Install Core Skills (Recommended)', value: 'core' },
         { title: 'Install All Skills', value: 'all' },
         { title: 'Select Specific Skills', value: 'custom' }
       ]
@@ -112,7 +114,17 @@ async function init() {
       await fs.ensureDir(workflowsDest);
 
       // Handle Workflows
-      if (response.workflowMode === 'all') {
+      if (response.workflowMode === 'core') {
+        console.log(pc.green('✔ Downloading Core Workflows...'));
+        const coreWorkflows = [
+          'vibe-genesis.md', 'vibe-design.md', 'vibe-build.md',
+          'vibe-continueBuild.md', 'vibe-finalize.md', 'vibe-spawnTask.md',
+          'vibe-primeAgent.md', 'vibe-syncDocs.md', 'stitch.md',
+          'mode-orchestrator.md', 'mode-architect.md', 'mode-code.md',
+          'mode-debug.md', 'mode-ask.md', 'mode-review.md'
+        ];
+        await copySpecificWorkflows(coreWorkflows, workflowsDest);
+      } else if (response.workflowMode === 'all') {
         console.log(pc.green('✔ Downloading all workflows...'));
         await copyAllWorkflows(workflowsDest, false);
       } else if (response.workflowMode === 'no-legacy') {
@@ -127,7 +139,20 @@ async function init() {
       await fs.ensureDir(skillsDest);
 
       // Handle Skills
-      if (response.skillMode === 'all') {
+      if (response.skillMode === 'core') {
+        console.log(pc.green('✔ Downloading Core Skills...'));
+        const coreSkills = [
+          'ai-sdk',
+          'code-review',
+          'component-analysis',
+          'nextjs-standards',
+          'security-audit',
+          'spawn-task',
+          'stitch',
+          'sync-docs'
+        ];
+        await copySpecificSkills(coreSkills, skillsDest);
+      } else if (response.skillMode === 'all') {
         console.log(pc.green('✔ Downloading all skills...'));
         await copyAllSkills(skillsDest);
       } else if (response.skillMode === 'custom' && response.selectedSkills) {
@@ -168,7 +193,7 @@ async function init() {
 program
   .name('vibesuite')
   .description('VibeCode Protocol Suite CLI')
-  .version('1.0.0')
+  .version('1.3.0')
   .command('init')
   .description('Initialize VibeCode in the current directory')
   .action(init);
