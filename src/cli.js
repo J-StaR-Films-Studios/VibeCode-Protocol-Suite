@@ -193,7 +193,7 @@ async function init() {
 program
   .name('vibesuite')
   .description('VibeCode Protocol Suite CLI')
-  .version('1.3.0')
+  .version('1.3.1')
   .command('init')
   .description('Initialize VibeCode in the current directory')
   .action(init);
