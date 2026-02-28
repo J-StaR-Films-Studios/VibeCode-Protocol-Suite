@@ -25,8 +25,8 @@ You may have forgotten what tools are available. **Run this now:**
 
 ```bash
 # Global (always available)
-ls ~/.gemini/antigravity/skills/
-ls ~/.gemini/antigravity/global_workflows/
+ls .agent/skills/
+ls .agent/workflows/
 
 # Local (project-specific, if exists)
 ls .agent/skills/ 2>/dev/null

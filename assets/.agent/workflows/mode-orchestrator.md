@@ -60,8 +60,7 @@ Use `/mode-orchestrator` when:
 ls .agent/skills/ 2>/dev/null
 
 # Global skills (path varies by AI client)
-ls ~/.gemini/antigravity/skills/ 2>/dev/null   # Gemini / Antigravity
-ls ~/.kilocode/skills/ 2>/dev/null              # KiloCode
+ls .agent/skills/ 2>/dev/null   # Gemini / Antigravity
 ```
 
 Create a **Skills Registry** — which skills are relevant and which tasks they apply to.
@@ -132,7 +131,7 @@ Each task file (`01_task_name.task.md`) includes:
 > |-------|------|-----|
 > | nextjs-standards | `[skills-dir]/nextjs-standards/SKILL.md` | Next.js project |
 >
-> **Skills directory varies by client.** Check: `.agent/skills/`, `~/.gemini/antigravity/skills/`, `~/.kilocode/skills/`, or your system prompt.
+> **Skills are listed in your system prompt with full paths.** Project-local skills live in `.agent/skills/`.
 
 ### Check Additional Skills
 > Scan all known skills directories for more relevant skills

@@ -1,4 +1,4 @@
-﻿---
+---
 name: youtube-pipeline
 description: Complete YouTube video production pipeline from ideation to distribution. Covers Strategy (Phase 1), Packaging (Phase 2), Scripting (Phase 3), Shorts (Phase 3.5), Production (Phase 4), and Repurposing (Phase 5).
 ---
@@ -27,13 +27,13 @@ The workflow docs are bundled in this skill's `resources/` folder for quick acce
 
 **Workflow Files (Local):**
 ```
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-pipeline.md
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-phase1-strategy.md
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-phase2-packaging.md
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-phase3-scripting.md
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-phase3.5-shorts.md
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-phase4-production.md
-~/.gemini/antigravity/skills/youtube-pipeline/resources/youtube-phase5-repurposing.md
+.agent/skills/youtube-pipeline/resources/youtube-pipeline.md
+.agent/skills/youtube-pipeline/resources/youtube-phase1-strategy.md
+.agent/skills/youtube-pipeline/resources/youtube-phase2-packaging.md
+.agent/skills/youtube-pipeline/resources/youtube-phase3-scripting.md
+.agent/skills/youtube-pipeline/resources/youtube-phase3.5-shorts.md
+.agent/skills/youtube-pipeline/resources/youtube-phase4-production.md
+.agent/skills/youtube-pipeline/resources/youtube-phase5-repurposing.md
 ```
 
 **Source of Truth (User's Vault):**
@@ -53,8 +53,8 @@ c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📝 01-Prompt\Sho
 
 **Automation Scripts (Phase 1):**
 ```
-~/.gemini/antigravity/skills/youtube-pipeline/scripts/parse_yt_studio.ps1  # Parse YT Studio Inspiration HTML
-~/.gemini/antigravity/skills/google-trends/scripts/search.js               # Google Trends CLI (separate skill)
+.agent/skills/youtube-pipeline/scripts/parse_yt_studio.ps1  # Parse YT Studio Inspiration HTML
+.agent/skills/google-trends/scripts/search.js               # Google Trends CLI (separate skill)
 ```
 
 ---

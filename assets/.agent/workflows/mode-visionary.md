@@ -84,8 +84,7 @@ Batch ALL questions into ONE message. Skip anything already answered:
 ls .agent/skills/ 2>/dev/null
 
 # Global skills (path varies by AI client)
-ls ~/.gemini/antigravity/skills/ 2>/dev/null   # Gemini / Antigravity
-ls ~/.kilocode/skills/ 2>/dev/null              # KiloCode
+ls .agent/skills/ 2>/dev/null   # Gemini / Antigravity
 
 # Workflows (always project-local)
 ls .agent/workflows/ 2>/dev/null

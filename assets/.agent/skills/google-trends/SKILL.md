@@ -16,7 +16,7 @@ Node.js 18+ and PNPM required.
 node --version
 
 # Install dependencies (first-time only)
-cd ~/.gemini/antigravity/skills/google-trends/scripts
+cd .agent/skills/google-trends/scripts
 pnpm install
 ```
 
@@ -26,16 +26,16 @@ pnpm install
 
 ```powershell
 # Basic search (YouTube, Last 7 Days, Tech category)
-node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "Claude AI"
+node .agent/skills/google-trends/scripts/search.js -k "Claude AI"
 
 # Search Web instead of YouTube
-node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "AI agents" -p web
+node .agent/skills/google-trends/scripts/search.js -k "AI agents" -p web
 
 # Extended time range (1 month)
-node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "VibeCoding" -t "now 1-m"
+node .agent/skills/google-trends/scripts/search.js -k "VibeCoding" -t "now 1-m"
 
 # Output as JSON for piping
-node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "Cursor IDE" -o json
+node .agent/skills/google-trends/scripts/search.js -k "Cursor IDE" -o json
 ```
 
 ---
@@ -96,7 +96,7 @@ Use this skill during `/youtube-phase1-strategy` to validate topics:
 
 ```powershell
 # Check if "Claude Cowork" is rising on YouTube
-node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "Claude Cowork" -p youtube -t "now 7-d"
+node .agent/skills/google-trends/scripts/search.js -k "Claude Cowork" -p youtube -t "now 7-d"
 ```
 
 **Signal:** Look for `BREAKOUT` or values > 100 in related queries.
@@ -105,7 +105,7 @@ node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "Claude Cow
 
 ```powershell
 # Is "RAG" still trending in AI?
-node ~/.gemini/antigravity/skills/google-trends/scripts/search.js -k "RAG AI" -p web -t "today 3-m" --interest
+node .agent/skills/google-trends/scripts/search.js -k "RAG AI" -p web -t "today 3-m" --interest
 ```
 
 **Signal:** Check if interest-over-time is increasing or peaked.

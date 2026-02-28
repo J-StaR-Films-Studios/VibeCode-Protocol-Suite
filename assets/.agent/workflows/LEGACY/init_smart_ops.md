@@ -6,7 +6,7 @@ description: Initialize Smart Ops for this repository with automatic OS detectio
 
 One-time setup to generate GitHub automation scripts for your repository.
 
-> **Skill Reference:** Read `~/.gemini/antigravity/skills/github-ops/SKILL.md` for templates and patterns.
+> **Skill Reference:** Read `.agent/skills/github-ops/SKILL.md` for templates and patterns.
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ User: "/init_smart_ops"
 
 ### 1. Read the Skill First
 ```
-view_file ~/.gemini/antigravity/skills/github-ops/SKILL.md
+view_file .agent/skills/github-ops/SKILL.md
 ```
 
 ### 2. Detect OS

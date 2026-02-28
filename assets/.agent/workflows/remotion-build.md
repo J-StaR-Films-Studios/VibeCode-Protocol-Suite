@@ -17,7 +17,7 @@ Before writing ANY Remotion code, you MUST read the relevant rule files. Do NOT 
 ### Step 0.1: Read the Main Skill
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/SKILL.md"
+cat ".agent/skills/remotion/SKILL.md"
 ```
 
 ### Step 0.2: Read REQUIRED Rule Files
@@ -27,62 +27,62 @@ Based on what the video needs, you MUST read the corresponding rule files. This 
 **For ANY animation work (ALWAYS READ THESE):**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/animations.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/timing.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/sequencing.md"
+cat ".agent/skills/remotion/rules/animations.md"
+cat ".agent/skills/remotion/rules/timing.md"
+cat ".agent/skills/remotion/rules/sequencing.md"
 ```
 
 **If using scene transitions:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/transitions.md"
+cat ".agent/skills/remotion/rules/transitions.md"
 ```
 
 **If using text animations (typewriter, highlights, etc):**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/text-animations.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/fonts.md"
+cat ".agent/skills/remotion/rules/text-animations.md"
+cat ".agent/skills/remotion/rules/fonts.md"
 ```
 
 **If using images, videos, or audio:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/assets.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/images.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/videos.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/audio.md"
+cat ".agent/skills/remotion/rules/assets.md"
+cat ".agent/skills/remotion/rules/images.md"
+cat ".agent/skills/remotion/rules/videos.md"
+cat ".agent/skills/remotion/rules/audio.md"
 ```
 
 **If using 3D elements:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/3d.md"
+cat ".agent/skills/remotion/rules/3d.md"
 ```
 
 **If using captions/subtitles:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/display-captions.md"
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/transcribe-captions.md"
+cat ".agent/skills/remotion/rules/display-captions.md"
+cat ".agent/skills/remotion/rules/transcribe-captions.md"
 ```
 
 **If using charts/data visualization:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/charts.md"
+cat ".agent/skills/remotion/rules/charts.md"
 ```
 
 **If using Lottie animations:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/lottie.md"
+cat ".agent/skills/remotion/rules/lottie.md"
 ```
 
 **If using GIFs:**
 // turbo
 ```bash
-cat "C:/Users/johno/.gemini/antigravity/skills/remotion/rules/gifs.md"
+cat ".agent/skills/remotion/rules/gifs.md"
 ```
 
 > ⛔ **DO NOT PROCEED TO PHASE 1 UNTIL YOU HAVE READ THE RELEVANT RULES.**

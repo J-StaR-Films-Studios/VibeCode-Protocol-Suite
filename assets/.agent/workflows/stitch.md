@@ -5,7 +5,7 @@ description: Google Stitch design-to-code workflow. Routes to the correct sub-sk
 # /stitch — Google Stitch Design Platform
 
 ## Overview
-This workflow orchestrates the full Stitch design-to-code pipeline. All skills live in `~/.gemini/antigravity/skills/stitch/`.
+This workflow orchestrates the full Stitch design-to-code pipeline. All skills live in `.agent/skills/stitch/`.
 
 **The Stitch bundle is NOT a pick-one-and-go system.** It's a **pipeline** of 6 skills that chain together. Your job is to guide the user through the journey, always suggesting the next logical step.
 
@@ -13,7 +13,7 @@ This workflow orchestrates the full Stitch design-to-code pipeline. All skills l
 // turbo
 Read the master SKILL.md — it contains the **Pipeline Orchestration Protocol** which you MUST follow:
 ```
-view_file ~/.gemini/antigravity/skills/stitch/SKILL.md
+view_file .agent/skills/stitch/SKILL.md
 ```
 
 ## Step 2: Identify the Entry Point
@@ -35,7 +35,7 @@ Use the decision tree from the master SKILL.md to determine WHERE the user enter
 // turbo
 Read the specific sub-skill's `SKILL.md`:
 ```
-view_file ~/.gemini/antigravity/skills/stitch/{sub-skill}/SKILL.md
+view_file .agent/skills/stitch/{sub-skill}/SKILL.md
 ```
 
 ## Step 4: Check for Supporting Resources
@@ -46,7 +46,7 @@ Each sub-skill may have `resources/`, `examples/`, and `scripts/` folders:
 - **scripts/**: Validation and networking helpers
 
 ```
-ls ~/.gemini/antigravity/skills/stitch/{sub-skill}/
+ls .agent/skills/stitch/{sub-skill}/
 ```
 
 ## Step 5: Execute the Sub-Skill

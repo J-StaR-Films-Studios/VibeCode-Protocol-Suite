@@ -102,16 +102,16 @@ gh project field-create NUMBER --owner USERNAME --name "Target Date" --data-type
 
 ```powershell
 # Basic: Create new issues only
-powershell -ExecutionPolicy Bypass -File ~/.gemini/antigravity/skills/github-ops/scripts/publish_issues.ps1
+powershell -ExecutionPolicy Bypass -File .agent/skills/github-ops/scripts/publish_issues.ps1
 
 # Dry run preview
-powershell -ExecutionPolicy Bypass -File ~/.gemini/antigravity/skills/github-ops/scripts/publish_issues.ps1 -Update -DryRun
+powershell -ExecutionPolicy Bypass -File .agent/skills/github-ops/scripts/publish_issues.ps1 -Update -DryRun
 
 # Update + archive completed
-powershell -ExecutionPolicy Bypass -File ~/.gemini/antigravity/skills/github-ops/scripts/publish_issues.ps1 -Update -AutoArchive
+powershell -ExecutionPolicy Bypass -File .agent/skills/github-ops/scripts/publish_issues.ps1 -Update -AutoArchive
 
 # Full sync with project dates
-powershell -ExecutionPolicy Bypass -File ~/.gemini/antigravity/skills/github-ops/scripts/publish_issues.ps1 `
+powershell -ExecutionPolicy Bypass -File .agent/skills/github-ops/scripts/publish_issues.ps1 `
     -Update -AutoArchive -SyncDates `
     -ProjectNumber 7 `
     -ProjectId "PVT_xxx" `
