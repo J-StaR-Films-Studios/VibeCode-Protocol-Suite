@@ -46,6 +46,12 @@ Coding-focused skills for everyday development:
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-sdk --skill code-review --skill component-analysis --skill nextjs-standards --skill security-audit --skill spawn-task --skill stitch --skill sync-docs
 ```
 
+### Convex Development Suite
+Complete Convex backend development skills:
+```bash
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check
+```
+
 ### AI Media Suite (Paid / Advanced)
 Specialized skills requiring API keys or paid services:
 ```bash
@@ -55,7 +61,7 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 ### Full Standard Suite (Free)
 Everything else (SEO, research, workflow tools):
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill algorithmic-art --skill audit-website --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
 
 ---
@@ -326,6 +332,7 @@ This is a living system! If you discover improvements:
 - **Subagent Development**: From [obra/superpowers](https://github.com/obra/superpowers) — advanced implementation planning.
 - **Context7**: From [upstash/context7](https://github.com/upstash/context7) — fresh library documentation fetcher.
 - **Audit Website**: From [squirrelscan/skills](https://github.com/squirrelscan/skills) — professional website auditor.
+- **Convex Skills**: From [waynesutton/convexskills](https://github.com/waynesutton/convexskills) — complete Convex development suite including **Functions**, **Schema Validation**, **Realtime**, **Agents**, **File Storage**, **Migrations**, **HTTP Actions**, **Cron Jobs**, **Component Authoring**, **Best Practices**, **Security Audit**, **Security Check**, **Avoid Feature Creep**, and **Optimize Agent Context**.
 - **Gemini CLI**: Custom VibeCode skill for large-context processing with Gemini 3 Pro.
 - **Google Stitch Skills**: From [google-labs-code/stitch-skills](https://github.com/google-labs-code/stitch-skills) — Design-to-code suite including **design-md**, **enhance-prompt**, **stitch-loop**, **react-components**, and **shadcn-ui**.
 - **Jules**: From [sanjay3290/ai-skills](https://github.com/sanjay3290/ai-skills) — delegate coding tasks to Google Jules AI agent.

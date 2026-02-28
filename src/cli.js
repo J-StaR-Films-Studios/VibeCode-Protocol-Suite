@@ -8,7 +8,6 @@ import {
   PATHS,
   getWorkflows,
   getSkills,
-  copyToDestination,
   copySpecificWorkflows,
   copySpecificSkills,
   copyAllWorkflows,
@@ -19,10 +18,33 @@ import {
   updateWorkflows,
   updateSkills,
   updateAgentYamls,
-  updateLegacyManual
+  updateLegacyManual,
+  downloadDirectoryFromGitHub,
 } from './utils.js';
+import {
+  detectHarnesses,
+  printHarnessStatus,
+  syncToAllHarnesses,
+  syncToHarness,
+} from './harness.js';
+import {
+  STORE_PATH,
+  initGlobalStore,
+  getManifest,
+  writeManifest,
+  populateSkills,
+  populateWorkflows,
+  populateAgentYamls,
+  getStoreSkills,
+  getStoreWorkflows,
+  isStoreInitialized,
+} from './store.js';
 
 const program = new Command();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vibesuite init (EXISTING — Backward Compatible)
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function init() {
   console.log(pc.magenta(figlet.textSync('VibeSuite', { horizontalLayout: 'full' })));
@@ -109,8 +131,6 @@ async function init() {
       const skillsDest = path.join(agentDest, 'skills');
 
       await fs.ensureDir(agentDest);
-
-      // Ensure workflows destination directory exists
       await fs.ensureDir(workflowsDest);
 
       // Handle Workflows
@@ -135,21 +155,15 @@ async function init() {
         await copySpecificWorkflows(response.selectedWorkflows, workflowsDest);
       }
 
-      // Ensure skills destination directory exists
       await fs.ensureDir(skillsDest);
 
       // Handle Skills
       if (response.skillMode === 'core') {
         console.log(pc.green('✔ Downloading Core Skills...'));
         const coreSkills = [
-          'ai-sdk',
-          'code-review',
-          'component-analysis',
-          'nextjs-standards',
-          'security-audit',
-          'spawn-task',
-          'stitch',
-          'sync-docs'
+          'ai-sdk', 'code-review', 'component-analysis',
+          'nextjs-standards', 'security-audit', 'spawn-task',
+          'stitch', 'sync-docs'
         ];
         await copySpecificSkills(coreSkills, skillsDest);
       } else if (response.skillMode === 'all') {
@@ -184,25 +198,382 @@ async function init() {
       console.log(pc.gray(`1. If using Cursor/Windsurf, the .agent folder is ready.`));
       console.log(pc.gray(`2. Try typing '/init_vibecode_genesis' in your IDE.`));
     }
+    console.log(pc.dim(`\n💡 Tip: Run "vibesuite install" for global multi-IDE setup.\n`));
 
   } catch (error) {
     console.error(pc.red('Error during installation:'), error);
   }
 }
 
-program
-  .name('vibesuite')
-  .description('VibeCode Protocol Suite CLI')
-  .version('1.3.2')
-  .command('init')
-  .description('Initialize VibeCode in the current directory')
-  .action(init);
+// ─────────────────────────────────────────────────────────────────────────────
+// vibesuite install (NEW — Global Setup + Harness Routing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function install() {
+  console.log(pc.magenta(figlet.textSync('VibeSuite', { horizontalLayout: 'full' })));
+  console.log(pc.cyan('   🌐 Global Installer v2.0\n'));
+
+  // 1. Detect harnesses
+  const detected = detectHarnesses();
+  printHarnessStatus(detected);
+
+  if (detected.length === 0) {
+    console.log(pc.yellow('  No AI harnesses detected on this machine.'));
+    console.log(pc.dim('  Supported: Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI'));
+    console.log(pc.dim('  Use "vibesuite init" for per-project setup instead.\n'));
+    return;
+  }
+
+  // 2. Let user select which harnesses to configure
+  const harnessResponse = await prompts({
+    type: 'multiselect',
+    name: 'harnesses',
+    message: 'Which harnesses should we configure?',
+    choices: detected.map(h => ({
+      title: h.name,
+      value: h.id,
+      selected: true,
+      description: path.relative(process.env.USERPROFILE || process.env.HOME || '', h.rootPath),
+    })),
+    min: 1,
+    hint: '- Space to select. Return to submit',
+  });
+
+  if (!harnessResponse.harnesses || harnessResponse.harnesses.length === 0) return;
+
+  const selectedHarnesses = detected.filter(h => harnessResponse.harnesses.includes(h.id));
+
+  // 3. Ask what to install
+  const contentResponse = await prompts([
+    {
+      type: 'multiselect',
+      name: 'content',
+      message: 'What should we install globally?',
+      choices: [
+        { title: 'Skills', value: 'skills', selected: true, description: `${(await getSkills()).length} available` },
+        { title: 'Workflows', value: 'workflows', selected: true, description: `${(await getWorkflows()).length} available` },
+        { title: 'Agent YAMLs (custom_modes.yaml → KiloCode)', value: 'yamls', selected: selectedHarnesses.some(h => h.id === 'kilocode'), description: 'For KiloCode modes' },
+      ],
+      min: 1,
+      hint: '- Space to select. Return to submit',
+    },
+    // Skill pack selection
+    {
+      type: (prev, values) => values.content.includes('skills') ? 'select' : null,
+      name: 'skillMode',
+      message: 'Which skill pack?',
+      choices: [
+        { title: 'Core (8 essentials)', value: 'core', description: 'ai-sdk, code-review, nextjs-standards...' },
+        { title: `All (${(await getSkills()).length} skills)`, value: 'all' },
+        { title: 'Custom selection', value: 'custom' },
+      ],
+    },
+    {
+      type: (prev, values) => values.skillMode === 'custom' ? 'multiselect' : null,
+      name: 'selectedSkills',
+      message: 'Select skills:',
+      choices: async () => {
+        const skills = await getSkills();
+        return skills.map(s => ({ title: s, value: s }));
+      },
+      hint: '- Space to select. Return to submit',
+    },
+    // Workflow pack selection
+    {
+      type: (prev, values) => values.content.includes('workflows') ? 'select' : null,
+      name: 'workflowMode',
+      message: 'Which workflow pack?',
+      choices: [
+        { title: 'Core (15 essentials)', value: 'core', description: 'vibe-build, mode-architect...' },
+        { title: `All (${(await getWorkflows()).length} workflows)`, value: 'all' },
+        { title: 'All (Exclude Legacy)', value: 'no-legacy' },
+        { title: 'Custom selection', value: 'custom' },
+      ],
+    },
+    {
+      type: (prev, values) => values.workflowMode === 'custom' ? 'multiselect' : null,
+      name: 'selectedWorkflows',
+      message: 'Select workflows:',
+      choices: async () => {
+        const workflows = await getWorkflows();
+        return workflows.map(w => ({ title: w, value: w }));
+      },
+      hint: '- Space to select. Return to submit',
+    },
+  ]);
+
+  if (!contentResponse.content) return;
+
+  try {
+    // 4. Initialize global store
+    console.log(pc.cyan(`\n📦 Creating global store (${STORE_PATH})...\n`));
+    await initGlobalStore();
+
+    // 5. Populate store from package assets
+    if (contentResponse.content.includes('skills')) {
+      const skillMode = contentResponse.skillMode === 'custom'
+        ? contentResponse.selectedSkills
+        : contentResponse.skillMode;
+      const skills = await populateSkills(skillMode);
+      console.log(pc.green(`  ✔ ${skills.length} skills loaded into store`));
+    }
+
+    if (contentResponse.content.includes('workflows')) {
+      const workflowMode = contentResponse.workflowMode === 'custom'
+        ? contentResponse.selectedWorkflows
+        : contentResponse.workflowMode;
+      const workflows = await populateWorkflows(workflowMode);
+      console.log(pc.green(`  ✔ ${workflows.length} workflows loaded into store`));
+    }
+
+    if (contentResponse.content.includes('yamls')) {
+      const yamls = await populateAgentYamls();
+      console.log(pc.green(`  ✔ ${yamls.length} agent YAMLs loaded into store`));
+    }
+
+    // 6. Sync store to all selected harnesses
+    console.log(pc.cyan('\n📡 Syncing to harnesses...\n'));
+    await syncToAllHarnesses(selectedHarnesses, STORE_PATH);
+
+    // 7. Update manifest
+    const manifest = await getManifest();
+    manifest.linkedHarnesses = selectedHarnesses.map(h => h.id);
+    manifest.installed.skills = await getStoreSkills();
+    manifest.installed.workflows = await getStoreWorkflows();
+    await writeManifest(manifest);
+
+    // 8. Summary
+    console.log(pc.magenta('\n✨ VibeSuite installed globally! ✨'));
+    console.log(pc.white(`\n  Store:     ${STORE_PATH}`));
+    console.log(pc.white(`  Harnesses: ${selectedHarnesses.map(h => h.name).join(', ')}`));
+    console.log(pc.dim(`\n  Run "vibesuite sync" to re-sync after adding new skills.`));
+    console.log(pc.dim(`  Run "vibesuite add <github-url>" to fetch remote skills.\n`));
+
+  } catch (error) {
+    console.error(pc.red('\nError during global installation:'), error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vibesuite sync (NEW — Re-sync store to all harnesses)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function sync() {
+  console.log(pc.magenta('📡 VibeSuite Sync\n'));
+
+  // Check if global store exists
+  if (!await isStoreInitialized()) {
+    console.log(pc.yellow('Global store not found. Run "vibesuite install" first.\n'));
+    return;
+  }
+
+  const manifest = await getManifest();
+  const detected = detectHarnesses();
+
+  if (detected.length === 0) {
+    console.log(pc.yellow('No AI harnesses detected.\n'));
+    return;
+  }
+
+  // Let user pick which harnesses to sync to
+  const response = await prompts({
+    type: 'multiselect',
+    name: 'harnesses',
+    message: 'Sync to which harnesses?',
+    choices: detected.map(h => ({
+      title: h.name,
+      value: h.id,
+      selected: manifest.linkedHarnesses.includes(h.id),
+    })),
+    min: 1,
+    hint: '- Space to select. Return to submit',
+  });
+
+  if (!response.harnesses || response.harnesses.length === 0) return;
+
+  const selectedHarnesses = detected.filter(h => response.harnesses.includes(h.id));
+
+  console.log(pc.cyan('\n📡 Syncing from global store...\n'));
+  await syncToAllHarnesses(selectedHarnesses, STORE_PATH);
+
+  // Update manifest with current harnesses
+  manifest.linkedHarnesses = [...new Set([...manifest.linkedHarnesses, ...response.harnesses])];
+  await writeManifest(manifest);
+
+  const skills = await getStoreSkills();
+  const workflows = await getStoreWorkflows();
+  console.log(pc.magenta(`\n✨ Synced ${skills.length} skills + ${workflows.length} workflows to ${selectedHarnesses.length} harness(es).\n`));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vibesuite add <url> (NEW — Fetch remote skills from GitHub)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function add(url) {
+  console.log(pc.magenta('📥 VibeSuite Add\n'));
+
+  // Parse GitHub URL → owner/repo
+  const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
+  if (!match) {
+    console.log(pc.red('Invalid GitHub URL. Expected: https://github.com/owner/repo'));
+    return;
+  }
+
+  const repoSlug = match[1].replace(/\.git$/, '');
+  console.log(pc.dim(`  Repo: ${repoSlug}\n`));
+
+  // Initialize store if needed
+  await initGlobalStore();
+
+  // Try to find skills in common locations
+  const skillsDest = path.join(STORE_PATH, 'skills');
+  const workflowsDest = path.join(STORE_PATH, 'workflows');
+
+  console.log(pc.cyan('📡 Fetching from GitHub...\n'));
+
+  // Try assets/.agent/skills/ first (VibeSuite structure)
+  let skillCount = await downloadDirectoryFromGitHub(
+    'assets/.agent/skills',
+    skillsDest,
+    null,
+    250
+  );
+
+  // Fallback: try .agent/skills/
+  if (skillCount === 0) {
+    skillCount = await downloadDirectoryFromGitHub(
+      '.agent/skills',
+      skillsDest,
+      null,
+      250
+    );
+  }
+
+  // Try workflows
+  let workflowCount = await downloadDirectoryFromGitHub(
+    'assets/.agent/workflows',
+    workflowsDest,
+    (item) => item.name.endsWith('.md'),
+    250
+  );
+
+  if (workflowCount === 0) {
+    workflowCount = await downloadDirectoryFromGitHub(
+      '.agent/workflows',
+      workflowsDest,
+      (item) => item.name.endsWith('.md'),
+      250
+    );
+  }
+
+  if (skillCount === 0 && workflowCount === 0) {
+    console.log(pc.yellow('  No skills or workflows found in repo.'));
+    console.log(pc.dim('  Expected structure: .agent/skills/ or assets/.agent/skills/\n'));
+    return;
+  }
+
+  console.log(pc.green(`\n  ✔ Added ${skillCount} skills, ${workflowCount} workflows to global store.`));
+
+  // Update manifest
+  const manifest = await getManifest();
+  manifest.installed.skills = await getStoreSkills();
+  manifest.installed.workflows = await getStoreWorkflows();
+  await writeManifest(manifest);
+
+  // Offer to sync
+  if (manifest.linkedHarnesses.length > 0) {
+    const syncResponse = await prompts({
+      type: 'confirm',
+      name: 'doSync',
+      message: 'Sync to linked harnesses now?',
+      initial: true,
+    });
+
+    if (syncResponse.doSync) {
+      const detected = detectHarnesses();
+      const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
+      await syncToAllHarnesses(linked, STORE_PATH);
+      console.log(pc.magenta(`\n✨ Synced to ${linked.length} harness(es).\n`));
+    }
+  } else {
+    console.log(pc.dim('\n  Run "vibesuite sync" to push these to your harnesses.\n'));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// vibesuite harnesses (NEW — Show detected harnesses + status)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function harnesses() {
+  console.log(pc.magenta('🔌 VibeSuite Harnesses\n'));
+
+  const detected = detectHarnesses();
+  printHarnessStatus(detected);
+
+  // Show store status if initialized
+  if (await isStoreInitialized()) {
+    const manifest = await getManifest();
+    const skills = await getStoreSkills();
+    const workflows = await getStoreWorkflows();
+
+    console.log(pc.cyan('📦 Global Store Status\n'));
+    console.log(pc.white(`  Path:      ${STORE_PATH}`));
+    console.log(pc.white(`  Skills:    ${skills.length}`));
+    console.log(pc.white(`  Workflows: ${workflows.length}`));
+    console.log(pc.white(`  Linked:    ${manifest.linkedHarnesses.join(', ') || 'none'}`));
+    console.log(pc.dim(`  Updated:   ${manifest.updatedAt}\n`));
+  } else {
+    console.log(pc.dim('  Global store not initialized. Run "vibesuite install" to set up.\n'));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Command Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
 program
+  .name('vibesuite')
+  .description('VibeCode Protocol Suite CLI — Skills, Workflows & Agent Modes')
+  .version('2.0.0');
+
+// Per-project setup (backward compatible)
+program
+  .command('init')
+  .description('Initialize VibeCode in the current project directory')
+  .action(init);
+
+// Global installer (NEW)
+program
+  .command('install')
+  .description('Install skills globally and route to all your AI harnesses')
+  .action(install);
+
+// Re-sync (NEW)
+program
+  .command('sync')
+  .description('Re-sync global store to all linked harnesses')
+  .action(sync);
+
+// Add remote skills (NEW)
+program
+  .command('add <url>')
+  .description('Add skills from a GitHub repo into the global store')
+  .action(add);
+
+// Show harness status (NEW)
+program
+  .command('harnesses')
+  .description('Show detected AI harnesses and global store status')
+  .action(harnesses);
+
+// Update from GitHub (EXISTING — enhanced)
+program
   .command('update')
-  .description('Update resources from GitHub (Overwrites local files)')
+  .description('Update resources from GitHub (overwrites local files)')
   .action(async () => {
-    console.log(pc.magenta('📡 VibeSuite Update Protocol'));
+    console.log(pc.magenta('📡 VibeSuite Update Protocol\n'));
+
+    const storeExists = await isStoreInitialized();
 
     const response = await prompts([
       {
@@ -212,7 +583,8 @@ program
         choices: [
           { title: '.agent (Workflows & Skills)', value: 'agent', selected: true },
           { title: 'Agent YAMLs', value: 'yamls' },
-          { title: 'Legacy Protocols', value: 'legacy' }
+          { title: 'Legacy Protocols', value: 'legacy' },
+          ...(storeExists ? [{ title: 'Global Store', value: 'global', description: 'Update ~/.vibesuite/' }] : []),
         ],
         hint: '- Space to select. Return to submit'
       }
@@ -236,7 +608,31 @@ program
       await updateLegacyManual(path.join(destRoot, 'Legacy-Protocols'));
     }
 
-    console.log(pc.magenta('\n✨ Resources updated from GitHub successfully!'));
+    // Update global store if selected
+    if (response.components.includes('global')) {
+      console.log(pc.cyan('\n📡 Updating global store from package assets...\n'));
+      const skills = await populateSkills('all');
+      const workflows = await populateWorkflows('all');
+      const yamls = await populateAgentYamls();
+      console.log(pc.green(`  ✔ ${skills.length} skills, ${workflows.length} workflows, ${yamls.length} YAMLs updated`));
+
+      // Auto-sync to linked harnesses
+      const manifest = await getManifest();
+      if (manifest.linkedHarnesses.length > 0) {
+        const detected = detectHarnesses();
+        const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
+        if (linked.length > 0) {
+          console.log(pc.cyan('\n📡 Auto-syncing to linked harnesses...\n'));
+          await syncToAllHarnesses(linked, STORE_PATH);
+        }
+      }
+
+      manifest.installed.skills = await getStoreSkills();
+      manifest.installed.workflows = await getStoreWorkflows();
+      await writeManifest(manifest);
+    }
+
+    console.log(pc.magenta('\n✨ Resources updated successfully!'));
   });
 
 program.parse();
