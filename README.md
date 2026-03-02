@@ -9,17 +9,33 @@
 
 ## 🚀 Quick Start (Recommended)
 
-Spawn the complete VibeCode system directly into your project with a single command:
+### Option A: Global Install (Best for Multi-IDE Users) ⭐
+
+Install skills **once** and have them available across all your AI harnesses (Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI):
 
 ```bash
-# Using npx (No installation required)
-npx vibesuite init
+# Using pnpm
+pnpm dlx vibesuite install
 
-# Or using pnpm
+# Using npx
+npx vibesuite install
+```
+
+This will:
+- 🔍 **Auto-detect** which AI harnesses are installed on your machine
+- 📦 **Create a global store** at `~/.vibesuite/`
+- 📡 **Sync skills & workflows** to every detected harness's global directory
+- 🔄 **Sync KiloCode YAMLs** to both CLI and VS Code extension paths
+
+### Option B: Per-Project Setup
+
+Spawn VibeCode into a single project's `.agent/` folder:
+
+```bash
 pnpm dlx vibesuite init
 ```
 
-This interactive CLI will let you choose exactly what you need:
+This interactive CLI lets you choose:
 - ✅ **.agent Folder** (For Cursor/Windsurf workflows)
 - ✅ **Kilo Code Agents** (YAML definitions)
 - ✅ **Legacy Protocols** (Manual prompts)
@@ -63,6 +79,52 @@ Everything else (SEO, research, workflow tools):
 ```bash
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
+
+---
+
+## 🌐 Global Skills Router (v2.0)
+
+VibeSuite v2.0 introduces the **Global Skills Router** — install skills once, route to every AI harness automatically. No symlinks, no admin privileges, works on Mac & Windows.
+
+### Supported Harnesses
+
+| Harness | Global Skills Path | Global Workflows Path |
+|---|---|---|
+| **Antigravity** | `~/.gemini/antigravity/skills/` | `~/.gemini/antigravity/global_workflows/` |
+| **KiloCode** | `~/.kilocode/skills/` | `~/.kilocode/workflows/` |
+| **Windsurf** | `~/.codeium/windsurf/skills/` | `~/.codeium/windsurf/global_workflows/` |
+| **Cursor** | `~/.cursor/skills/` | _(uses rules)_ |
+| **Gemini CLI** | `~/.gemini/skills/` | — |
+
+### CLI Commands
+
+| Command | What It Does |
+|---|---|
+| `vibesuite install` | One-time global setup — detect harnesses, create store, sync everything |
+| `vibesuite sync` | Re-sync from `~/.vibesuite/` to all linked harnesses |
+| `vibesuite add <url>` | Fetch skills from any GitHub repo into your global store |
+| `vibesuite harnesses` | Show detected harnesses and global store status |
+| `vibesuite init` | Per-project `.agent/` setup (backward compatible) |
+| `vibesuite update` | Update resources from GitHub (supports global store) |
+
+### Example: Add Remote Skills
+
+```bash
+# Pull skills from any GitHub repo into your global store
+pnpm dlx vibesuite add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
+
+# Check what's detected
+pnpm dlx vibesuite harnesses
+
+# Re-sync after adding new skills
+pnpm dlx vibesuite sync
+```
+
+### KiloCode YAML Auto-Sync
+
+When KiloCode is detected, `vibesuite install` automatically syncs `custom_modes.yaml` to **both** locations:
+- CLI: `~/.kilocode/cli/global/settings/custom_modes.yaml`
+- Extension: `%APPDATA%/Antigravity/User/globalStorage/kilocode.kilo-code/settings/custom_modes.yaml`
 
 ---
 
