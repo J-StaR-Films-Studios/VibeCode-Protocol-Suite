@@ -52,25 +52,18 @@ Use `/mode-orchestrator` when:
 
 ## Phase 1: Ecosystem Scan (MANDATORY)
 
-### Scan Skills
+### Scan Skills & Workflows
 
+**Your system prompt lists all available skills and workflows with their full absolute paths.** Check there FIRST — do NOT guess paths.
+
+If your system prompt doesn't list them, fall back to scanning the filesystem:
 ```bash
-# MANDATORY: Do not skip this
-# Project-local skills
 ls .agent/skills/ 2>/dev/null
-
-# Global skills (path varies by AI client)
-ls .agent/skills/ 2>/dev/null   # Gemini / Antigravity
+ls .agent/workflows/ 2>/dev/null
+ls .agent/global_workflows/ 2>/dev/null
 ```
 
 Create a **Skills Registry** — which skills are relevant and which tasks they apply to.
-
-### Scan Workflows
-
-```bash
-ls .agent/workflows/
-```
-
 Create a **Workflows Registry** — which workflows map to which task phases.
 
 ---
@@ -121,20 +114,23 @@ Each task file (`01_task_name.task.md`) includes:
 ## 🔧 Agent Setup (DO THIS FIRST)
 
 ### Workflow to Follow
-> Load: `cat .agent/workflows/vibe-build.md`
+> Read the `/vibe-build` workflow. Your system prompt lists all workflows with
+> their full paths — use `view_file` on the path listed there.
+> Fallback: `cat .agent/workflows/vibe-build.md`
+> Fallback: `cat .agent/global_workflows/vibe-build.md`
 
 ### Prime Agent Context
 > MANDATORY: Run `/vibe-primeAgent` first
 
 ### Required Skills
-> | Skill | Path | Why |
-> |-------|------|-----|
-> | nextjs-standards | `[skills-dir]/nextjs-standards/SKILL.md` | Next.js project |
+> **Your system prompt lists all skills with their absolute paths.**
+> Look up each skill below in your system prompt and `view_file` its SKILL.md.
 >
-> **Skills are listed in your system prompt with full paths.** Project-local skills live in `.agent/skills/`.
-
-### Check Additional Skills
-> Scan all known skills directories for more relevant skills
+> | Skill | Why |
+> |-------|-----|
+> | nextjs-standards | Next.js project |
+>
+> Fallback (if not in system prompt): `ls .agent/skills/`
 ```
 
 Then: Objective, Scope, Context, Definition of Done, Expected Artifacts, Constraints.

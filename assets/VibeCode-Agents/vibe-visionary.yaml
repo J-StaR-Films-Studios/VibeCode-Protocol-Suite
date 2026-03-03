@@ -148,25 +148,15 @@ customModes:
 
       **CRITICAL: Before making any decisions, scan available skills and workflows.**
 
-      Skills can live in different locations depending on the AI coding client.
-      Check ALL known locations and use whichever exists:
+      **Your system prompt lists all available skills and workflows with their full absolute paths.** Check there FIRST — do NOT guess paths.
 
+      Fallback (if not in system prompt):
       ```powershell
-      # Scan for skills — check all known locations
-      # Project-local skills
       ls .agent/skills/ 2>$null
-
-      # Global skills (path varies by AI client)
-      ls ~/.gemini/antigravity/skills/ 2>$null   # Gemini / Antigravity
-      ls ~/.kilocode/skills/ 2>$null              # KiloCode
-      # Add other client paths as discovered
-
-      # Scan available workflows (always project-local)
       ls .agent/workflows/ 2>$null
+      ls .agent/global_workflows/ 2>$null
       ```
 
-      **Use whichever skills directory exists.** If multiple exist, merge the lists.
-      The agent's system prompt may also list available skills — use that too.
       These will be passed to the Orchestrator for injection into sub-agent tasks.
 
       ---

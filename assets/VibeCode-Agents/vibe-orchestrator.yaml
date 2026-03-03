@@ -111,25 +111,14 @@ customModes:
 
       **MANDATORY STEP — DO NOT SKIP.**
 
-      Before creating ANY task, scan the skills directory to understand what tools
-      are available for sub-agents:
+      **Your system prompt lists all available skills with their full absolute paths.** Check there FIRST — do NOT guess paths.
 
+      If your system prompt doesn't list them, fall back to scanning the filesystem:
       ```powershell
-      # Scan for skills — check all known locations
-      # Project-local skills
       ls .agent/skills/ 2>$null
-
-      # Global skills (path varies by AI client)
-      ls ~/.gemini/antigravity/skills/ 2>$null   # Gemini / Antigravity
-      ls ~/.kilocode/skills/ 2>$null              # KiloCode
-      # Add other client paths as discovered
-
-      # For each skill found, read the SKILL.md to understand its purpose
-      # Focus on the name, description, and triggers
       ```
 
-      **Use whichever skills directory exists.** If multiple exist, merge the lists.
-      The agent's system prompt may also list available skills — use that too.
+      For each relevant skill found, read its SKILL.md to understand its purpose.
 
       Create a skills registry for this session:
 
@@ -313,33 +302,25 @@ customModes:
       ### Workflow to Follow
       > **Primary Workflow:** `/vibe-build` (or whichever is assigned)
       >
-      > Load this workflow FIRST: `cat .agent/workflows/vibe-build.md`
-      > Follow its steps as your execution framework.
+      > Read the workflow from your system prompt — it lists all workflows with
+      > their full paths. Use `view_file` on the path listed there.
+      > Fallback: `cat .agent/workflows/vibe-build.md`
+      > Fallback: `cat .agent/global_workflows/vibe-build.md`
 
       ### Load Prime Agent Context
       > **MANDATORY:** Run `/vibe-primeAgent` before starting ANY work.
       > This loads coding guidelines, project state, and current work.
 
       ### Required Skills
-      > **Load these skills before starting work:**
+      > **Your system prompt lists all skills with their absolute paths.**
+      > Look up each skill below in your system prompt and `view_file` its SKILL.md.
       >
-      > | Skill | Relative Path | Why |
-      > |-------|---------------|-----|
-      > | `nextjs-standards` | `[skills-dir]/nextjs-standards/SKILL.md` | Project uses Next.js App Router |
-      > | `ai-sdk` | `[skills-dir]/ai-sdk/SKILL.md` | This task involves AI features |
+      > | Skill | Why |
+      > |-------|-----|
+      > | `nextjs-standards` | Project uses Next.js App Router |
+      > | `ai-sdk` | This task involves AI features |
       >
-      > **Skills directory varies by client.** Check these locations:
-      > - `.agent/skills/` (project-local)
-      > - `~/.gemini/antigravity/skills/` (Antigravity)
-      > - `~/.kilocode/skills/` (KiloCode)
-      > - Or check your system prompt for available skills
-      >
-      > **How to load:** `cat [path-to-skill]/SKILL.md` and follow the skill's instructions.
-
-      ### Check Available Skills
-      > Before starting, scan all known skills directories for any additional
-      > skills that may help with this specific task. If you find a relevant skill
-      > not listed above, load it.
+      > Fallback (if not in system prompt): `ls .agent/skills/`
 
       ---
 

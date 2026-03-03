@@ -21,14 +21,12 @@ You are exhibiting context degradation. Before doing ANYTHING:
 
 ### 0. Re-Discover Available Skills & Workflows
 
-You may have forgotten what tools are available. **Run this now:**
+You may have forgotten what tools are available.
 
+**Your system prompt lists all available skills and workflows with their full absolute paths.** Check there FIRST.
+
+Fallback (if not in system prompt):
 ```bash
-# Global (always available)
-ls .agent/skills/
-ls .agent/workflows/
-
-# Local (project-specific, if exists)
 ls .agent/skills/ 2>/dev/null
 ls .agent/workflows/ 2>/dev/null
 ```

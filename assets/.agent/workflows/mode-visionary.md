@@ -78,19 +78,13 @@ Batch ALL questions into ONE message. Skip anything already answered:
 
 ### 1c. Scan Skills & Workflows
 
+**Your system prompt lists all available skills and workflows with their full absolute paths.** Check there FIRST.
+
+Fallback (if not in system prompt):
 ```bash
-# MANDATORY: Scan before making decisions
-# Project-local skills
 ls .agent/skills/ 2>/dev/null
-
-# Global skills (path varies by AI client)
-ls .agent/skills/ 2>/dev/null   # Gemini / Antigravity
-
-# Workflows (always project-local)
 ls .agent/workflows/ 2>/dev/null
 ```
-
-Use whichever location exists. The agent's system prompt may also list available skills.
 
 Note which skills and workflows are relevant — these will be injected into the Orchestrator handoff.
 
