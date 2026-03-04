@@ -1,9 +1,16 @@
-# VibeCode Protocol Suite
+# Takomi
 
 <div align="center">
-  <h3>🤖 A Complete System for AI-Human Software Development Collaboration</h3>
-  <p><em>Code with the flow. Code with the vibe.</em></p>
+  <h3>🎯 Stop Wrestling With AI. Start Building With Purpose.</h3>
+  <p><em>The artisan's toolkit that transforms AI from chatbot to development partner — powered by the VibeCode Protocol</em></p>
 </div>
+
+---
+
+> **🎉 Rebrand Notice:** VibeSuite is now **Takomi**!  
+> If you're following tutorials that reference `vibesuite` or `VibeCode`, simply use `takomi` instead.  
+> Example: `npx vibesuite install` → `npx takomi install`  
+> The VibeCode Protocol lives on as the engine powering Takomi.
 
 ---
 
@@ -11,41 +18,41 @@
 
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 
-Install skills **once** and have them available across all your AI harnesses (Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI):
+Install once. Use everywhere. Your skills follow you across every AI harness(Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI):
 
 ```bash
 # Using pnpm
-pnpm dlx vibesuite install
+pnpm dlx takomi install
 
 # Using npx
-npx vibesuite install
+npx takomi install
 ```
 
-This will:
-- 🔍 **Auto-detect** which AI harnesses are installed on your machine
-- 📦 **Create a global store** at `~/.vibesuite/`
-- 📡 **Sync skills & workflows** to every detected harness's global directory
-- 🔄 **Sync KiloCode YAMLs** to both CLI and VS Code extension paths
+What happens next:
+- 🔍 **Auto-detects** every AI harness on your machine
+- 📦 **Creates your command center** at `~/.takomi/`
+- 📡 **Syncs your entire toolkit** to every IDE automatically
+- 🔄 **Keeps KiloCode in sync** across CLI and VS Code
 
 ### Option B: Per-Project Setup
 
-Spawn VibeCode into a single project's `.agent/` folder:
+Need workflows for just this project? Drop them in with one command:
 
 ```bash
-pnpm dlx vibesuite init
+pnpm dlx takomi init
 ```
 
-This interactive CLI lets you choose:
-- ✅ **.agent Folder** (For Cursor/Windsurf workflows)
-- ✅ **Kilo Code Agents** (YAML definitions)
-- ✅ **Legacy Protocols** (Manual prompts)
-- ✅ **Select Specific Workflows/Skills**
+Choose your weapons:
+- ✅ **.agent Folder** — Workflows for Cursor, Windsurf, Gemini Code Assist
+- ✅ **Agent YAMLs** — Custom modes for Kilo Code
+- ✅ **Legacy Protocols** — Copy-paste prompts for browser AI
+- ✅ **Cherry-pick** exactly the workflows and skills you need
 
 ---
 
-## 📦 Install Skills (New Standard)
+## 📦 Skill Ecosystem
 
-Use the new standard `skills` command to pull capabilities directly from the VibeCode Suite.
+Think of skills as specialized team members you can summon on demand. From security audits to AI video generation — there's a skill for that.
 
 ### Interactive Search & Install
 ```bash
@@ -56,26 +63,26 @@ pnpm dlx skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 ```
 
-### Core Essentials (Recommended)
-Coding-focused skills for everyday development:
+### Core Essentials (Start Here)
+The non-negotiables for daily development:
 ```bash
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-sdk --skill code-review --skill component-analysis --skill nextjs-standards --skill security-audit --skill spawn-task --skill stitch --skill sync-docs
 ```
 
 ### Convex Development Suite
-Complete Convex backend development skills:
+Backend superpowers for the Convex ecosystem:
 ```bash
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check
 ```
 
 ### AI Media Suite (Paid / Advanced)
-Specialized skills requiring API keys or paid services:
+For when you need more than code — videos, voice, images, and automation:
 ```bash
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-avatar-video --skill ai-marketing-videos --skill ai-podcast-creation --skill ai-product-photography --skill ai-social-media-content --skill ai-voice-cloning
 ```
 
-### Full Standard Suite (Free)
-Everything else (SEO, research, workflow tools):
+### The Full Arsenal (Free)
+Everything else — SEO, research, documentation, testing, and beyond:
 ```bash
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
@@ -84,7 +91,9 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 
 ## 🌐 Global Skills Router (v2.0)
 
-VibeSuite v2.0 introduces the **Global Skills Router** — install skills once, route to every AI harness automatically. No symlinks, no admin privileges, works on Mac & Windows.
+**One install. Every IDE. Zero friction.**
+
+Takomi v2.0 introduces the **Global Skills Router** — install skills once, and they appear in every AI harness you use. No symlinks. No admin privileges. Works on Mac & Windows.
 
 ### Supported Harnesses
 
@@ -100,45 +109,47 @@ VibeSuite v2.0 introduces the **Global Skills Router** — install skills once, 
 
 | Command | What It Does |
 |---|---|
-| `vibesuite install` | One-time global setup — detect harnesses, create store, sync everything |
-| `vibesuite sync` | Re-sync from `~/.vibesuite/` to all linked harnesses |
-| `vibesuite add <url>` | Fetch skills from any GitHub repo into your global store |
-| `vibesuite harnesses` | Show detected harnesses and global store status |
-| `vibesuite init` | Per-project `.agent/` setup (backward compatible) |
-| `vibesuite update` | Update resources from GitHub (supports global store) |
+| `takomi install` | One-time setup — detects your IDEs, creates your toolkit, syncs everything |
+| `takomi sync` | Push updates from `~/.takomi/` to all linked harnesses |
+| `takomi add <url>` | Pull skills from any GitHub repo into your global store |
+| `takomi harnesses` | See what's connected and your toolkit status |
+| `takomi init` | Project-specific setup (works alongside global) |
+| `takomi update` | Refresh resources from GitHub (global store supported) |
 
 ### Example: Add Remote Skills
 
 ```bash
 # Pull skills from any GitHub repo into your global store
-pnpm dlx vibesuite add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
+pnpm dlx takomi add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 
-# Check what's detected
-pnpm dlx vibesuite harnesses
+# See what's connected
+pnpm dlx takomi harnesses
 
-# Re-sync after adding new skills
-pnpm dlx vibesuite sync
+# Push updates everywhere
+pnpm dlx takomi sync
 ```
 
 ### KiloCode YAML Auto-Sync
 
-When KiloCode is detected, `vibesuite install` automatically syncs `custom_modes.yaml` to **both** locations:
+When KiloCode is detected, `takomi install` syncs `custom_modes.yaml` to **both** locations automatically:
 - CLI: `~/.kilocode/cli/global/settings/custom_modes.yaml`
 - Extension: `%APPDATA%/Antigravity/User/globalStorage/kilocode.kilo-code/settings/custom_modes.yaml`
 
 ---
 
-## 🌟 What is VibeCode?
+## 🌟 What Is Takomi?
 
-VibeCode isn't just a collection of prompts—it's a **complete workflow system** for collaborating with AI to build software. Think of yourself as the Visionary/CEO, and your AI assistants as a specialized, high-performance development team.
+**AI shouldn't feel like a chatbot. It should feel like a teammate.**
 
-This repository contains the **VibeCode Protocol Suite**: a battle-tested collection of protocols, workflows, and prompts that transform AI from simple code generators into genuine project partners.
+Takomi is a complete workflow system for collaborating with AI to build software. Think of yourself as the Visionary/CEO, and your AI assistants as a specialized, high-performance development team that actually delivers.
+
+This isn't prompt engineering. This is **orchestrated development** — a battle-tested collection of protocols, workflows, and prompts that transform AI from code generators into genuine project partners.
 
 ---
 
 ## 📂 Repository Structure
 
-This repo is organized for **two types of users**:
+Built for two types of builders:
 
 | Folder | Purpose | Who It's For |
 |--------|---------|--------------|
@@ -155,9 +166,9 @@ Everything you need is in the **`.agent/`** folder.
 
 ### Quick Setup
 
-1. Copy the `.agent/` folder to the root of your project
-2. The IDE will automatically detect workflows and skills
-3. Invoke workflows with slash commands (e.g., `/init_vibecode_genesis`)
+1. Copy the `.agent/` folder to your project root
+2. Your IDE automatically detects workflows and skills
+3. Invoke with slash commands (e.g., `/init_vibecode_genesis`)
 
 ### What's Inside `.agent/`
 
@@ -234,8 +245,8 @@ Use the **`Legacy (Manual Method)/`** folder with copy-paste prompts.
 ### The Protocol Library
 
 | # | Protocol | Purpose |
-|---|----------|---------|
-| 0 | **VibeCode User Manual** | Complete guide to the system |
+|---|---|----------|
+| 0 | **Takomi User Manual** | Complete guide to the system |
 | 1 | **Project Genesis Protocol** | Start any new project (99% of cases) |
 | 2 | **Ultimate Orchestration Prompt** | One-shot prompt for quick scripts |
 | 3 | **Design System Genesis Protocol** | Create visual design systems |
@@ -259,17 +270,17 @@ The **`Deep_Source_Prompts/`** folder contains the **reference documentation** a
 
 ### Contents
 
-- **Coding Guidelines** - React/TypeScript and Next.js App Router standards
-- **Vercel AI SDK Docs** - Complete AI SDK reference (building RAG, streaming, tools)
-- **Design System Docs** - Google's Material Design 3, mobile-first patterns
-- **Agent Prompts** - Raw system prompts for various AI agents
-- **OpenRouter Docs** - API reference for multi-model routing
+- **Coding Guidelines** — React/TypeScript and Next.js App Router standards
+- **Vercel AI SDK Docs** — Complete AI SDK reference (building RAG, streaming, tools)
+- **Design System Docs** — Google's Material Design 3, mobile-first patterns
+- **Agent Prompts** — Raw system prompts for various AI agents
+- **OpenRouter Docs** — API reference for multi-model routing
 
 > **Note:** These are raw, unprocessed reference materials. They're useful for understanding *why* the workflows are structured the way they are, or for creating new workflows.
 
 ---
 
-## 🎯 The VibeCode Philosophy
+## 🎯 The Takomi Philosophy
 
 - **Structured Collaboration**: Clear roles for different AI agents (Genesis, Designer, Builder, Orchestrator, Architect, Coder, Debugger)
 - **End-to-End Workflows**: From project genesis to debugging escalations
@@ -288,12 +299,12 @@ The V3 workflows introduce verification gates, TypeScript strict mode, and bette
 
 ### Mode Workflows (KiloCode-Inspired)
 New specialized mode workflows for targeted tasks:
-- `/mode-orchestrator` - Coordinate multi-agent projects with session-based task management
-- `/mode-architect` - Plan and design before coding
-- `/mode-code` - Focused implementation mode
-- `/mode-debug` - Systematic troubleshooting
-- `/mode-ask` - Analysis without changes
-- `/mode-review` - Quality assessment
+- `/mode-orchestrator` — Coordinate multi-agent projects with session-based task management
+- `/mode-architect` — Plan and design before coding
+- `/mode-code` — Focused implementation mode
+- `/mode-debug` — Systematic troubleshooting
+- `/mode-ask` — Analysis without changes
+- `/mode-review` — Quality assessment
 
 ### Naming Convention
 - **`vibe-*`** workflows = Project lifecycle (genesis, design, build, continue, finalize)
@@ -372,7 +383,7 @@ cp -r path/to/VibeCode-Protocol-Suite/.agent ./
 
 ## 🤝 Contributing
 
-This is a living system! If you discover improvements:
+This is a living system. If you discover improvements:
 
 1. Test your changes with real projects
 2. Add reference materials to `Deep_Source_Prompts/` if needed
@@ -406,6 +417,6 @@ This repository contains workflow protocols and prompts. Feel free to use, modif
 ---
 
 <div align="center">
-  <p><strong>Built with ❤️ for developers who want to code with the flow</strong></p>
+  <p><strong>Built with ❤️ by artisans who code with the flow</strong></p>
   <p><em>Transform AI from a tool into a true development partner</em></p>
 </div>

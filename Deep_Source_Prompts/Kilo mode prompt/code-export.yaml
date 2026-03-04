@@ -21,7 +21,7 @@ customModes:
       description: The Orchestrator - Autonomously builds projects using sub-agents
       ---
 
-      # /orchestrate - The VibeCode Brain
+      # /orchestrate - The Takomi Brain
 
       ## Phase 0: Prime Self
       1. Read `/README` workflow to understand all available tools

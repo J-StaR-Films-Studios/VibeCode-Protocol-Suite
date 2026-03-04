@@ -151,7 +151,7 @@ export function printHarnessStatus(detected) {
  * Syncs a source directory to a harness target path.
  * Uses hard copy (fs.copy) — no symlinks.
  *
- * @param {string} sourcePath  - Source directory (e.g., ~/.vibesuite/skills/)
+ * @param {string} sourcePath  - Source directory (e.g., ~/.takomi/skills/)
  * @param {string} targetPath  - Destination directory (e.g., ~/.gemini/antigravity/skills/)
  * @param {string} label       - Human-readable label for logging
  * @returns {Promise<number>}  - Number of items copied
@@ -222,7 +222,7 @@ export async function syncFile(sourceFile, targetPaths, label = '') {
  * Syncs skills, workflows, and yamls from the global store to a single harness.
  *
  * @param {{id: string, name: string, targets: object}} harness  - Harness config
- * @param {string} storePath - Path to the global store (~/.vibesuite/)
+ * @param {string} storePath - Path to the global store (~/.takomi/)
  * @returns {Promise<{skills: number, workflows: number, yamls: number}>}
  */
 export async function syncToHarness(harness, storePath) {
@@ -267,7 +267,7 @@ export async function syncToHarness(harness, storePath) {
  * Syncs from the global store to ALL specified harnesses.
  *
  * @param {Array} harnesses - Array of harness configs from detectHarnesses()
- * @param {string} storePath - Path to the global store (~/.vibesuite/)
+ * @param {string} storePath - Path to the global store (~/.takomi/)
  * @returns {Promise<object>} - Summary of sync results
  */
 export async function syncToAllHarnesses(harnesses, storePath) {

@@ -1,7 +1,7 @@
 # CLI Resource Installer & Network Resilience
 
 ## Overview
-The VibeSuite CLI (`src/cli.js`) serves as the primary entry point for initializing the VibeCode ecosystem. Its core function, the **Resource Installer**, handles the acquisition and deployment of "Brain Resources" (Workflows and Skills) into the user's workspace.
+The Takomi CLI (`src/cli.js`) serves as the primary entry point for initializing the Takomi ecosystem. Its core function, the **Resource Installer**, handles the acquisition and deployment of "Brain Resources" (Workflows and Skills) into the user's workspace.
 
 Recently enhanced with a **Smart Network Protocol**, the installer is designed to be resilient against poor connectivity, ensuring users can always access their tools even when GitHub's raw content servers are unstable or unreachable.
 
@@ -21,7 +21,7 @@ Recently enhanced with a **Smart Network Protocol**, the installer is designed t
 
 ## Key Components
 
-### 1. The Resource Installer (`vibesuite init`)
+### 1. The Resource Installer (`takomi init`)
 The installer follows a "Scaffold & Fill" pattern:
 1.  **Selection**: User selects components (Workflows, Skills, YAMLs, Legacy).
 2.  **Targeting**: User specifies the destination directory.

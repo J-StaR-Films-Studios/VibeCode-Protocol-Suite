@@ -1,4 +1,4 @@
-# VibeCode Skills Curation - Agent Handoff
+# Takomi Skills Curation - Agent Handoff
 
 ## Your Mission
 
@@ -40,7 +40,7 @@ Audit newly installed skills in `.agent/skills/`, then:
 ✅ **Keep if:**
 - High-quality documentation
 - Unique functionality (not duplicating existing skills)
-- Practical for VibeCode users
+- Practical for Takomi users
 
 ❌ **Flag/Skip if:**
 - Thin content (just conceptual, no tooling)

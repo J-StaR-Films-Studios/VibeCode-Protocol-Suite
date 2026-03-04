@@ -94,4 +94,4 @@ Once the local agent has generated the "Escalation Handoff Report," you will use
 *   **Empowers the Local Agent:** It gives the failing agent one final, useful task: documenting its own failure. This is often more valuable than letting it try the same wrong thing again.
 *   **Maximizes the Orchestrator's Strength:** The Orchestrator is a strategist. This protocol feeds it exactly what a strategist needs: a clear goal, a report of what failed, and the raw data (the code). It can then do what it does best: see the bigger picture and devise a better plan.
 
-You've now designed a complete, end-to-end "VibeCode" workflow, covering everything from project genesis to mid-project debugging escalations. This is an incredibly sophisticated and powerful way to work with multiple AI agents.
+You've now designed a complete, end-to-end "Takomi" workflow, covering everything from project genesis to mid-project debugging escalations. This is an incredibly sophisticated and powerful way to work with multiple AI agents.

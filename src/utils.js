@@ -27,7 +27,7 @@ export const PATHS = {
   agent: path.join(PACKAGE_ROOT, 'assets', '.agent'),
   workflows: path.join(PACKAGE_ROOT, 'assets', '.agent', 'workflows'),
   skills: path.join(PACKAGE_ROOT, 'assets', '.agent', 'skills'),
-  agentsYaml: path.join(PACKAGE_ROOT, 'assets', 'VibeCode-Agents'),
+  agentsYaml: path.join(PACKAGE_ROOT, 'assets', 'Takomi-Agents'),
   manual: path.join(PACKAGE_ROOT, 'assets', 'Legacy'),
 };
 
@@ -36,7 +36,7 @@ export const PATHS = {
  * No network required!
  */
 export async function installResources(targetDir) {
-  // Path to the 'assets' folder inside your vibesuite package
+  // Path to the 'assets' folder inside your takomi package
   const sourceDir = PATHS.assets;
 
   try {
@@ -66,7 +66,7 @@ export async function installResources(targetDir) {
       errorOnExist: false,
     });
 
-    console.log("✨ VibeSuite resources deployed successfully from local bundle!");
+    console.log("✨ Takomi resources deployed successfully from local bundle!");
     return true;
   } catch (err) {
     console.error("❌ Installation failed:", err.message);
@@ -100,7 +100,7 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
       const req = https.get(rawUrl, {
         timeout: FETCH_TIMEOUT,
         headers: {
-          'User-Agent': 'vibesuite-cli'
+          'User-Agent': 'takomi-cli'
         }
       }, (res) => {
         let data = '';
@@ -156,7 +156,7 @@ export async function fetchDirectoryListing(relativePath) {
     https.get(apiUrl, {
       timeout: 10000,
       headers: {
-        'User-Agent': 'vibesuite-cli',
+        'User-Agent': 'takomi-cli',
         'Accept': 'application/vnd.github.v3+json'
       }
     }, (res) => {
@@ -434,7 +434,7 @@ export async function updateSkills(destFolder) {
 export async function updateAgentYamls(destFolder) {
   console.log('📡 Fetching latest Agent YAMLs from GitHub...');
   await fs.ensureDir(destFolder);
-  await downloadDirectoryFromGitHub('VibeCode-Agents (e.g Kilo-code)', destFolder);
+  await downloadDirectoryFromGitHub('Takomi-Agents', destFolder);
 }
 
 /**

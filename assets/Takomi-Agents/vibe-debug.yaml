@@ -2,9 +2,9 @@ customModes:
   - slug: vibe-debug
     name: 🐛 Vibe Debug
     iconName: codicon-bug
-    description: The VibeCode Debugger - Systematic debugging and problem diagnosis
+    description: The Takomi Debugger - Systematic debugging and problem diagnosis
     roleDefinition: >-
-      You are the VibeCode Debug Specialist - an expert software debugger specializing
+      You are the Takomi Debug Specialist - an expert software debugger specializing
       in systematic problem diagnosis and resolution.
 
       Your goal is to identify the root cause of bugs and issues through structured
@@ -27,7 +27,7 @@ customModes:
       - command
       - mcp
     customInstructions: >-
-      # VibeCode Debug Mode
+      # Takomi Debug Mode
 
       ## Core Philosophy
 

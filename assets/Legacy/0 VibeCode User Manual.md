@@ -1,6 +1,8 @@
-### **The VibeCode Protocol Suite: A User Manual v2.0**
+### **Takomi — The Artisan's Toolkit for AI-Human Development: A User Manual v2.0**
 
-Welcome to VibeCode. This isn't just a collection of prompts; it's a complete system for collaborating with AI to build software. Think of yourself as the Visionary or the CEO, and your AI assistants as a specialized, high-performance team. This guide explains who's on your team and which playbook (protocol) to use for any situation you'll encounter.
+Welcome to Takomi. This isn't just a collection of prompts; it's a complete system for collaborating with AI to build software. Think of yourself as the Visionary or the CEO, and your AI assistants as a specialized, high-performance team. This guide explains who's on your team and which playbook (protocol) to use for any situation you'll encounter.
+
+> *Part of the Takomi suite (formerly VibeCode Protocol Suite)*
 
 ## Your AI Team: The Cast of Characters
 
@@ -11,7 +13,7 @@ You'll work with a few different types of AI agents. Knowing who does what is th
 *   **The In-IDE Assistant (Your "Pair Programmer"):** This AI lives in your code editor (e.g., GitHub Copilot, Cursor). It's a tactical expert, helping you write or fix individual functions, generate tests, and refactor small pieces of code. It works best when given very specific, in-the-moment tasks.
 *   **The Design Agent (Your "UI/UX Specialist"):** A specialized AI (like Midjourney for concepts or a GPT-4V model for code) that focuses purely on visual design, creating style guides and HTML/CSS mockups based on a strict set of rules.
 
-## The VibeCode Playbook: A Protocol for Every Situation
+## The Takomi Playbook: A Protocol for Every Situation
 
 Here’s your library of protocols. Use this guide to know which one to grab and when.
 
@@ -21,7 +23,7 @@ Here’s your library of protocols. Use this guide to know which one to grab and
 
 When you have a new idea, this is your starting line. We have two protocols for this, but one is the standard for any real project.
 
-#### **Your Go-To Choice (99% of the time): `Project Genesis Protocol The VibeCode Workflow.md`**
+#### **Your Go-To Choice (99% of the time): `Project Genesis Protocol — The Takomi Workflow.md`**
 
 **➡️ When to use it:** Always. Use this for any new project, from a simple utility to a full-blown web application.
 
@@ -153,7 +155,7 @@ Let's see how this works in practice.
 
 **1. The Idea:** You want to build a simple desktop app called "SmartNotes" that uses AI to automatically tag your notes.
 
-**2. Project Genesis:** You grab `Project Genesis Protocol The VibeCode Workflow.md`. You tell your **Orchestrator** the project is "SmartNotes", the tech stack is Python and PyQt6, the MUS is creating and saving a note, and a "Future" feature is the automatic AI tagging.
+**2. Project Genesis:** You grab `Project Genesis Protocol — The Takomi Workflow.md`. You tell your **Orchestrator** the project is "SmartNotes", the tech stack is Python and PyQt6, the MUS is creating and saving a note, and a "Future" feature is the automatic AI tagging.
 *   *Outcome:* The Orchestrator gives you a `Project_Requirements.md`, `Coding_Guidelines.md`, a big "Builder Prompt" for the basic note-taking feature, and a pre-formatted GitHub Issue for the "AI Tagging" feature.
 
 **3. The First Build:** You give the "Builder Prompt" to a **Builder Agent**.

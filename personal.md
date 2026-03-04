@@ -1,6 +1,6 @@
 # Personal Skills (Not for Distribution)
 
-These skills are installed locally but NOT included in the VibeCode assets distribution.
+These skills are installed locally but NOT included in the Takomi assets distribution.
 
 ## Kept Personal
 

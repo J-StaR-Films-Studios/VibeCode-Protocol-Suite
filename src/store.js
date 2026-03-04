@@ -6,13 +6,13 @@ import { PATHS } from './utils.js';
 
 // ─── Global Store Path ───────────────────────────────────────────────────────
 const HOME = os.homedir();
-export const STORE_PATH = path.join(HOME, '.vibesuite');
+export const STORE_PATH = path.join(HOME, '.takomi');
 export const MANIFEST_PATH = path.join(STORE_PATH, 'manifest.json');
 
 // ─── Store Structure ─────────────────────────────────────────────────────────
 
 /**
- * Creates the global store directory structure at ~/.vibesuite/
+ * Creates the global store directory structure at ~/.takomi/
  * Idempotent — safe to call multiple times.
  * @returns {Promise<void>}
  */
@@ -136,7 +136,7 @@ export async function populateWorkflows(mode) {
         'vibe-continueBuild.md', 'vibe-finalize.md', 'vibe-spawnTask.md',
         'vibe-primeAgent.md', 'vibe-syncDocs.md', 'stitch.md',
         'mode-orchestrator.md', 'mode-architect.md', 'mode-code.md',
-        'mode-debug.md', 'mode-ask.md', 'mode-review.md',
+        'mode-debug.md', 'mode-ask.md', 'mode-review.md', 'mode-visionary.md',
     ];
 
     let workflowsToCopy = [];

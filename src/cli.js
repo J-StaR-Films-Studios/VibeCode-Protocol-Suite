@@ -43,12 +43,12 @@ import {
 const program = new Command();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// vibesuite init (EXISTING — Backward Compatible)
+// takomi init (EXISTING — Backward Compatible)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function init() {
-  console.log(pc.magenta(figlet.textSync('VibeSuite', { horizontalLayout: 'full' })));
-  console.log(pc.cyan('   J StaR Films Studios VibeCode Protocol Suite\n'));
+  console.log(pc.magenta(figlet.textSync('Takomi', { horizontalLayout: 'full' })));
+  console.log(pc.cyan('   Your AI team. Activated. 🚀\n'));
 
   const response = await prompts([
     {
@@ -141,7 +141,7 @@ async function init() {
           'vibe-continueBuild.md', 'vibe-finalize.md', 'vibe-spawnTask.md',
           'vibe-primeAgent.md', 'vibe-syncDocs.md', 'stitch.md',
           'mode-orchestrator.md', 'mode-architect.md', 'mode-code.md',
-          'mode-debug.md', 'mode-ask.md', 'mode-review.md'
+          'mode-debug.md', 'mode-ask.md', 'mode-review.md', 'mode-visionary.md'
         ];
         await copySpecificWorkflows(coreWorkflows, workflowsDest);
       } else if (response.workflowMode === 'all') {
@@ -181,7 +181,7 @@ async function init() {
     // 2. Handle Agent YAMLs
     if (response.components.includes('yamls')) {
       console.log(pc.green('✔ Downloading Agent YAMLs...'));
-      const yamlDest = path.join(destRoot, 'VibeCode-Agents');
+      const yamlDest = path.join(destRoot, 'Takomi-Agents');
       await copyAgentYamls(yamlDest);
     }
 
@@ -192,13 +192,13 @@ async function init() {
       await copyLegacyManual(legacyDest);
     }
 
-    console.log(pc.magenta('\n✨ VibeCode Protocol Suite spawned successfully! ✨'));
+    console.log(pc.magenta('\n✨ Your toolkit is ready. Let\'s build something extraordinary. ✨'));
     console.log(pc.white(`\nNext steps:`));
     if (response.components.includes('agent')) {
-      console.log(pc.gray(`1. If using Cursor/Windsurf, the .agent folder is ready.`));
-      console.log(pc.gray(`2. Try typing '/init_vibecode_genesis' in your IDE.`));
+      console.log(pc.gray(`1. Your .agent folder is armed and ready.`));
+      console.log(pc.gray(`2. Type '/init_vibecode_genesis' in your IDE to begin.`));
     }
-    console.log(pc.dim(`\n💡 Tip: Run "vibesuite install" for global multi-IDE setup.\n`));
+    console.log(pc.dim(`\n💡 Pro tip: Run "takomi install" to sync this toolkit across all your IDEs.\n`));
 
   } catch (error) {
     console.error(pc.red('Error during installation:'), error);
@@ -206,12 +206,12 @@ async function init() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// vibesuite install (NEW — Global Setup + Harness Routing)
+// takomi install (NEW — Global Setup + Harness Routing)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function install() {
-  console.log(pc.magenta(figlet.textSync('VibeSuite', { horizontalLayout: 'full' })));
-  console.log(pc.cyan('   🌐 Global Installer v2.0\n'));
+  console.log(pc.magenta(figlet.textSync('Takomi', { horizontalLayout: 'full' })));
+  console.log(pc.cyan('   🌐 One install. Every IDE. Zero friction.\n'));
 
   // 1. Detect harnesses
   const detected = detectHarnesses();
@@ -219,8 +219,8 @@ async function install() {
 
   if (detected.length === 0) {
     console.log(pc.yellow('  No AI harnesses detected on this machine.'));
-    console.log(pc.dim('  Supported: Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI'));
-    console.log(pc.dim('  Use "vibesuite init" for per-project setup instead.\n'));
+    console.log(pc.dim('  We support: Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI'));
+    console.log(pc.dim('  Run "takomi init" instead for per-project setup.\n'));
     return;
   }
 
@@ -284,7 +284,7 @@ async function install() {
       name: 'workflowMode',
       message: 'Which workflow pack?',
       choices: [
-        { title: 'Core (15 essentials)', value: 'core', description: 'vibe-build, mode-architect...' },
+        { title: 'Core (16 essentials)', value: 'core', description: 'vibe-build, mode-architect...' },
         { title: `All (${(await getWorkflows()).length} workflows)`, value: 'all' },
         { title: 'All (Exclude Legacy)', value: 'no-legacy' },
         { title: 'Custom selection', value: 'custom' },
@@ -343,11 +343,11 @@ async function install() {
     await writeManifest(manifest);
 
     // 8. Summary
-    console.log(pc.magenta('\n✨ VibeSuite installed globally! ✨'));
+    console.log(pc.magenta('\n✨ Your command center is live. ✨'));
     console.log(pc.white(`\n  Store:     ${STORE_PATH}`));
-    console.log(pc.white(`  Harnesses: ${selectedHarnesses.map(h => h.name).join(', ')}`));
-    console.log(pc.dim(`\n  Run "vibesuite sync" to re-sync after adding new skills.`));
-    console.log(pc.dim(`  Run "vibesuite add <github-url>" to fetch remote skills.\n`));
+    console.log(pc.white(`  Connected: ${selectedHarnesses.map(h => h.name).join(', ')}`));
+    console.log(pc.dim(`\n  Add skills:    takomi add <github-url>`));
+    console.log(pc.dim(`  Sync updates:  takomi sync\n`));
 
   } catch (error) {
     console.error(pc.red('\nError during global installation:'), error);
@@ -355,15 +355,15 @@ async function install() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// vibesuite sync (NEW — Re-sync store to all harnesses)
+// takomi sync (NEW — Re-sync store to all harnesses)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function sync() {
-  console.log(pc.magenta('📡 VibeSuite Sync\n'));
+  console.log(pc.magenta('📡 Syncing your toolkit to all connected IDEs...\n'));
 
   // Check if global store exists
   if (!await isStoreInitialized()) {
-    console.log(pc.yellow('Global store not found. Run "vibesuite install" first.\n'));
+    console.log(pc.yellow('No command center found. Run "takomi install" first.\n'));
     return;
   }
 
@@ -402,20 +402,20 @@ async function sync() {
 
   const skills = await getStoreSkills();
   const workflows = await getStoreWorkflows();
-  console.log(pc.magenta(`\n✨ Synced ${skills.length} skills + ${workflows.length} workflows to ${selectedHarnesses.length} harness(es).\n`));
+  console.log(pc.magenta(`\n✨ ${skills.length} skills and ${workflows.length} workflows synced to ${selectedHarnesses.length} IDE(s). Ready to build.\n`));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// vibesuite add <url> (NEW — Fetch remote skills from GitHub)
+// takomi add <url> (NEW — Fetch remote skills from GitHub)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function add(url) {
-  console.log(pc.magenta('📥 VibeSuite Add\n'));
+  console.log(pc.magenta('📥 Adding new capabilities to your toolkit...\n'));
 
   // Parse GitHub URL → owner/repo
   const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
   if (!match) {
-    console.log(pc.red('Invalid GitHub URL. Expected: https://github.com/owner/repo'));
+    console.log(pc.red('That doesn\'t look like a GitHub URL. Expected: https://github.com/owner/repo'));
     return;
   }
 
@@ -431,7 +431,7 @@ async function add(url) {
 
   console.log(pc.cyan('📡 Fetching from GitHub...\n'));
 
-  // Try assets/.agent/skills/ first (VibeSuite structure)
+  // Try assets/.agent/skills/ first (Takomi structure)
   let skillCount = await downloadDirectoryFromGitHub(
     'assets/.agent/skills',
     skillsDest,
@@ -472,7 +472,7 @@ async function add(url) {
     return;
   }
 
-  console.log(pc.green(`\n  ✔ Added ${skillCount} skills, ${workflowCount} workflows to global store.`));
+  console.log(pc.green(`\n  ✔ ${skillCount} skills and ${workflowCount} workflows added to your command center.`));
 
   // Update manifest
   const manifest = await getManifest();
@@ -485,7 +485,7 @@ async function add(url) {
     const syncResponse = await prompts({
       type: 'confirm',
       name: 'doSync',
-      message: 'Sync to linked harnesses now?',
+      message: 'Push these to your connected IDEs now?',
       initial: true,
     });
 
@@ -493,19 +493,19 @@ async function add(url) {
       const detected = detectHarnesses();
       const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
       await syncToAllHarnesses(linked, STORE_PATH);
-      console.log(pc.magenta(`\n✨ Synced to ${linked.length} harness(es).\n`));
+      console.log(pc.magenta(`\n✨ Live on ${linked.length} IDE(s). You're armed and ready.\n`));
     }
   } else {
-    console.log(pc.dim('\n  Run "vibesuite sync" to push these to your harnesses.\n'));
+    console.log(pc.dim('\n  Run "takomi sync" when you want to push these to your IDEs.\n'));
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// vibesuite harnesses (NEW — Show detected harnesses + status)
+// takomi harnesses (NEW — Show detected harnesses + status)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function harnesses() {
-  console.log(pc.magenta('🔌 VibeSuite Harnesses\n'));
+  console.log(pc.magenta('🔌 Your Connected IDEs\n'));
 
   const detected = detectHarnesses();
   printHarnessStatus(detected);
@@ -516,14 +516,14 @@ async function harnesses() {
     const skills = await getStoreSkills();
     const workflows = await getStoreWorkflows();
 
-    console.log(pc.cyan('📦 Global Store Status\n'));
-    console.log(pc.white(`  Path:      ${STORE_PATH}`));
-    console.log(pc.white(`  Skills:    ${skills.length}`));
-    console.log(pc.white(`  Workflows: ${workflows.length}`));
-    console.log(pc.white(`  Linked:    ${manifest.linkedHarnesses.join(', ') || 'none'}`));
+    console.log(pc.cyan('📦 Command Center Status\n'));
+    console.log(pc.white(`  Location:  ${STORE_PATH}`));
+    console.log(pc.white(`  Skills:    ${skills.length} ready to deploy`));
+    console.log(pc.white(`  Workflows: ${workflows.length} available`));
+    console.log(pc.white(`  Connected: ${manifest.linkedHarnesses.join(', ') || 'none'}`));
     console.log(pc.dim(`  Updated:   ${manifest.updatedAt}\n`));
   } else {
-    console.log(pc.dim('  Global store not initialized. Run "vibesuite install" to set up.\n'));
+    console.log(pc.dim('  No command center yet. Run "takomi install" to build your toolkit.\n'));
   }
 }
 
@@ -532,46 +532,46 @@ async function harnesses() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 program
-  .name('vibesuite')
-  .description('VibeCode Protocol Suite CLI — Skills, Workflows & Agent Modes')
+  .name('takomi')
+  .description('Your AI team. Activated. 🎯')
   .version('2.0.0');
 
 // Per-project setup (backward compatible)
 program
   .command('init')
-  .description('Initialize VibeCode in the current project directory')
+  .description('Drop Takomi into this project')
   .action(init);
 
 // Global installer (NEW)
 program
   .command('install')
-  .description('Install skills globally and route to all your AI harnesses')
+  .description('Build your global command center')
   .action(install);
 
 // Re-sync (NEW)
 program
   .command('sync')
-  .description('Re-sync global store to all linked harnesses')
+  .description('Push updates to all connected IDEs')
   .action(sync);
 
 // Add remote skills (NEW)
 program
   .command('add <url>')
-  .description('Add skills from a GitHub repo into the global store')
+  .description('Import skills from any GitHub repo')
   .action(add);
 
 // Show harness status (NEW)
 program
   .command('harnesses')
-  .description('Show detected AI harnesses and global store status')
+  .description('See your toolkit status and connected IDEs')
   .action(harnesses);
 
 // Update from GitHub (EXISTING — enhanced)
 program
   .command('update')
-  .description('Update resources from GitHub (overwrites local files)')
+  .description('Pull fresh resources from GitHub')
   .action(async () => {
-    console.log(pc.magenta('📡 VibeSuite Update Protocol\n'));
+    console.log(pc.magenta('📡 Updating your toolkit from GitHub...\n'));
 
     const storeExists = await isStoreInitialized();
 
@@ -584,7 +584,7 @@ program
           { title: '.agent (Workflows & Skills)', value: 'agent', selected: true },
           { title: 'Agent YAMLs', value: 'yamls' },
           { title: 'Legacy Protocols', value: 'legacy' },
-          ...(storeExists ? [{ title: 'Global Store', value: 'global', description: 'Update ~/.vibesuite/' }] : []),
+          ...(storeExists ? [{ title: 'Global Store', value: 'global', description: 'Update ~/.takomi/' }] : []),
         ],
         hint: '- Space to select. Return to submit'
       }
@@ -601,7 +601,7 @@ program
     }
 
     if (response.components.includes('yamls')) {
-      await updateAgentYamls(path.join(destRoot, 'VibeCode-Agents'));
+      await updateAgentYamls(path.join(destRoot, 'Takomi-Agents'));
     }
 
     if (response.components.includes('legacy')) {
@@ -632,7 +632,7 @@ program
       await writeManifest(manifest);
     }
 
-    console.log(pc.magenta('\n✨ Resources updated successfully!'));
+    console.log(pc.magenta('\n✨ Your toolkit is fresh and ready to ship.'));
   });
 
 program.parse();

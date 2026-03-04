@@ -4,18 +4,18 @@ A comprehensive checklist to test the 23 newly added skills. Each task is design
 
 ## Media & Content Creation (Inference.sh)
 
-- [ ] **`ai-marketing-videos`**: Create a 30-second promo for "VibeCode"
-    > "Create a 30s marketing video for VibeCode - a fast, agentic coding protocol. Visuals: Cyberpunk coding interface, fast typing, glowing circuits. Voiceover: Energetic, professional. Script: Mention 'Stop coding slow. Start VibeCoding.'"
+- [ ] **`ai-marketing-videos`**: Create a 30-second promo for "Takomi"
+    > "Create a 30s marketing video for Takomi - a fast, agentic coding protocol. Visuals: Cyberpunk coding interface, fast typing, glowing circuits. Voiceover: Energetic, professional. Script: Mention 'Stop coding slow. Start building with the artisan's toolkit.'"
 - [ ] **`ai-social-media-content`**: Generate a TikTok script & visual concepts
     > "Create a TikTok concept for launching a new AI tool. Audience: Gen Z developers. Hook: 'Your IDE is lying to you.' Visual style: Glitchcore."
 - [ ] **`ai-voice-cloning`**: Generate a welcome message
-    > "Generate a welcome audio message using a deep, cinematic voice stating: 'Welcome to the VibeCode Protocol. System initialized.'"
+    > "Generate a welcome audio message using a deep, cinematic voice stating: 'Welcome to Takomi. The Artisan\'s Toolkit for AI-Human Development. System initialized.'"
 - [ ] **`ai-avatar-video`**: Create a talking head update
     > "Create a talking head video of an AI avatar giving a 15-second status update on 'Server Deployment Complete'."
 - [ ] **`ai-podcast-creation`**: Generate a mini-podcast intro
     > "Create a 30-second podcast intro with background music. Topic: 'The Future of Agentic Coding'. Two voices discussing the shift from manual to autonomous coding."
 - [ ] **`ai-product-photography`**: Generate a mockup
-    > "Generate a photorealistic product shot of a 'VibeCode Mechanical Keyboard' on a neon-lit desk. Style: Cyberpunk, macro lens, bokeh."
+    > "Generate a photorealistic product shot of a 'Takomi Mechanical Keyboard' on a neon-lit desk. Style: Cyberpunk, macro lens, bokeh."
 - [ ] **`prompt-engineering`**: Optimize a complex prompt
     > "Refine this prompt for better reasoning: 'Fix my code it doesn't work'. Make it a perfect chain-of-thought system prompt for a senior engineer agent."
 
@@ -63,7 +63,7 @@ A comprehensive checklist to test the 23 newly added skills. Each task is design
 - [ ] **`xlsx`**: Financial Model
     > "Create a generic SaaS financial model in .xlsx. Columns: Month 1-12. Rows: Revenue, COGS, Gross Margin, OpEx, Net Income. Include formulas."
 - [ ] **`pptx`**: Pitch Deck
-    > "Create a 5-slide pitch deck structure in .pptx for 'VibeCode'. Slides: Problem, Solution, Market, Team, Ask."
+    > "Create a 5-slide pitch deck structure in .pptx for 'Takomi'. Slides: Problem, Solution, Market, Team, Ask."
 
 ## Advanced & Artistic
 

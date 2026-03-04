@@ -1,6 +1,6 @@
 # KiloCode Mode Prompts - Reference Documentation
 
-This directory contains the exported YAML mode definitions from KiloCode. These serve as the foundation for creating VibeCode workflows.
+This directory contains the exported YAML mode definitions from KiloCode. These serve as the foundation for creating Takomi workflows.
 
 ## Overview
 
@@ -24,10 +24,10 @@ KiloCode uses a mode-based system where each mode has:
 | [`debug`](./debug-export.yaml) | Systematic debugging and diagnosis | Investigates errors, adds logging |
 | [`review`](./review-export.yaml) | Code review and quality assessment | Analyzes diffs, provides feedback |
 
-## Key Insights for VibeCode Workflows
+## Key Insights for Takomi Workflows
 
 ### 1. Orchestrator Pattern
-The orchestrator mode is the most important for VibeCode's multi-agent workflow:
+The orchestrator mode is the most important for Takomi's multi-agent workflow:
 
 ```yaml
 customInstructions: >-
@@ -65,9 +65,9 @@ groups:
 | `command` | execute_command |
 | `mcp` | MCP server tools |
 
-## VibeCode Adaptation Strategy
+## Takomi Adaptation Strategy
 
-Since VibeCode doesn't have a `new_task` tool like KiloCode, we adapt the orchestrator pattern:
+Since Takomi doesn't have a `new_task` tool like KiloCode, we adapt the orchestrator pattern:
 
 1. **Task Spawning**: Use `/spawn_task` workflow to create detailed task files
 2. **Sub-agent Simulation**: User manually spawns new chats with task files
@@ -90,12 +90,12 @@ docs/tasks/
 
 ## Migration Notes
 
-When converting KiloCode modes to VibeCode workflows:
+When converting KiloCode modes to Takomi workflows:
 
 1. **Keep the role definition** - The core identity remains the same
-2. **Adapt tool references** - Map KiloCode tools to VibeCode equivalents
+2. **Adapt tool references** - Map KiloCode tools to Takomi equivalents
 3. **Replace `new_task` with task file creation** - Document the manual handoff process
-4. **Add VibeCode-specific conventions** - Reference existing workflows like `/spawn_task`
+4. **Add Takomi-specific conventions** - Reference existing workflows like `/spawn_task`
 5. **Include completion protocols** - Define how sub-agents signal they're done
 
 ## Future Extensions
@@ -109,4 +109,4 @@ Additional KiloCode modes that could be adapted:
 
 ---
 
-*This documentation helps future developers understand the KiloCode foundation and extend the VibeCode workflow system.*
+*This documentation helps future developers understand the KiloCode foundation and extend the Takomi workflow system.*
