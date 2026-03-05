@@ -161,6 +161,7 @@ async function init() {
       if (response.skillMode === 'core') {
         console.log(pc.green('✔ Downloading Core Skills...'));
         const coreSkills = [
+          'takomi',
           'ai-sdk', 'code-review', 'component-analysis',
           'nextjs-standards', 'security-audit', 'spawn-task',
           'stitch', 'sync-docs'
@@ -196,7 +197,7 @@ async function init() {
     console.log(pc.white(`\nNext steps:`));
     if (response.components.includes('agent')) {
       console.log(pc.gray(`1. Your .agent folder is armed and ready.`));
-      console.log(pc.gray(`2. Type '/init_vibecode_genesis' in your IDE to begin.`));
+      console.log(pc.gray(`2. In Codex, say "use takomi genesis" (slash command optional).`));
     }
     console.log(pc.dim(`\n💡 Pro tip: Run "takomi install" to sync this toolkit across all your IDEs.\n`));
 
@@ -263,7 +264,7 @@ async function install() {
       name: 'skillMode',
       message: 'Which skill pack?',
       choices: [
-        { title: 'Core (8 essentials)', value: 'core', description: 'ai-sdk, code-review, nextjs-standards...' },
+        { title: 'Core (Takomi + essentials)', value: 'core', description: 'takomi, ai-sdk, code-review...' },
         { title: `All (${(await getSkills()).length} skills)`, value: 'all' },
         { title: 'Custom selection', value: 'custom' },
       ],

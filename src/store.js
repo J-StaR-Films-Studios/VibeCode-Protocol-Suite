@@ -84,6 +84,7 @@ export async function populateSkills(mode) {
     await fs.ensureDir(storeSkills);
 
     const coreSkills = [
+        'takomi',
         'ai-sdk', 'code-review', 'component-analysis', 'context7',
         'nextjs-standards', 'security-audit', 'spawn-task', 'stitch',
     ];

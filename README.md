@@ -50,6 +50,30 @@ Choose your weapons:
 
 ---
 
+## Codex Takomi Skills (No Slash Required)
+
+Takomi now supports a full skill-native protocol path in Codex:
+- Router skill: `takomi`
+- Specialist skills: `takomi-*` (migrated from non-legacy workflows)
+- Backward phrase aliases: `vibe genesis`, `vibe build`, `mode code`, and related prior names
+
+Use natural language:
+
+```text
+use takomi
+use takomi genesis
+run vibe genesis
+continue build with takomi
+```
+
+Install the Takomi protocol suite:
+
+```bash
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill takomi
+```
+
+---
+
 ## 📦 Skill Ecosystem
 
 Think of skills as specialized team members you can summon on demand. From security audits to AI video generation — there's a skill for that.
@@ -66,7 +90,7 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 ### Core Essentials (Start Here)
 The non-negotiables for daily development:
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill ai-sdk --skill code-review --skill component-analysis --skill nextjs-standards --skill security-audit --skill spawn-task --skill stitch --skill sync-docs
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill takomi
 ```
 
 ### Convex Development Suite
@@ -168,7 +192,7 @@ Everything you need is in the **`.agent/`** folder.
 
 1. Copy the `.agent/` folder to your project root
 2. Your IDE automatically detects workflows and skills
-3. Invoke with slash commands (e.g., `/init_vibecode_genesis`)
+3. Invoke with natural language in Codex (e.g., `use takomi genesis`) - slash commands are optional
 
 ### What's Inside `.agent/`
 
