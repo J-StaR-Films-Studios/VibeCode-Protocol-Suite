@@ -1,121 +1,161 @@
 ---
-description: Spawn J Star Code Review bot into the current repository
+description: Install J-Star Reviewer in the current repository and set up the up-to-date review and audit flows.
 ---
 
-# /spawn-jstar - Add J Star Reviewer v2 to Any Project
+# /spawn-jstar - Install J-Star Reviewer in This Repository
 
-Works with **any programming language** — TypeScript, Python, Rust, Go, etc.
+Use this workflow to install the `jstar-reviewer` npm package and wire the repository for both code review and security audit.
 
-## Prerequisites
-- Node.js 18+ installed on your machine
+## Core Rule
 
-## Steps
+`review` and `audit` are separate steps.
 
-### 1. Install the CLI Globally (One Time) use pnpm by default else revert to npm
-// turbo
+For a serious verification pass, run both. Do not present one as a substitute for the other.
+
+## Command Prefix
+
+Examples below use `jstar`.
+
+If you do not want a global install, replace `jstar` with `npx jstar-reviewer`.
+
+## 1. Prerequisites
+
+- Node.js 18+
+- Git repository
+- Gemini API key
+- Groq API key
+
+## 2. Install the CLI
+
+Preferred:
+
 ```bash
-pnpm install -g jstar-reviewer
+pnpm add -g jstar-reviewer
 ```
 
-### 2. Run your First Command
-// turbo
+Fallback:
+
+```bash
+npm install -g jstar-reviewer
+```
+
+No global install:
+
+```bash
+npx jstar-reviewer --help
+```
+
+## 3. Set Up the Repository
+
 ```bash
 jstar setup
 ```
-*(Or simply run `jstar review` if you already have your keys ready)*
 
-This **auto-creates** (or updates):
-- `.jstar/` directory
-- `.env.example` with required variables
-- `.gitignore` (appends `.jstar/` and `.env.local`)
+This should create or update:
+- `.jstar/`
+- `.env.example`
+- `.gitignore`
 
+## 4. Create `.env.local`
 
-### 3. Configure Environment Variables
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+POSIX shell:
+
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and add your API keys:
+Required variables:
+
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GROQ_API_KEY=your_groq_api_key_here
+GEMINI_API_KEY=your_gemini_key
+GROQ_API_KEY=your_groq_key
 ```
 
-**Where to get keys:**
-- Google API Key: [Google AI Studio](https://aistudio.google.com/apikey)
-- Groq API Key: [console.groq.com](https://console.groq.com)
+Optional but useful:
 
-### 4. Index Your Codebase (Build the Brain)
+```env
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+REVIEW_MODEL_NAME=moonshotai/kimi-k2-instruct-0905
+```
+
+## 5. Build the Local Index
+
 ```bash
 jstar init
 ```
 
-This scans your codebase and creates embeddings for context-aware reviews.
+If indexing fails with a Google 404 for the embedding model, set:
 
-### 5. (Optional) Create Rules File
-Create `.jstar/rules.md` with your project-specific coding guidelines:
-
-```markdown
-# Project Coding Rules
-
-## General
-- Follow PEP 8 (Python) / Google Style Guide
-- Add docstrings to all public functions
-
-
-
-## Security  
-- Never log sensitive data
-- Validate all user inputs
+```env
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 ```
 
-### 6. Understanding Review Modes
-Before running a review, understand the available modes:
+## 6. First Verification Pass
 
-| Mode | Command | Best For |
-| :--- | :--- | :--- |
-| **Standard** | `jstar review` | checking staged changes *before* committing. |
-| **Retroactive** | `jstar review --last` | checking the *last commit* (if you forgot to review). |
-| **Pull Request** | `jstar review --pr` | checking an entire feature branch against `main`. |
+### Option A: Interactive user flow
 
-### 7. Run Your First Review
-
-**Agent Instruction:** Ask the user: *"Would you like to run the review yourself, or should I run a headless check for you?"*
-
-#### Option A: User Runs It (Recommended)
-The user runs the interactive TUI command in their terminal:
 ```bash
 jstar review
+jstar audit
 ```
 
-#### Option B: Agent Runs It (Headless)
-If the user asks YOU to do it, use the headless flag to avoid hanging:
-// turbo
+Use this when the user wants the normal CLI/TUI experience.
+
+### Option B: Agent automation flow
+
 ```bash
-jstar review --headless
+jstar review --json > .jstar/last-review.json
+jstar audit --json > .jstar/audit_report.json
 ```
-*(This outputs JSON-formatted results that you can parse)*
 
-The dashboard will be saved to `.jstar/last-review.md`.
+Use this when an agent needs machine-readable output.
 
-## Done! 🎉
+### Option C: Review debate flow
 
-**CLI Commands:**
-| Command | Description |
-|---------|-------------|
-| `jstar setup` | Create config files in current project |
-| `jstar init` | Index codebase (after major changes) |
-| `jstar review` | Review staged changes (Default) |
-| `jstar review --last` | Review last commit (Retroactive) |
-| `jstar review --pr` | Review branch against main (PR Mode) |
-
-**Output:**
-- Console: Quick summary with severity counts
-- `.jstar/last-review.md`: Full dashboard with fix prompts
-
-## Alternative: Without Global Install
-
-If you don't want to install globally:
 ```bash
-npx jstar-reviewer review
+jstar chat --headless
 ```
+
+Headless commands:
+- `{"action":"list"}`
+- `{"action":"debate","issueId":0,"argument":"..."}`
+- `{"action":"ignore","issueId":0}`
+- `{"action":"accept","issueId":0}`
+- `{"action":"exit"}`
+
+## 7. Common Target Modes
+
+Staged changes:
+
+```bash
+jstar review
+jstar audit
+```
+
+Last commit:
+
+```bash
+jstar review --last
+jstar audit --last
+```
+
+Branch or PR scope:
+
+```bash
+jstar review --pr
+jstar audit --pr
+```
+
+## Outputs
+
+- `.jstar/last-review.md`
+- `.jstar/session.json`
+- `.jstar/audit_report.md`
+- `.jstar/audit_report.json`
+- `.jstar/audit-ignore.json`

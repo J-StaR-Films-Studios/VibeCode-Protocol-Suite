@@ -1,133 +1,96 @@
 ---
-description: Run the J-Star Code Reviewer loop to analyze and fix code quality issues.
+description: Run the up-to-date J-Star review and audit loop for a change set.
 ---
 
-# J-Star Code Review Workflow
+# J-Star Review Workflow
 
-This workflow executes the J-Star Reviewer on staged changes, allowing the agent to iteratively fix issues.
+Use this workflow when the repository already has J-Star installed and you need to verify a change set.
 
-## 1. Build the Brain (Required once)
-If you haven't indexed the project yet, or if major files have changed, run:
-// turbo
+## Core Rule
+
+`review` and `audit` are separate steps.
+
+For a serious verification pass, run both.
+
+## 1. Build the Local Index
+
+If the repository is missing `.jstar/storage`, or if major files were added, run:
+
 ```bash
 jstar init
 ```
 
-## 2. Stage Current Changes
-Ensure all recent changes are staged so the reviewer can see them.
-// turbo
+## 2. Choose the Scope
+
+### Staged changes
+
 ```bash
 git add .
-```
-
-## 3. Run Reviewer
-Execute the review pipeline.
-
-### Standard Review (Staged Changes)
-```bash
 jstar review
+jstar audit
 ```
-*Use this when changes are staged but not yet committed.*
 
-### Retroactive Review (Oops Mode)
-If you already committed changes but forgot to review:
+### Last commit
+
 ```bash
 jstar review --last
+jstar audit --last
 ```
-*Equivalent to checking the last commit `HEAD~1..HEAD`.*
 
-### Branch/PR Review
-If working on a feature branch, check against main:
+### Branch or PR scope
+
 ```bash
 jstar review --pr
+jstar audit --pr
 ```
-*Equivalent to `git diff main...HEAD`. Use this for full feature verification.*
 
-## 4. Analyze and Fix
-**Agent Instructions:**
-1.  **Read the Output**: Check `.jstar/last-review.md` or the console summary.
-2.  **Prioritize**: Focus *only* on **P0_CRITICAL** and **P1_HIGH** issues first.
-3.  **Looping Strategy**:
-    - **IF** P0/P1 issues are found:
-        - Apply fixes to the code.
-        - Stage changes: `git add .`
-        - (Optional) Re-index if you added new files: `jstar init`
-        - Restart this workflow (Stage -> Review).
-    - **IF** only P2_MEDIUM issues remain:
-        - You may fix them if they are quick/obvious.
-        - Otherwise, consider the code "Good Enough" and stop.
-    - **MAX LOOPS**: 3. Do not run this cycle more than 3 times. If issues persist, stop and ask the user.
+## 3. Read the Outputs
 
-## 5. Handling False Positives (Debate Mode)
+Review outputs:
+- `.jstar/last-review.md`
+- `.jstar/session.json`
 
-If the reviewer flags correct code as an issue (e.g., security false positives), use **Headless Chat** to resolve it.
+Audit outputs:
+- `.jstar/audit_report.md`
+- `.jstar/audit_report.json`
 
-**Protocol:**
-1. **Start Session:**
-   Use the `run_command` tool to start the background process:
-   ```bash
-   jstar chat --headless
-   ```
-   *Note: Capture the `CommandId` returned by this tool.*
+## 4. Fix Loop
 
-2. **List Issues (Get IDs):**
-   Use `send_command_input` with the `CommandId`:
-   ```json
-   {"action": "list"}
-   ```
-   *Wait for output. Identify the numeric `id` of the issue you want to challenge.*
+Agent instructions:
+1. Read both the review and audit outputs.
+2. Prioritize review `P0_CRITICAL` and `P1_HIGH` issues first.
+3. Prioritize audit `CRITICAL` and `HIGH` findings first.
+4. Apply fixes.
+5. Stage changes with `git add .`.
+6. Re-run both `review` and `audit` for the same scope.
+7. If only lower-priority review issues remain, stop when the remaining work is not worth another loop.
+8. Maximum loops: 3. If issues persist, stop and ask the user.
 
-3. **Debate:**
-   Use `send_command_input` to explain why it's a false positive:
-   ```json
-   {"action": "debate", "issueId": 0, "argument": "This is correct because..."}
-   ```
-   *Use the integer `id` from step 2.*
+## 5. False Positives and Debate
 
-4. **Verify Result:**
-   Check the output for `"status": "resolved"` and `"verdict": "LGTM"`.
+For review findings that need challenge or adjudication:
 
-5. **Exit:**
-   Terminate the session cleanly:
-   ```json
-   {"action": "exit"}
-   ```
-
----
-
-## AI Agent Mode (Headless)
-
-For programmatic interaction without TUI navigation, use headless mode.
-
-### JSON Review (One-Shot)
-Get findings as JSON for parsing:
-// turbo
 ```bash
-jstar review --json > .jstar/report.json
+jstar chat --headless
 ```
 
-### Headless Chat (Interactive Protocol)
-For debating specific issues via stdin/stdout:
+Headless commands:
+- `{"action":"list"}`
+- `{"action":"debate","issueId":0,"argument":"..."}`
+- `{"action":"ignore","issueId":0}`
+- `{"action":"accept","issueId":0}`
+- `{"action":"exit"}`
+
+For known deterministic audit false positives, use:
+- `.jstar/audit-ignore.json`
+
+## 6. Automation Mode
+
+Machine-readable review output:
+
 ```bash
-echo '{"action": "list"}' | jstar chat --headless
+jstar review --json > .jstar/last-review.json
+jstar audit --json > .jstar/audit_report.json
 ```
 
-**Commands:**
-| Action | Parameters | Description |
-|--------|------------|-------------|
-| `list` | — | List all current issues |
-| `debate` | `issueId`, `argument` | Challenge an issue |
-| `ignore` | `issueId` | Mark issue as ignored |
-| `exit` | — | End session, get final report |
-
-See [Headless Mode Docs](../docs/features/headless-mode.md) for full protocol.
-
-### AI Fix Cycle
-```
-1. jstar review --json  →  Parse findings
-2. Apply code fixes
-3. git add .            →  Stage changes
-4. jstar init           →  Update brain (if new files added)
-5. jstar review --json  →  Verify fixes
-6. Repeat until P0/P1 = 0
-```
+Use `review --json` and `audit --json` for automation. Do not rely on `review --headless`.

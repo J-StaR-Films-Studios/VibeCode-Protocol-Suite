@@ -1,81 +1,34 @@
 ---
 name: code-review
-description: Run J-Star code review on staged changes. Analyze, fix P0/P1 issues, and iterate until clean.
+description: Deprecated compatibility alias for J-Star Reviewer. Use `jstar-reviewer` for the canonical install, review, audit, and automation flows.
 ---
 
-# Code Review Skill
+# Code Review (Deprecated)
 
-Run the J-Star Reviewer on staged changes, allowing iterative fixing of issues.
+This skill is kept only for backward compatibility with older Takomi prompts and habits.
 
-## When to Use
-- Before committing code changes
-- When code quality issues are mentioned
-- As a quality gate before merging
-- When user asks to "review this code"
+Use `jstar-reviewer` as the canonical skill for:
+- installing the `jstar-reviewer` npm package
+- setting up `.jstar/`, `.env.local`, and `.gitignore`
+- running `review` and `audit`
+- using `--json` and `chat --headless` automation flows
 
-## Quick Start
+## Redirect Rule
 
-### 1. Build the Brain (First Time Only)
-```bash
-jstar init
-```
+If this skill is invoked, treat it as a redirect to `jstar-reviewer`.
 
-### 2. Stage Changes
-```bash
-git add .
-```
+Do not use this file as the authoritative J-Star workflow documentation.
 
-### 3. Run Review
-```bash
-# Standard review (staged changes)
-jstar review
+## Operational Rule
 
-# Retroactive (already committed)
-jstar review --last
+`review` and `audit` are separate steps.
 
-# Branch/PR review (against main)
-jstar review --pr
-```
+If the user wants a serious verification pass, run both:
+1. `review` for code review findings and fix prompts
+2. `audit` for deterministic security audit findings
 
-## Fix Loop Protocol
+## Canonical References
 
-1. **Read Output**: Check `.jstar/last-review.md` or console
-2. **Prioritize**: Focus on **P0_CRITICAL** and **P1_HIGH** only
-3. **Loop Strategy**:
-   - If P0/P1 found → Fix → Stage → Re-review
-   - If only P2_MEDIUM → Consider "Good Enough"
-   - **MAX LOOPS: 3** — If issues persist, stop and ask user
-
-## Handling False Positives (Headless Mode)
-
-```bash
-# Start headless session
-jstar chat --headless
-
-# List issues
-echo '{"action": "list"}' | jstar chat --headless
-
-# Debate an issue
-echo '{"action": "debate", "issueId": 0, "argument": "This is correct because..."}' | jstar chat --headless
-
-# Exit
-echo '{"action": "exit"}' | jstar chat --headless
-```
-
-## AI Fix Cycle
-```
-1. jstar review --json  →  Parse findings
-2. Apply code fixes
-3. git add .            →  Stage changes
-4. jstar init           →  Update brain (if new files added)
-5. jstar review --json  →  Verify fixes
-6. Repeat until P0/P1 = 0
-```
-
-## Headless Commands
-| Action | Parameters | Description |
-|--------|------------|-------------|
-| `list` | — | List all current issues |
-| `debate` | `issueId`, `argument` | Challenge an issue |
-| `ignore` | `issueId` | Mark issue as ignored |
-| `exit` | — | End session, get final report |
+- `assets/.agent/skills/jstar-reviewer/SKILL.md`
+- `assets/.agent/workflows/spawn-jstar-code-review.md`
+- `assets/.agent/workflows/review_code.md`
