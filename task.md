@@ -12,7 +12,7 @@ Audit newly installed skills in `.agent/skills/`, then:
 
 ## Current State
 
-**Total Skills in Assets: 47**
+**Total Skills in Assets: 48**
 
 ### Distributed Skills (by source)
 - **Anthropic (11)**: algorithmic-art, crafting-effective-readmes, docx, domain-name-brainstormer, frontend-design, monorepo-management, pdf, pptx, skill-creator, webapp-testing, xlsx
@@ -23,7 +23,7 @@ Audit newly installed skills in `.agent/skills/`, then:
 - **obra (1)**: subagent-driven-development
 - **squirrelscan (1)**: audit-website
 - **upstash (1)**: context7
-- **Custom (1)**: gemini
+- **Custom (2)**: 21st-dev-components, gemini
 - **Original VibeCode (15)**: agent-recovery, code-review, component-analysis, git-worktree, github-ops, google-trends, high-fidelity-extraction, nextjs-standards, remotion, security-audit, seo-ready, spawn-task, sync-docs, ui-ux-pro-max, youtube-pipeline
 
 ### Personal (NOT distributed)

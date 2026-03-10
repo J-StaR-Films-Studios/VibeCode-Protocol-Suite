@@ -73,6 +73,19 @@ export const HARNESS_MAP = {
     },
   },
 
+  codex: {
+    name: 'Codex',
+    rootPath: path.join(HOME, '.codex'),
+    detect() {
+      return fs.existsSync(this.rootPath);
+    },
+    targets: {
+      skills: path.join(HOME, '.codex', 'skills'),
+      workflows: null,
+      yamls: null,
+    },
+  },
+
   cursor: {
     name: 'Cursor',
     rootPath: path.join(HOME, '.cursor'),

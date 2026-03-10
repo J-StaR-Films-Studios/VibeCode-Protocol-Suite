@@ -67,4 +67,5 @@ These skills are installed locally but NOT included in the Takomi assets distrib
 - `context7` - API for fresh library documentation
 
 ### Custom
+- `21st-dev-components` - 21st.dev reference-site cloning and manual component handoff workflow
 - `gemini` - Gemini CLI for big context (>200k tokens)

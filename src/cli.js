@@ -220,7 +220,7 @@ async function install() {
 
   if (detected.length === 0) {
     console.log(pc.yellow('  No AI harnesses detected on this machine.'));
-    console.log(pc.dim('  We support: Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI'));
+    console.log(pc.dim('  We support: Antigravity, KiloCode, Windsurf, Codex, Cursor, Gemini CLI'));
     console.log(pc.dim('  Run "takomi init" instead for per-project setup.\n'));
     return;
   }

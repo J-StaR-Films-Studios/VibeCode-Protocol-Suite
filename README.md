@@ -108,7 +108,7 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 ### The Full Arsenal (Free)
 Everything else — SEO, research, documentation, testing, and beyond:
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 21st-dev-components --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
 
 ---
@@ -126,6 +126,7 @@ Takomi v2.0 introduces the **Global Skills Router** — install skills once, and
 | **Antigravity** | `~/.gemini/antigravity/skills/` | `~/.gemini/antigravity/global_workflows/` |
 | **KiloCode** | `~/.kilocode/skills/` | `~/.kilocode/workflows/` |
 | **Windsurf** | `~/.codeium/windsurf/skills/` | `~/.codeium/windsurf/global_workflows/` |
+| **Codex** | `~/.codex/skills/` | _(skills only)_ |
 | **Cursor** | `~/.cursor/skills/` | _(uses rules)_ |
 | **Gemini CLI** | `~/.gemini/skills/` | — |
 
@@ -384,6 +385,7 @@ cp -r path/to/VibeCode-Protocol-Suite/.agent ./
 ```
 
 ### For Complex Multi-Agent Projects
+See the Takumi orchestration build plan: `docs/takumi_code_v0.001_plan.md`.
 ```bash
 # Use the orchestrator to coordinate multiple specialized agents
 # Type: /mode-orchestrator
