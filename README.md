@@ -72,11 +72,15 @@ Install the Takomi protocol suite:
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill takomi
 ```
 
+Original Takomi-authored skills in this bundle include `21st-dev-components`, `takomi`, `global-brand-namer`, `jstar-reviewer`, and the core VibeCode/Takomi workflow skills that ship with the CLI.
+
 ---
 
 ## 📦 Skill Ecosystem
 
 Think of skills as specialized team members you can summon on demand. From security audits to AI video generation — there's a skill for that.
+
+The published bundle currently ships **68 top-level skills**, including the original `21st-dev-components` workflow for guided 21st.dev integration.
 
 ### Interactive Search & Install
 ```bash
@@ -108,7 +112,7 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 ### The Full Arsenal (Free)
 Everything else — SEO, research, documentation, testing, and beyond:
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 21st-dev-components --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill google-trends --skill high-fidelity-extraction --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 21st-dev-components --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill global-brand-namer --skill google-trends --skill high-fidelity-extraction --skill jstar-reviewer --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
 
 ---
@@ -128,7 +132,7 @@ Takomi v2.0 introduces the **Global Skills Router** — install skills once, and
 | **Windsurf** | `~/.codeium/windsurf/skills/` | `~/.codeium/windsurf/global_workflows/` |
 | **Codex** | `~/.codex/skills/` | _(skills only)_ |
 | **Cursor** | `~/.cursor/skills/` | _(uses rules)_ |
-| **Gemini CLI** | `~/.gemini/skills/` | — |
+| **Gemini CLI** | `~/.agents/skills/` | _(skills only)_ |
 
 ### CLI Commands
 
@@ -420,6 +424,8 @@ This is a living system. If you discover improvements:
 ---
 
 ## 🙏 Acknowledgements
+
+Externally sourced skills in this bundle retain credit to their upstream creators. Takomi-original skills and workflows in this repository, including `21st-dev-components`, remain authored and maintained by J StaR Films Studios.
 
 - **Anthropic Skills**: From [anthropics/skills](https://github.com/anthropics/skills) — a massive collection including **Office Suite** (PDF/DOCX/PPTX/XLSX), **Frontend Design**, **Webapp Testing**, **Algorithmic Art**, **Monorepo Management**, and **Skill Creator**.
 - **Inference.sh Skills**: From [inference.sh/skills](https://github.com/inference-sh/skills) — complete media & automation suite including **Marketing Videos**, **Voice Cloning**, **Social Content**, **Twitter Automation**, **Product Photography**, and **Prompt Engineering**.

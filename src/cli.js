@@ -535,7 +535,7 @@ async function harnesses() {
 program
   .name('takomi')
   .description('Your AI team. Activated. 🎯')
-  .version('2.0.0');
+  .version('2.0.7');
 
 // Per-project setup (backward compatible)
 program

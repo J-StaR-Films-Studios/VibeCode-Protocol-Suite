@@ -12,19 +12,17 @@ Audit newly installed skills in `.agent/skills/`, then:
 
 ## Current State
 
-**Total Skills in Assets: 48**
+**Total Skills in Assets: 68**
 
-### Distributed Skills (by source)
-- **Anthropic (11)**: algorithmic-art, crafting-effective-readmes, docx, domain-name-brainstormer, frontend-design, monorepo-management, pdf, pptx, skill-creator, webapp-testing, xlsx
-- **Vercel (2)**: ai-sdk, web-design-guidelines
-- **Expo (2)**: building-native-ui, upgrading-expo
-- **coreyhaines (5)**: copywriting, marketing-ideas, pricing-strategy, programmatic-seo, social-content
-- **inference.sh (7)**: ai-avatar-video, ai-marketing-videos, ai-podcast-creation, ai-product-photography, ai-social-media-content, ai-voice-cloning, twitter-automation, prompt-engineering
-- **obra (1)**: subagent-driven-development
-- **squirrelscan (1)**: audit-website
-- **upstash (1)**: context7
-- **Custom (2)**: 21st-dev-components, gemini
-- **Original VibeCode (15)**: agent-recovery, code-review, component-analysis, git-worktree, github-ops, google-trends, high-fidelity-extraction, nextjs-standards, remotion, security-audit, seo-ready, spawn-task, sync-docs, ui-ux-pro-max, youtube-pipeline
+### Recently Verified / Added
+- `21st-dev-components` is present in the bundled assets and included in `npm pack --dry-run`
+- README install commands now mention the expanded free-skill bundle, including `global-brand-namer` and `jstar-reviewer`
+- Package metadata now reflects in-house ownership (`UNLICENSED`) and the CLI version matches `package.json`
+- Added a dedicated feature doc: `docs/features/21st_Dev_Components.md`
+
+### Distribution Snapshot
+- **Takomi originals / in-house**: `21st-dev-components`, `takomi`, `global-brand-namer`, `jstar-reviewer`, `gemini`, plus the core Takomi/VibeCode workflow skills
+- **Imported suites**: Anthropic, Vercel, Expo, coreyhaines31/marketingskills, inference.sh, waynesutton/convexskills, Google Stitch, Remotion, Jules, obra/superpowers, squirrelscan, upstash, and Next Level Builder
 
 ### Personal (NOT distributed)
 - `brainstorming` - covered by `/mode-architect`
@@ -51,3 +49,4 @@ Audit newly installed skills in `.agent/skills/`, then:
 
 - [ ] Check `.agent/skills/` for new installs
 - [ ] Commit all changes when done
+- [ ] Publish updated package after final manual install/push/publish run
