@@ -20,6 +20,8 @@ export type RouteDecision = {
   role: TakomiRole;
   workflow?: TakomiWorkflowId;
   stage?: VibeLifecycleStage;
+  executionMode: "direct" | "orchestrate";
+  sessionRecommendation: "none" | "consider" | "create";
   reason: string;
 };
 
@@ -34,7 +36,9 @@ export type OrchestratorTask = {
   id: string;
   title: string;
   role: TakomiRole;
+  stage?: VibeLifecycleStage;
   workflow?: TakomiWorkflowId;
+  parentTaskId?: string;
   preferredAgent?: string;
   preferredModelHint?: string;
   preferredModel?: string;
@@ -52,11 +56,23 @@ export type OrchestratorTask = {
   conversationId?: string;
 };
 
+export type LifecycleStageState = {
+  status: OrchestratorTaskStatus;
+  taskIds: string[];
+  canExpand?: boolean;
+  expandedAt?: string;
+  notes?: string;
+};
+
+export type SessionIntent = "full-project" | "feature-scope" | "follow-up-task";
+
 export type OrchestratorSessionState = {
   sessionId: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   mode: "hybrid";
+  lifecycle: Record<VibeLifecycleStage, LifecycleStageState>;
+  sessionIntent?: SessionIntent;
   tasks: OrchestratorTask[];
 };

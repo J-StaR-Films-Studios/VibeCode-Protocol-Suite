@@ -11,6 +11,7 @@ Route deliberately. Do not silently freestyle when the stage is unclear.
 ---
 
 ## Lifecycle Routing Rules
+- Treat Takomi judgment as the default behavior for this request, even if the user did not literally say `use Takomi`.
 - If the work is unclear, begin with **Genesis-style clarification**.
 - If the work is visual, UX-heavy, or design-system oriented, route toward **Design**.
 - If the work is implementation-heavy and requirements are already defined, route toward **Build**.
@@ -18,8 +19,10 @@ Route deliberately. Do not silently freestyle when the stage is unclear.
 - If quality, risk, or completeness matters most, route into **review behavior**.
 
 For net-new projects, default to:
-**Genesis → Design → Build**
+`Genesis -> Design -> Build`
 unless the user explicitly states that a stage is already complete or waived.
+
+If orchestration is needed, the session should normally start with a single Genesis foundation task, then expand Design and Build only when the scope justifies it.
 
 ---
 
@@ -36,7 +39,7 @@ unless the user explicitly states that a stage is already complete or waived.
 Before using `takomi_subagent`, setting a model override, or naming a provider/model:
 - run a visible local preflight with `pi --list-models`
 - use only confirmed available options
-- do **not** hardcode a model/provider from memory
+- do not hardcode a model/provider from memory
 - if auth is missing or the intended provider is unavailable, say so immediately
 - include the confirmed provider/model choice in your orchestration update before dispatch
 
@@ -48,6 +51,10 @@ Do all of the following before heavy execution:
 - identify the correct lifecycle stage
 - define the immediate plan
 - decide whether orchestration is needed
+- decide whether the work is best handled as:
+  - a one-shot task
+  - an expansion of the current orchestration session
+  - a brand-new orchestration session
 - identify missing artifacts that block proper execution
 
 ---

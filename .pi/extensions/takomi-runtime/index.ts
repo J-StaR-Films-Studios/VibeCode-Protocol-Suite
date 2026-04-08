@@ -8,16 +8,21 @@ import { Type } from "@sinclair/typebox";
 import {
   buildSessionState,
   createSessionId,
+  createLifecycleStarterSession,
   createTask,
   decideRoute,
   getSessionPaths,
+  getNextTaskId,
   getWorkflowDefinition,
   listWorkflowDefinitions,
+  markStageExpanded,
+  normalizeSessionState,
   renderMasterPlan,
   renderTaskFile,
   serializeSessionState,
   slugifyTaskTitle,
   type OrchestratorTask,
+  type OrchestratorSessionState,
   type OrchestratorTaskStatus,
   type TakomiRole,
   type TakomiWorkflowId,
@@ -134,7 +139,7 @@ function shouldAutoRoute(text: string): boolean {
 }
 
 function buildTaskRows(tasks: OrchestratorTask[]): string {
-  return tasks.map((task) => `${task.id}: ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
+  return tasks.map((task) => `${task.id}: ${task.stage ?? "-"} | ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
 }
 
 function resolveTaskAgent(task: OrchestratorTask): string {
@@ -191,6 +196,7 @@ function formatChecklist(checklist?: Array<string | { text: string; done?: boole
 
 function buildSubagentTaskPrompt(task: OrchestratorTask, extraInstructions?: string): string {
   return [
+    task.stage ? `Stage: ${task.stage}` : "",
     task.workflow ? `Workflow: ${task.workflow}` : "",
     task.skills?.length ? `Skills: ${task.skills.join(", ")}` : "",
     formatChecklist(task.checklist),
@@ -313,30 +319,37 @@ async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?:
   return { ...resolved, report, cliOk: cli.ok };
 }
 
-async function loadSessionState(cwd: string, sessionId: string): Promise<{ title: string; tasks: OrchestratorTask[]; paths: ReturnType<typeof getSessionPaths> }> {
+async function loadSessionState(cwd: string, sessionId: string): Promise<{ state: OrchestratorSessionState; paths: ReturnType<typeof getSessionPaths> }> {
   const paths = getSessionPaths(cwd, sessionId);
   const raw = await readFile(paths.stateFile, "utf8");
-  const parsed = JSON.parse(raw) as { title: string; tasks: OrchestratorTask[] };
-  return { title: parsed.title, tasks: parsed.tasks ?? [], paths };
+  const parsed = JSON.parse(raw) as Partial<OrchestratorSessionState>;
+  const state = normalizeSessionState({
+    sessionId,
+    title: parsed.title ?? "Takomi Session",
+    ...parsed,
+  });
+  return { state, paths };
 }
 
-async function syncTaskArtifacts(cwd: string, sessionId: string, title: string, tasks: OrchestratorTask[]) {
-  const paths = getSessionPaths(cwd, sessionId);
+async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState) {
+  const normalizedState = normalizeSessionState(session);
+  const paths = getSessionPaths(cwd, normalizedState.sessionId);
   await mkdir(paths.pending, { recursive: true });
   await mkdir(paths.inProgress, { recursive: true });
   await mkdir(paths.completed, { recursive: true });
   await mkdir(paths.blocked, { recursive: true });
   await mkdir(paths.stateDir, { recursive: true });
-  await writeFile(paths.masterPlan, renderMasterPlan(sessionId, title, tasks), "utf8");
+  await writeFile(paths.masterPlan, renderMasterPlan(normalizedState), "utf8");
   await writeFile(paths.summary, [
-    `# Orchestrator Summary: ${title}`,
+    `# Orchestrator Summary: ${normalizedState.title}`,
     "",
-    `- Session ID: ${sessionId}`,
+    `- Session ID: ${normalizedState.sessionId}`,
     `- Human docs: ${paths.root}`,
     `- Machine state: ${paths.stateFile}`,
-    `- Runtime mode: hybrid`,
+    `- Runtime mode: ${normalizedState.mode}`,
+    `- Session intent: ${normalizedState.sessionIntent ?? "full-project"}`,
   ].join("\n"), "utf8");
-  await writeFile(paths.stateFile, serializeSessionState(buildSessionState(sessionId, title, tasks)), "utf8");
+  await writeFile(paths.stateFile, serializeSessionState(normalizedState), "utf8");
 
   for (const folder of [paths.pending, paths.inProgress, paths.completed, paths.blocked]) {
     const entries = await readdir(folder).catch(() => [] as string[]);
@@ -347,16 +360,72 @@ async function syncTaskArtifacts(cwd: string, sessionId: string, title: string, 
     }
   }
 
-  for (const task of tasks) {
+  for (const task of normalizedState.tasks) {
     const filePath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
-    await writeFile(filePath, renderTaskFile(task, `Parent session: ${sessionId}\n\nTask title: ${task.title}`), "utf8");
+    await writeFile(filePath, renderTaskFile(task, `Parent session: ${normalizedState.sessionId}\n\nTask title: ${task.title}`), "utf8");
   }
 
   return paths;
 }
 
-async function writeOrchestratorSession(cwd: string, sessionId: string, title: string, tasks: OrchestratorTask[]) {
-  return syncTaskArtifacts(cwd, sessionId, title, tasks);
+async function writeOrchestratorSession(cwd: string, session: OrchestratorSessionState) {
+  return syncTaskArtifacts(cwd, session);
+}
+
+type IncomingTask = {
+  id?: string;
+  title: string;
+  role: TakomiRole;
+  stage?: VibeLifecycleStage;
+  workflow?: TakomiWorkflowId;
+  parentTaskId?: string;
+  preferredAgent?: string;
+  preferredModel?: string;
+  preferredModelHint?: string;
+  skills?: string[];
+  checklist?: Array<string | { text: string; done?: boolean }>;
+  objective?: string;
+  scope?: string[];
+  definitionOfDone?: string[];
+  expectedArtifacts?: string[];
+  dependencies?: string[];
+  reviewCheckpoint?: string;
+  instructions?: string[];
+  conversationId?: string;
+};
+
+async function materializeTasksFromInput(
+  ctx: ExtensionContext,
+  currentTasks: OrchestratorTask[],
+  incoming: IncomingTask[],
+  stageOverride?: VibeLifecycleStage,
+): Promise<OrchestratorTask[]> {
+  const nextTasks = [...currentTasks];
+
+  for (const task of incoming) {
+    const resolvedModel = await resolvePreferredModel(ctx, task.preferredModel);
+    const id = task.id ?? getNextTaskId(nextTasks);
+    nextTasks.push(createTask(id, task.title, task.role, {
+      stage: task.stage ?? stageOverride,
+      workflow: task.workflow,
+      parentTaskId: task.parentTaskId,
+      preferredAgent: task.preferredAgent,
+      preferredModel: resolvedModel.model,
+      preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
+      skills: task.skills,
+      checklist: (task.checklist ?? []).map((item) => typeof item === "string" ? { text: item } : item),
+      objective: task.objective,
+      scope: task.scope,
+      definitionOfDone: task.definitionOfDone,
+      expectedArtifacts: task.expectedArtifacts,
+      dependencies: task.dependencies,
+      reviewCheckpoint: task.reviewCheckpoint,
+      instructions: task.instructions,
+      conversationId: task.conversationId,
+    }));
+  }
+
+  return nextTasks;
 }
 
 async function refreshUi(ctx: ExtensionContext, state: TakomiState) {
@@ -474,47 +543,14 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     description: "Create a default Genesis → Design → Build orchestrator session",
     handler: async (args, ctx) => {
       const title = args.trim() || "Takomi Project";
-      const sessionId = createSessionId();
-      const tasks = [
-        createTask("01", "Genesis foundation", "orchestrator", {
-          workflow: "vibe-genesis",
-          preferredAgent: "orchestrator",
-          objective: "Create the project foundation before any design or implementation starts.",
-          scope: ["Clarify scope", "Lock acceptance criteria", "Define implementation boundaries"],
-          checklist: [{ text: "Clarify scope" }, { text: "Lock acceptance criteria" }, { text: "Define boundaries" }],
-          definitionOfDone: ["Requirements are explicit", "Acceptance criteria are captured", "Non-goals are identified"],
-          expectedArtifacts: ["Genesis brief", "Approved scope foundation"],
-          reviewCheckpoint: "User approves foundation before design begins.",
-        }),
-        createTask("02", "Design handoff", "design", {
-          workflow: "vibe-design",
-          preferredAgent: "designer",
-          preferredModelHint: "Prefer Gemini or another design-capable cloud model.",
-          objective: "Turn the approved foundation into build-ready UI and UX direction.",
-          scope: ["Capture key flows", "Define visual direction", "Produce build-ready handoff"],
-          checklist: [{ text: "Capture flows" }, { text: "Define visual direction" }, { text: "Produce build-ready handoff" }],
-          definitionOfDone: ["Core surfaces are mocked or described", "Design direction is coherent", "Build can implement from handoff"],
-          expectedArtifacts: ["Design handoff summary", "Build-ready surface guidance"],
-          reviewCheckpoint: "User approves design before build packets are generated.",
-        }),
-        createTask("03", "Build orchestration", "orchestrator", {
-          workflow: "vibe-build",
-          preferredAgent: "orchestrator",
-          objective: "Coordinate implementation through task breakdown, delegation, review, and iteration.",
-          scope: ["Break work into tasks", "Dispatch specialists", "Review and iterate"],
-          checklist: [{ text: "Break work into tasks" }, { text: "Dispatch specialists" }, { text: "Review and iterate" }],
-          definitionOfDone: ["Implementation tasks are assigned", "Review loop is active", "Completion state is clear"],
-          expectedArtifacts: ["Task packets", "Progress updates", "Completion summary"],
-          reviewCheckpoint: "Orchestrator confirms all required tasks are reviewed before closure.",
-        }),
-      ];
-      const paths = await writeOrchestratorSession(ctx.cwd, sessionId, title, tasks);
+      const session = createLifecycleStarterSession(title);
+      const paths = await writeOrchestratorSession(ctx.cwd, session);
       await updateState(ctx, () => {
-        state.activeSessionId = sessionId;
-        state.stage = "build";
-        state.workflow = "vibe-build";
+        state.activeSessionId = session.sessionId;
+        state.stage = "genesis";
+        state.workflow = "vibe-genesis";
         state.role = "orchestrator";
-      }, `Takomi kickoff created session ${sessionId}`);
+      }, `Takomi kickoff created session ${session.sessionId}`);
       ctx.ui.notify(`Master plan: ${paths.masterPlan}`, "info");
     },
   });
@@ -576,17 +612,20 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerTool({
     name: "takomi_board",
     label: "Takomi Board",
-    description: "Create and manage lightweight Takomi orchestrator session artifacts.",
-    promptSnippet: "Create an orchestrator session board and task files for Vibe Build.",
+    description: "Create and manage lifecycle-aware Takomi orchestration session artifacts.",
+    promptSnippet: "Create or expand a Genesis -> Design -> Build orchestration session only when the work is large enough to merit it.",
     promptGuidelines: [
       "Use this when you need a concrete orchestrator session directory and task artifacts on disk.",
+      "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
+      "If the request is small enough, do not force orchestration just because the tool exists.",
       "If a reviewed task needs more work, keep or reuse its conversationId so the same subagent can continue it.",
     ],
     parameters: Type.Object({
-      action: StringEnum(["init_session", "show_workflows", "show_session", "update_task", "redispatch_task", "review_and_redispatch"] as const),
+      action: StringEnum(["init_session", "expand_stage", "show_workflows", "show_session", "update_task", "redispatch_task", "review_and_redispatch"] as const),
       title: Type.Optional(Type.String()),
       sessionId: Type.Optional(Type.String()),
       taskId: Type.Optional(Type.String()),
+      stage: Type.Optional(StringEnum(["genesis", "design", "build"] as const)),
       status: Type.Optional(StringEnum(["pending", "in-progress", "completed", "blocked"] as const)),
       notes: Type.Optional(Type.String()),
       rerunInstructions: Type.Optional(Type.String()),
@@ -596,10 +635,12 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         done: Type.Optional(Type.Boolean()),
       }))),
       tasks: Type.Optional(Type.Array(Type.Object({
-        id: Type.String(),
+        id: Type.Optional(Type.String()),
         title: Type.String(),
         role: StringEnum(["general", "orchestrator", "architect", "design", "code", "review"] as const),
+        stage: Type.Optional(StringEnum(["genesis", "design", "build"] as const)),
         workflow: Type.Optional(StringEnum(["vibe-genesis", "vibe-design", "vibe-build"] as const)),
+        parentTaskId: Type.Optional(Type.String()),
         preferredAgent: Type.Optional(Type.String()),
         preferredModel: Type.Optional(Type.String()),
         preferredModelHint: Type.Optional(Type.String()),
@@ -639,7 +680,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         return {
           content: [{ type: "text", text: `${masterPlan}\n\n---\n\nMachine state\n\n\
 ${stateJson}` }],
-          details: { paths, state: JSON.parse(stateJson) },
+          details: { paths, state: normalizeSessionState({ sessionId: params.sessionId, title: "Takomi Session", ...(JSON.parse(stateJson) as Partial<OrchestratorSessionState>) }) },
         };
       }
 
@@ -647,22 +688,32 @@ ${stateJson}` }],
         if (!params.sessionId || !params.taskId) {
           return { content: [{ type: "text", text: "sessionId and taskId are required for update_task" }], details: {}, isError: true };
         }
-        const { title, tasks } = await loadSessionState(ctx.cwd, params.sessionId);
-        const idx = tasks.findIndex((task) => task.id === params.taskId);
+        const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
+        const idx = sessionState.tasks.findIndex((task) => task.id === params.taskId);
         if (idx === -1) {
           return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
         }
-        const current = tasks[idx];
-        tasks[idx] = {
+        const current = sessionState.tasks[idx];
+        sessionState.tasks[idx] = {
           ...current,
           status: (params.status ?? current.status) as OrchestratorTaskStatus,
           notes: params.notes ?? current.notes,
           checklist: applyChecklistUpdates(current.checklist, params.checklistUpdates),
         };
-        const paths = await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+        const nextState = buildSessionState(
+          sessionState.sessionId,
+          sessionState.title,
+          sessionState.tasks,
+          new Date(),
+          {
+            sessionIntent: sessionState.sessionIntent,
+            lifecycle: sessionState.lifecycle,
+          },
+        );
+        const paths = await syncTaskArtifacts(ctx.cwd, nextState);
         return {
-          content: [{ type: "text", text: `Updated task ${params.taskId} in session ${params.sessionId}.\nStatus: ${tasks[idx].status}` }],
-          details: { sessionId: params.sessionId, task: tasks[idx], paths },
+          content: [{ type: "text", text: `Updated task ${params.taskId} in session ${params.sessionId}.\nStatus: ${nextState.tasks[idx].status}` }],
+          details: { sessionId: params.sessionId, task: nextState.tasks[idx], paths, lifecycle: nextState.lifecycle },
         };
       }
 
@@ -670,8 +721,8 @@ ${stateJson}` }],
         if (!params.sessionId || !params.taskId) {
           return { content: [{ type: "text", text: "sessionId and taskId are required for redispatch_task" }], details: {}, isError: true };
         }
-        const { title, tasks } = await loadSessionState(ctx.cwd, params.sessionId);
-        const task = tasks.find((item) => item.id === params.taskId);
+        const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
+        const task = sessionState.tasks.find((item) => item.id === params.taskId);
         if (!task) {
           return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
         }
@@ -689,7 +740,17 @@ ${stateJson}` }],
         } else if (params.notes) {
           task.notes = params.notes;
         }
-        const paths = await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+        let nextState = buildSessionState(
+          sessionState.sessionId,
+          sessionState.title,
+          sessionState.tasks,
+          new Date(),
+          {
+            sessionIntent: sessionState.sessionIntent,
+            lifecycle: sessionState.lifecycle,
+          },
+        );
+        const paths = await syncTaskArtifacts(ctx.cwd, nextState);
 
         if (ctx.hasUI) {
           ctx.ui.setStatus("takomi-subagent", ctx.ui.theme.fg("accent", `↺ ${agentName}:${task.id}`));
@@ -718,7 +779,17 @@ ${stateJson}` }],
         }
         if (!preflight.model) {
           task.status = "blocked";
-          await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+          nextState = buildSessionState(
+            sessionState.sessionId,
+            sessionState.title,
+            sessionState.tasks,
+            new Date(),
+            {
+              sessionIntent: sessionState.sessionIntent,
+              lifecycle: sessionState.lifecycle,
+            },
+          );
+          await syncTaskArtifacts(ctx.cwd, nextState);
           return {
             content: [{ type: "text", text: `Redispatch blocked before launch.\n\n${preflight.report}` }],
             details: { sessionId: params.sessionId, task, paths, preflight },
@@ -738,7 +809,17 @@ ${stateJson}` }],
         if (result.code !== 0) {
           task.status = "blocked";
           task.notes = appendTaskNote(task.notes, "Redispatch failure", result.stderr.trim() || result.stdout.trim());
-          await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+          nextState = buildSessionState(
+            sessionState.sessionId,
+            sessionState.title,
+            sessionState.tasks,
+            new Date(),
+            {
+              sessionIntent: sessionState.sessionIntent,
+              lifecycle: sessionState.lifecycle,
+            },
+          );
+          await syncTaskArtifacts(ctx.cwd, nextState);
           return {
             content: [{ type: "text", text: `Redispatch failed for task ${task.id}.\n\n${result.stderr || result.stdout || "No output"}` }],
             details: { sessionId: params.sessionId, task, paths },
@@ -747,41 +828,79 @@ ${stateJson}` }],
         }
 
         task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
-        await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+        nextState = buildSessionState(
+          sessionState.sessionId,
+          sessionState.title,
+          sessionState.tasks,
+          new Date(),
+          {
+            sessionIntent: sessionState.sessionIntent,
+            lifecycle: sessionState.lifecycle,
+          },
+        );
+        await syncTaskArtifacts(ctx.cwd, nextState);
         return {
           content: [{ type: "text", text: `${preflight.report}\n\n${result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.`}` }],
-          details: { sessionId: params.sessionId, task, paths, agent: agentName, conversationId: task.conversationId, action: params.action, preflight },
+          details: { sessionId: params.sessionId, task, paths, lifecycle: nextState.lifecycle, agent: agentName, conversationId: task.conversationId, action: params.action, preflight },
+        };
+      }
+
+      if (params.action === "expand_stage") {
+        if (!params.sessionId || !params.stage || !params.tasks?.length) {
+          return { content: [{ type: "text", text: "sessionId, stage, and at least one task are required for expand_stage" }], details: {}, isError: true };
+        }
+
+        const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
+        const tasks = await materializeTasksFromInput(ctx, sessionState.tasks, params.tasks as IncomingTask[], params.stage);
+        let nextState = buildSessionState(
+          sessionState.sessionId,
+          sessionState.title,
+          tasks,
+          new Date(),
+          {
+            sessionIntent: sessionState.sessionIntent,
+            lifecycle: sessionState.lifecycle,
+          },
+        );
+        nextState = markStageExpanded(nextState, params.stage, params.notes);
+        const paths = await writeOrchestratorSession(ctx.cwd, nextState);
+        state.activeSessionId = nextState.sessionId;
+        persistState();
+
+        return {
+          content: [{ type: "text", text: `Expanded ${params.stage} stage in session ${nextState.sessionId}.\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(nextState.tasks)}` }],
+          details: { sessionId: nextState.sessionId, paths, tasks: nextState.tasks, lifecycle: nextState.lifecycle, mode: nextState.mode },
         };
       }
 
       const sessionId = params.sessionId || createSessionId();
-      const title = params.title || "Takomi Build Session";
-      const tasks = await Promise.all((params.tasks ?? []).map(async (task) => {
-        const resolvedModel = await resolvePreferredModel(ctx, task.preferredModel);
-        return createTask(task.id, task.title, task.role, {
-          workflow: task.workflow,
-          preferredAgent: task.preferredAgent,
-          preferredModel: resolvedModel.model,
-          preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
-          skills: task.skills,
-          checklist: (task.checklist ?? []).map((item) => typeof item === "string" ? { text: item } : item),
-          objective: task.objective,
-          scope: task.scope,
-          definitionOfDone: task.definitionOfDone,
-          expectedArtifacts: task.expectedArtifacts,
-          dependencies: task.dependencies,
-          reviewCheckpoint: task.reviewCheckpoint,
-          instructions: task.instructions,
-          conversationId: task.conversationId,
-        });
-      }));
-      const paths = await writeOrchestratorSession(ctx.cwd, sessionId, title, tasks);
-      state.activeSessionId = sessionId;
+      const title = params.title || "Takomi Session";
+      const baseState = params.tasks?.length
+        ? buildSessionState(sessionId, title, [], new Date())
+        : createLifecycleStarterSession(title, { sessionId });
+      const tasks = params.tasks?.length
+        ? await materializeTasksFromInput(ctx, baseState.tasks, params.tasks as IncomingTask[], params.stage)
+        : baseState.tasks;
+      const nextState = buildSessionState(
+        baseState.sessionId,
+        baseState.title,
+        tasks,
+        new Date(),
+        {
+          sessionIntent: baseState.sessionIntent,
+          lifecycle: baseState.lifecycle,
+        },
+      );
+      const paths = await writeOrchestratorSession(ctx.cwd, nextState);
+      state.activeSessionId = nextState.sessionId;
+      state.role = "orchestrator";
+      state.stage = nextState.lifecycle.genesis.status === "completed" ? "build" : "genesis";
+      state.workflow = state.stage === "genesis" ? "vibe-genesis" : "vibe-build";
       persistState();
 
       return {
-        content: [{ type: "text", text: `Created Takomi orchestrator session ${sessionId} in hybrid mode\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(tasks) || "No tasks provided."}` }],
-        details: { sessionId, paths, tasks, mode: "hybrid" },
+        content: [{ type: "text", text: `Created Takomi orchestrator session ${nextState.sessionId} in hybrid mode\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(nextState.tasks) || "No tasks provided."}` }],
+        details: { sessionId: nextState.sessionId, paths, tasks: nextState.tasks, lifecycle: nextState.lifecycle, mode: nextState.mode },
       };
     },
   });
@@ -827,22 +946,26 @@ ${stateJson}` }],
     let effectiveState = cloneState(state);
     const runtimeCwd = typeof (event as { cwd?: string }).cwd === "string" ? (event as { cwd?: string }).cwd as string : process.cwd();
     const genesisExists = await hasGenesisArtifacts(runtimeCwd);
+    const route = decideRoute(event.prompt);
     if (state.autoOrch && shouldAutoRoute(event.prompt)) {
       effectiveState.role = "orchestrator";
       effectiveState.stage = genesisExists ? "build" : "genesis";
       effectiveState.workflow = genesisExists ? "vibe-build" : "vibe-genesis";
     }
 
-    const route = decideRoute(event.prompt);
-    if (!effectiveState.stage && route.stage) {
+    const shouldHonorRoute = route.stage || route.role !== "general" || route.sessionRecommendation !== "none";
+    if (shouldHonorRoute && route.stage) {
       effectiveState.stage = route.stage;
       effectiveState.workflow = route.workflow;
       effectiveState.role = effectiveState.role === "orchestrator" && route.stage === "genesis" ? "orchestrator" : route.role;
+    } else if (shouldHonorRoute && route.role !== "general") {
+      effectiveState.role = route.role;
     }
 
     let routingNote = route.reason;
     const explicitLifecycleWaiver = /skip genesis|waive genesis|genesis complete|already have (a )?(prd|requirements)|design complete|jump straight to build/i.test(event.prompt);
-    if (!genesisExists && effectiveState.role === "orchestrator" && !explicitLifecycleWaiver) {
+    const orchestrationActive = effectiveState.role === "orchestrator" || route.executionMode === "orchestrate";
+    if (!genesisExists && orchestrationActive && !explicitLifecycleWaiver) {
       effectiveState.stage = "genesis";
       effectiveState.workflow = "vibe-genesis";
       routingNote = "Blank project detected; orchestrator remains in control and must honor Genesis → Design → Build.";
@@ -854,8 +977,12 @@ ${stateJson}` }],
       effectiveState.planMode ? planPrompt() : "",
       getInjectedPlaybook(effectiveState),
       `Routing note: ${routingNote}`,
+      `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       !genesisExists ? "Project foundation is missing or incomplete. Do not skip Genesis unless the user explicitly waives it." : "",
-      "Task fan-out is flexible. Do not force exactly three tasks; decompose design/build work to fit the actual scope.",
+      "Takomi is the default orchestration mindset here. Do not wait for the literal phrase 'use Takomi' before applying lifecycle judgment.",
+      "Task fan-out is flexible. Do not force exactly three tasks; decompose Genesis, Design, and Build work to fit the actual scope.",
+      "A new orchestration session should usually begin with one Genesis foundation task that creates or updates the required markdown artifacts, then expand later stages only when the scope justifies it.",
+      "If a follow-up request is small, one-shot it. If it is multi-part or large, create or expand an orchestration session instead of pretending it is a single task.",
       "Before any subagent dispatch or model override, run and surface a visible `pi --list-models` preflight. Never fail silently on model availability.",
       "When useful, state the current Takomi stage and the recommended next stage.",
       effectiveState.stage === "build"

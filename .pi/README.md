@@ -6,10 +6,10 @@ It is intentionally separate from the existing cross-harness assets under `asset
 
 ## Contents
 
-- `extensions/takomi-runtime/` — Pi runtime glue, embedded workflow playbooks, and orchestrator board tools
-- `extensions/takomi-subagents/` — project-local subagent execution with resumable conversation IDs
-- `prompts/` — Pi-native prompt shortcuts
-- `agents/` — Pi-native specialist agent definitions, including a design-stage agent
+- `extensions/takomi-runtime/` - Pi runtime glue, embedded workflow playbooks, and orchestrator board tools
+- `extensions/takomi-subagents/` - project-local subagent execution with resumable conversation IDs
+- `prompts/` - Pi-native prompt shortcuts
+- `agents/` - Pi-native specialist agent definitions, including a design-stage agent
 
 ## Why this exists
 
@@ -29,8 +29,8 @@ Inside Pi, use:
 - `/reload` after edits
 - `/takomi` to enable Takomi mode guidance
 - `/takomi-genesis`, `/takomi-design`, `/takomi-build` for lifecycle stages
-- `/takomi-kickoff <title>` to create a default Genesis → Design → Build orchestrator session
-- `takomi_board` actions now include task updates and redispatch support for review loops
+- `/takomi-kickoff <title>` to create a Genesis-first orchestration session that can expand through Design and Build
+- `takomi_board` actions now include stage expansion, task updates, and redispatch support for review loops
 - `/orch` to bias toward orchestrator behavior
 - `/architect`, `/code`, `/review` for focused roles
 - `/autoorch` to toggle lightweight automatic orchestration routing
@@ -43,17 +43,21 @@ Inside Pi, use:
 
 ## Notable behavior
 
-- The lifecycle now explicitly models **Genesis → Design → Build**.
+- The lifecycle explicitly models `Genesis -> Design -> Build`.
+- Takomi lifecycle judgment is the default runtime behavior, not something that should require the literal phrase `use Takomi`.
 - Design stage includes a Gemini-oriented hint for model selection.
-- **Build is treated as a workflow/stage, not as a separate specialist agent.**
+- Build is treated as a workflow/stage, not as a separate specialist agent.
+- A fresh orchestration session starts with a Genesis foundation task, then expands Design and Build only when the scope justifies it.
 - The main execution roles remain things like `orchestrator`, `coder`, `designer`, `architect`, and `reviewer`.
-- Orchestrator sessions now run in **hybrid mode**:
+- Orchestrator sessions run in hybrid mode:
   - human-readable docs live under `docs/tasks/orchestrator-sessions/<sessionId>/`
   - machine state lives under `.pi/takomi/orchestrator/<sessionId>.json`
-- Task packets can now carry `workflow`, `skills`, `preferredModel`, `conversationId`, and `checklist` metadata.
-- The subagent tool supports `conversationId`, so reviewed work can be sent back to the **same agent** for continuation instead of restarting from scratch.
+- Task packets can carry `workflow`, `skills`, `preferredModel`, `conversationId`, and `checklist` metadata.
+- The subagent tool supports `conversationId`, so reviewed work can be sent back to the same agent for continuation instead of restarting from scratch.
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, and `checklist` overrides.
-- `takomi_board` can now:
+- `takomi_board` can:
+  - create a Genesis-first lifecycle session by default
+  - expand a lifecycle stage into additional tasks
   - update task status and notes
   - update checklist progress
   - rewrite JSON machine state
