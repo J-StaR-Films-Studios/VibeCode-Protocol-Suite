@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Takomi Orchestration UI Mockups</title>
+  <style>
+    :root {
+      --bg: #080b11;
+      --panel: #0f141d;
+      --panel-2: #121a26;
+      --panel-3: #182231;
+      --line: #233047;
+      --soft: #8d9aad;
+      --text: #e5edf7;
+      --muted: #95a2b6;
+      --dim: #627086;
+      --accent: #55d7ee;
+      --accent-2: #9beaf8;
+      --violet: #a78bfa;
+      --amber: #ffca58;
+      --jade: #3ad39b;
+      --coral: #ff7a92;
+      --shadow: 0 30px 80px rgba(0,0,0,.45);
+      --radius: 20px;
+      --mono: "SFMono-Regular", "Cascadia Code", "Consolas", monospace;
+      --ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: radial-gradient(circle at top, #111726 0%, var(--bg) 45%); color: var(--text); font-family: var(--ui); }
+    body { padding: 36px 24px 80px; }
+    .wrap { max-width: 1460px; margin: 0 auto; }
+
+    .hero {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 64px);
+      line-height: .98;
+      letter-spacing: -.04em;
+      max-width: 900px;
+    }
+    .lede {
+      max-width: 880px;
+      color: var(--soft);
+      font-size: 18px;
+      line-height: 1.65;
+      margin: 0;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: rgba(18,26,38,.72);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .chip strong { color: var(--text); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.45fr .9fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(18,24,36,.96), rgba(10,13,20,.98));
+      border: 1px solid rgba(80,103,136,.28);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 24px 24px 18px;
+      border-bottom: 1px solid rgba(80,103,136,.18);
+    }
+    .section-head h2,
+    .section-head h3 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      letter-spacing: -.03em;
+    }
+    .section-head p {
+      margin: 0;
+      color: var(--soft);
+      max-width: 720px;
+      line-height: 1.55;
+    }
+
+    .terminal {
+      padding: 16px;
+      background: radial-gradient(circle at top right, rgba(85,215,238,.06), transparent 32%), #0a0e15;
+    }
+
+    .terminal-shell {
+      min-height: 880px;
+      border: 1px solid rgba(85,215,238,.18);
+      border-radius: 22px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(12,18,28,.94), rgba(8,11,17,.98));
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .titlebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(80,103,136,.18);
+      background: rgba(17,24,34,.88);
+      backdrop-filter: blur(16px);
+    }
+    .dots { display: flex; gap: 8px; }
+    .dot { width: 10px; height: 10px; border-radius: 999px; }
+    .dot:nth-child(1) { background: #ff6b81; }
+    .dot:nth-child(2) { background: #ffcd56; }
+    .dot:nth-child(3) { background: #31d59b; }
+    .titlebar .meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 11px;
+      line-height: 1;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.03);
+    }
+    .badge.accent { color: var(--accent-2); border-color: rgba(85,215,238,.24); background: rgba(85,215,238,.08); }
+    .badge.violet { color: #d3c8ff; border-color: rgba(167,139,250,.24); background: rgba(167,139,250,.08); }
+    .badge.amber { color: #ffe2a2; border-color: rgba(255,202,88,.24); background: rgba(255,202,88,.08); }
+    .badge.jade { color: #aef2d6; border-color: rgba(58,211,155,.24); background: rgba(58,211,155,.08); }
+    .badge.coral { color: #ffc1cb; border-color: rgba(255,122,146,.24); background: rgba(255,122,146,.08); }
+    .badge.dim { color: var(--dim); }
+
+    .terminal-main {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+    }
+
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid rgba(80,103,136,.12);
+    }
+    .hud .left, .hud .right { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .hud .brand { font-weight: 700; letter-spacing: -.02em; color: var(--text); }
+    .hud .brand span { color: var(--accent); }
+    .hud .tiny { font-size: 12px; color: var(--muted); }
+
+    .transcript {
+      padding: 22px 20px 14px;
+      overflow: hidden;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .msg {
+      border: 1px solid rgba(80,103,136,.16);
+      background: rgba(18,25,37,.58);
+      border-radius: 18px;
+      padding: 16px 16px 14px;
+      backdrop-filter: blur(14px);
+    }
+    .msg.user { border-color: rgba(255,255,255,.07); background: rgba(255,255,255,.03); }
+    .msg-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .14em;
+    }
+    .msg p { margin: 0; color: var(--text); line-height: 1.6; }
+    .msg.small p { color: var(--soft); font-size: 14px; }
+
+    .artifact {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(58,211,155,.24);
+      background: linear-gradient(180deg, rgba(11,33,28,.88), rgba(10,15,18,.72));
+    }
+    .artifact .title { font-size: 13px; color: #aef2d6; text-transform: uppercase; letter-spacing: .14em; }
+    .artifact ul { margin: 0; padding-left: 18px; color: var(--soft); line-height: 1.55; }
+
+    .stack-zone {
+      padding: 0 20px 18px;
+      display: grid;
+      gap: 12px;
+    }
+    .stack-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      padding-top: 10px;
+    }
+
+    .agent-card {
+      position: relative;
+      border-radius: 20px;
+      border: 1px solid rgba(85,215,238,.18);
+      background: linear-gradient(180deg, rgba(15,24,36,.94), rgba(11,15,23,.98));
+      padding: 16px 18px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 18px 40px rgba(0,0,0,.28);
+      display: grid;
+      gap: 12px;
+    }
+    .agent-card.dimmed {
+      opacity: .58;
+      transform: scale(.985);
+      border-color: rgba(255,255,255,.08);
+    }
+    .agent-card.child { margin-left: 32px; }
+    .agent-card.child::before {
+      content: "";
+      position: absolute;
+      left: -18px;
+      top: -14px;
+      bottom: 28px;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(85,215,238,.42), rgba(85,215,238,0));
+      border-radius: 999px;
+    }
+    .agent-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .agent-name {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+    .agent-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--bg);
+      background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      box-shadow: 0 10px 24px rgba(85,215,238,.24);
+    }
+    .agent-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .agent-text {
+      font-family: var(--mono);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .agent-text .muted { color: var(--soft); }
+    .agent-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn {
+      border: 1px solid rgba(85,215,238,.26);
+      color: var(--accent-2);
+      background: rgba(85,215,238,.08);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      padding: 10px 12px;
+    }
+    .btn.secondary {
+      border-color: rgba(255,255,255,.1);
+      color: var(--soft);
+      background: rgba(255,255,255,.03);
+    }
+    .btn.warn {
+      border-color: rgba(255,122,146,.22);
+      color: #ffd0d8;
+      background: rgba(255,122,146,.1);
+    }
+
+    .composer {
+      border-top: 1px solid rgba(80,103,136,.14);
+      padding: 16px 18px 18px;
+      background: linear-gradient(180deg, rgba(10,14,20,.52), rgba(10,14,20,.92));
+      display: grid;
+      gap: 12px;
+    }
+    .composer-line {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid rgba(255,202,88,.22);
+      background: rgba(255,202,88,.06);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .composer-prefix {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: #ffe2a2;
+      white-space: nowrap;
+    }
+    .composer-input {
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .inspector {
+      display: grid;
+      gap: 18px;
+      padding: 24px;
+    }
+    .note {
+      border: 1px solid rgba(80,103,136,.18);
+      background: rgba(13,17,25,.78);
+      border-radius: 18px;
+      padding: 18px;
+    }
+    .note h3 { margin: 0 0 10px; font-size: 16px; }
+    .note p, .note li { color: var(--soft); line-height: 1.65; }
+    .note ul { margin: 0; padding-left: 18px; }
+
+    .mini-rail {
+      display: grid;
+      gap: 12px;
+    }
+    .mini {
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(80,103,136,.16);
+      background: rgba(17,24,34,.82);
+    }
+    .mini strong { display: block; margin-bottom: 8px; }
+    .mini code {
+      color: var(--accent-2);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .timeline {
+      padding: 18px 20px 24px;
+      display: grid;
+      gap: 12px;
+    }
+    .line-block {
+      border-left: 2px solid rgba(85,215,238,.24);
+      padding-left: 16px;
+      display: grid;
+      gap: 10px;
+    }
+    .line-block.child { margin-left: 22px; border-left-color: rgba(167,139,250,.32); }
+    .line-block.grandchild { margin-left: 44px; border-left-color: rgba(255,202,88,.32); }
+
+    .footer-state {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 20px 18px;
+      border-top: 1px solid rgba(80,103,136,.12);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .legend-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--soft);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+    .legend-item .pill {
+      min-width: 88px;
+      text-align: center;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: 1fr; }
+      .terminal-shell { min-height: 760px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Takomi design exploration</div>
+      <h1>Mock up the orchestration UX before committing to another terminal build pass.</h1>
+      <p class="lede">
+        These HTML mockups test the design direction recommended by the Takomi designer on Gemini 3.1: <strong>a bottom card stack</strong> that makes delegation feel like a visible call stack near the command line, instead of a detached side panel. The goal is to make nested delegation, steering, and baton-passing feel obvious.
+      </p>
+      <div class="chips">
+        <div class="chip"><strong>Recommended:</strong> Bottom Stack</div>
+        <div class="chip"><strong>Also shown:</strong> Inline Timeline</div>
+        <div class="chip"><strong>Focus:</strong> nested agents, steer mode, completion/error collapse</div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <h2>Option A — Bottom Stack</h2>
+            <p>The transcript stays full-width. Active agents live in a stack right above the input, so the user can track parent → child delegation and inject steering instructions where their eyes already are.</p>
+          </div>
+          <div class="badge accent">Recommended</div>
+        </div>
+
+        <div class="terminal">
+          <div class="terminal-shell">
+            <div class="titlebar">
+              <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+              <div class="meta">
+                <span class="badge accent">Takomi</span>
+                <span class="badge violet">Genesis</span>
+                <span class="badge amber">Auto-Orch</span>
+                <span class="badge dim">Session orch-20260408-ux</span>
+              </div>
+            </div>
+
+            <div class="terminal-main">
+              <div class="hud">
+                <div class="left">
+                  <div class="brand"><span>◎</span> Takomi Command Deck</div>
+                  <div class="tiny">role orchestrator · workflow vibe-genesis · branch orchestration-ui</div>
+                </div>
+                <div class="right">
+                  <span class="badge jade">1 completed</span>
+                  <span class="badge accent">2 active</span>
+                  <span class="badge dim">1 steerable</span>
+                </div>
+              </div>
+
+              <div class="transcript">
+                <div class="msg user">
+                  <div class="msg-label"><span>User</span><span>just now</span></div>
+                  <p>The side panel feels wonky. I want to understand what delegated agents are doing, especially when one agent hands off to another. It should feel steerable, not bolted on.</p>
+                </div>
+
+                <div class="msg small">
+                  <div class="msg-label"><span>Takomi Orchestrator</span><span>analysis</span></div>
+                  <p>Exploring a redesign direction. I’ll test an interaction model that keeps active work near the input area instead of pulling attention off to the right.</p>
+                </div>
+
+                <div class="msg">
+                  <div class="msg-label"><span>Completed Artifact</span><span>design note</span></div>
+                  <div class="artifact">
+                    <div class="title">Why the side panel struggled</div>
+                    <ul>
+                      <li>It competes with the transcript instead of collaborating with it.</li>
+                      <li>Nested delegation becomes visually detached from the user’s focus point.</li>
+                      <li>It narrows logs at the exact moment clarity matters most.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stack-zone">
+                <div class="stack-label">
+                  <span>Active stack</span>
+                  <span>Follow the baton pass in place</span>
+                </div>
+
+                <div class="agent-card dimmed">
+                  <div class="agent-top">
+                    <div>
+                      <div class="agent-name"><div class="agent-icon">O</div> Orchestrator</div>
+                      <div class="agent-meta">
+                        <span class="badge violet">parent</span>
+                        <span>task: redesign orchestration UX</span>
+                        <span>elapsed 0:46</span>
+                      </div>
+                    </div>
+                    <div class="badge dim">waiting on child</div>
+                  </div>
+                  <div class="agent-text"><span class="muted">Paused:</span> keeping session context, waiting for the active designer thread to finish the mockup recommendation.</div>
+                </div>
+
+                <div class="agent-card child">
+                  <div class="agent-top">
+                    <div>
+                      <div class="agent-name"><div class="agent-icon">D</div> Designer</div>
+                      <div class="agent-meta">
+                        <span class="badge accent">active</span>
+                        <span>workflow vibe-design</span>
+                        <span>model gemini-3.1-pro-preview</span>
+                      </div>
+                    </div>
+                    <div class="badge jade">steerable</div>
+                  </div>
+                  <div class="agent-text">
+                    Recommending a <strong>bottom stack</strong> interaction. The transcript remains stable while active cards visualize delegation depth. Current child focus: mapping how a nested code reviewer should appear inside the same stack.
+                  </div>
+                  <div class="agent-actions">
+                    <button class="btn">Steer active agent</button>
+                    <button class="btn secondary">Open full thread</button>
+                    <button class="btn secondary">Promote to transcript</button>
+                  </div>
+                </div>
+
+                <div class="agent-card child" style="margin-left:68px; border-color: rgba(255,202,88,.22); background: linear-gradient(180deg, rgba(28,24,15,.92), rgba(12,15,21,.98));">
+                  <div class="agent-top">
+                    <div>
+                      <div class="agent-name"><div class="agent-icon" style="background: linear-gradient(135deg, #ffe3a3, var(--amber)); box-shadow: 0 10px 24px rgba(255,202,88,.18);">R</div> Reviewer</div>
+                      <div class="agent-meta">
+                        <span class="badge amber">child task</span>
+                        <span>checking steer-mode interaction</span>
+                        <span>elapsed 0:09</span>
+                      </div>
+                    </div>
+                    <div class="badge amber">live output</div>
+                  </div>
+                  <div class="agent-text">Testing whether a running child agent should accept <span class="muted">“also make sure…”</span> style steering without killing the parent workflow. Suggestion: attach a user note directly into the active child thread.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer">
+              <div class="composer-line">
+                <div class="composer-prefix">@designer &gt;</div>
+                <div class="composer-input">Before you finalize, also show how completion collapses back into the parent card instead of leaving the stack hanging open.</div>
+                <button class="btn">Inject steer note</button>
+              </div>
+              <div class="footer-state">
+                <span>(takomi) genesis · orchestrator · 2 active agents · steer mode armed</span>
+                <span>⌘/Ctrl+S steer · Esc cancel · Tab inspect stack</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel inspector">
+        <div class="note">
+          <h3>Why this works better</h3>
+          <ul>
+            <li><strong>Eyes stay anchored</strong> near the input where interaction actually happens.</li>
+            <li><strong>Delegation depth is obvious</strong> because cards stack like a call stack.</li>
+            <li><strong>Steering feels native</strong> because the active card becomes the input target.</li>
+            <li><strong>The transcript stays clean</strong> while active state remains visible.</li>
+          </ul>
+        </div>
+
+        <div class="note">
+          <h3>Terminal adaptation rules</h3>
+          <div class="legend">
+            <div class="legend-item"><span class="pill" style="color: var(--accent-2); border-color: rgba(85,215,238,.22);">Running</span><span>Bright active card at the bottom, parent cards dimmed above it.</span></div>
+            <div class="legend-item"><span class="pill" style="color: #aef2d6; border-color: rgba(58,211,155,.22);">Complete</span><span>Child folds into parent, then the summary drops into transcript history.</span></div>
+            <div class="legend-item"><span class="pill" style="color: #ffd0d8; border-color: rgba(255,122,146,.22);">Blocked</span><span>Card stays open and input automatically targets the blocked agent for rescue.</span></div>
+          </div>
+        </div>
+
+        <div class="mini-rail">
+          <div class="mini">
+            <strong>Key pattern</strong>
+            <code>Transcript = history</code><br />
+            <code>Bottom stack = now</code>
+          </div>
+          <div class="mini">
+            <strong>Steer mode copy</strong>
+            <code>@designer &gt; also keep logs condensed</code>
+          </div>
+          <div class="mini">
+            <strong>Nested baton pass</strong>
+            Parent card dims → child card appears underneath → completion folds upward.
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel" style="margin-top: 28px;">
+      <div class="section-head">
+        <div>
+          <h3>Option B — Inline Timeline</h3>
+          <p>Useful as a comparison. This version keeps everything in one threaded transcript, which is excellent for chronology but weaker for active focus and steerability.</p>
+        </div>
+        <div class="badge dim">Comparison</div>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-shell" style="min-height: 620px;">
+          <div class="titlebar">
+            <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="meta">
+              <span class="badge accent">Inline Timeline</span>
+              <span class="badge violet">Design exploration</span>
+            </div>
+          </div>
+
+          <div class="timeline">
+            <div class="msg user">
+              <div class="msg-label"><span>User</span><span>prompt</span></div>
+              <p>Make the delegation flow more legible and easier to steer.</p>
+            </div>
+
+            <div class="line-block">
+              <div class="msg small">
+                <div class="msg-label"><span>Orchestrator</span><span>opened thread</span></div>
+                <p>Starting a redesign pass and dispatching a designer.</p>
+              </div>
+
+              <div class="line-block child">
+                <div class="msg">
+                  <div class="msg-label"><span>Designer</span><span>active</span></div>
+                  <p>Evaluating whether a side panel or bottom stack better communicates agent state.</p>
+                </div>
+
+                <div class="line-block grandchild">
+                  <div class="msg">
+                    <div class="msg-label"><span>Reviewer</span><span>child delegation</span></div>
+                    <p>Checking if steer mode can target the deepest active child without breaking parent continuity.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <div class="composer-line" style="border-color: rgba(80,103,136,.2); background: rgba(255,255,255,.03);">
+              <div class="composer-prefix" style="color: var(--soft);">&gt;</div>
+              <div class="composer-input">This is easier to archive, but it is harder to feel which agent is active right now.</div>
+              <button class="btn secondary">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

@@ -5,6 +5,7 @@ import os from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { discoverProjectAgents, type TakomiAgentConfig } from "./agents";
+import { TakomiSubagentUi } from "../takomi-runtime/ui";
 
 const ChecklistItemSchema = Type.Object({
   text: Type.String(),
@@ -59,20 +60,161 @@ async function writePrompt(agentName: string, prompt: string) {
   return filePath;
 }
 
-async function runAgent(cwd: string, args: string[], signal?: AbortSignal): Promise<{ stdout: string; stderr: string; code: number }> {
+type RunHooks = {
+  onStdout?: (chunk: string) => void;
+  onStderr?: (chunk: string) => void;
+};
+
+type JsonRunHooks = {
+  onEventText?: (line: string) => void;
+  onStderr?: (chunk: string) => void;
+};
+
+function extractAssistantText(message: unknown): string {
+  if (!message || typeof message !== "object") return "";
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((block): block is { type?: string; text?: string } => Boolean(block) && typeof block === "object")
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text ?? "")
+    .join("\n")
+    .trim();
+}
+
+function summarizeJsonEvent(event: Record<string, unknown>): string | undefined {
+  const type = typeof event.type === "string" ? event.type : "";
+  if (type === "tool_execution_start") {
+    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+    return `Tool start: ${toolName}`;
+  }
+  if (type === "tool_execution_update") {
+    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+    const partial = event.partialResult;
+    if (partial && typeof partial === "object") {
+      const partialText = extractAssistantText(partial);
+      if (partialText) return `${toolName}: ${partialText.split(/\r?\n/).find(Boolean)?.trim()}`;
+      const details = (partial as { details?: { output?: string; stdout?: string } }).details;
+      const output = details?.output ?? details?.stdout;
+      if (typeof output === "string" && output.trim()) {
+        return `${toolName}: ${output.split(/\r?\n/).find(Boolean)?.trim()}`;
+      }
+    }
+    return `${toolName}: update`;
+  }
+  if (type === "tool_execution_end") {
+    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+    const isError = event.isError === true;
+    return isError ? `Tool failed: ${toolName}` : `Tool complete: ${toolName}`;
+  }
+  if (type === "message_update") {
+    const assistantEvent = event.assistantMessageEvent;
+    if (assistantEvent && typeof assistantEvent === "object") {
+      const delta = (assistantEvent as { delta?: unknown }).delta;
+      if (typeof delta === "string" && delta.trim()) return delta.trim();
+    }
+    const messageText = extractAssistantText(event.message);
+    if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
+  }
+  if (type === "message_end") {
+    const message = event.message;
+    if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+      const messageText = extractAssistantText(message);
+      if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
+    }
+  }
+  return undefined;
+}
+
+async function runAgent(cwd: string, args: string[], signal?: AbortSignal, hooks?: RunHooks): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
     const invocation = getPiInvocation(args);
     const proc = spawn(invocation.command, invocation.args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: false });
     let stdout = "";
     let stderr = "";
     proc.stdout.on("data", (d) => {
-      stdout += d.toString();
+      const chunk = d.toString();
+      stdout += chunk;
+      hooks?.onStdout?.(chunk);
     });
     proc.stderr.on("data", (d) => {
-      stderr += d.toString();
+      const chunk = d.toString();
+      stderr += chunk;
+      hooks?.onStderr?.(chunk);
     });
     proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 0 }));
     proc.on("error", () => resolve({ stdout, stderr, code: 1 }));
+    if (signal) {
+      const abort = () => proc.kill("SIGTERM");
+      if (signal.aborted) abort();
+      else signal.addEventListener("abort", abort, { once: true });
+    }
+  });
+}
+
+async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, hooks?: JsonRunHooks): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve) => {
+    const invocation = getPiInvocation(args);
+    const proc = spawn(invocation.command, invocation.args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: false });
+    let stdout = "";
+    let stderr = "";
+    let lineBuffer = "";
+    let finalAssistantText = "";
+
+    const consumeLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      stdout += `${line}\n`;
+      try {
+        const event = JSON.parse(trimmed) as Record<string, unknown>;
+        const messageText = summarizeJsonEvent(event);
+        if (messageText) hooks?.onEventText?.(messageText);
+
+        if (event.type === "message_end") {
+          const message = event.message;
+          if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+            const text = extractAssistantText(message);
+            if (text) finalAssistantText = text;
+          }
+        }
+        if (event.type === "agent_end") {
+          const messages = (event.messages as unknown[] | undefined) ?? [];
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const message = messages[i];
+            if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+              const text = extractAssistantText(message);
+              if (text) {
+                finalAssistantText = text;
+                break;
+              }
+            }
+          }
+        }
+      } catch {
+        hooks?.onEventText?.(trimmed);
+      }
+    };
+
+    proc.stdout.on("data", (d) => {
+      lineBuffer += d.toString();
+      let newlineIndex = lineBuffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = lineBuffer.slice(0, newlineIndex);
+        lineBuffer = lineBuffer.slice(newlineIndex + 1);
+        consumeLine(line);
+        newlineIndex = lineBuffer.indexOf("\n");
+      }
+    });
+    proc.stderr.on("data", (d) => {
+      const chunk = d.toString();
+      stderr += chunk;
+      hooks?.onStderr?.(chunk);
+    });
+    proc.on("close", (code) => {
+      if (lineBuffer.trim()) consumeLine(lineBuffer);
+      resolve({ stdout: finalAssistantText || stdout.trim(), stderr, code: code ?? 0 });
+    });
+    proc.on("error", () => resolve({ stdout: finalAssistantText || stdout.trim(), stderr, code: 1 }));
     if (signal) {
       const abort = () => proc.kill("SIGTERM");
       if (signal.aborted) abort();
@@ -135,6 +277,12 @@ async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?:
 }
 
 export default function takomiSubagents(pi: ExtensionAPI) {
+  const subagentUi = new TakomiSubagentUi("takomi-subagent");
+
+  pi.on("session_start", async (_event, ctx) => {
+    subagentUi.reset(ctx);
+  });
+
   pi.registerTool({
     name: "takomi_subagent",
     label: "Takomi Subagent",
@@ -213,7 +361,20 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         const sessionPath = path.join(subagentSessionDir, `${conversationId}.jsonl`);
         const subagentCwd = item.cwd ? path.resolve(rootCwd, item.cwd) : rootCwd;
 
+        await subagentUi.start(ctx, {
+          title: "Takomi Active Subagent",
+          agent: config.name,
+          taskLabel: item.task.split(/\r?\n/)[0]?.trim() || item.agent,
+          workflow: item.workflow,
+          conversationId,
+          checklist: item.checklist,
+          summary: "Preparing delegated run.",
+        });
+
         const preflight = await runModelPreflight(ctx, subagentCwd, item.model, config.model, signal);
+        if (preflight.model) {
+          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` });
+        }
         if (!preflight.model) {
           results.push({
             agent: config.name,
@@ -225,6 +386,10 @@ export default function takomiSubagents(pi: ExtensionAPI) {
             output: "",
             stderr: preflight.report,
           });
+          await subagentUi.block(ctx, {
+            summary: `Subagent ${config.name} blocked before launch.`,
+            logs: [preflight.warning || "No model matched the requested run."],
+          });
           return {
             content: [{ type: "text", text: `Subagent ${config.name} blocked before launch.\n\n${preflight.report}` }],
             details: { results, preflight },
@@ -232,11 +397,18 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           };
         }
 
-        const args = ["--append-system-prompt", promptPath, "-p", effectiveTask, "--session", sessionPath];
+        const args = ["--mode", "json", "--append-system-prompt", promptPath, "--session", sessionPath, effectiveTask];
         args.unshift("--model", preflight.model);
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
 
-        const result = await runAgent(subagentCwd, args, signal);
+        const result = await runAgentJson(subagentCwd, args, signal, {
+          onEventText: (line) => {
+            void subagentUi.appendLog(ctx, line);
+          },
+          onStderr: (chunk) => {
+            void subagentUi.appendLog(ctx, chunk);
+          },
+        });
         previousOutput = result.stdout.trim();
         results.push({
           agent: config.name,
@@ -251,12 +423,23 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         });
 
         if (result.code !== 0) {
+          await subagentUi.block(ctx, {
+            model: preflight.model,
+            summary: `Subagent ${config.name} failed.`,
+            logs: [result.stderr || result.stdout || "No output"],
+          });
           return {
             content: [{ type: "text", text: `${preflight.report}\n\nSubagent ${config.name} failed.\n\n${result.stderr || result.stdout || "No output"}` }],
             details: { results, preflight },
             isError: true,
           };
         }
+
+        await subagentUi.complete(ctx, {
+          model: preflight.model,
+          summary: previousOutput || `Subagent ${config.name} run complete.`,
+          logs: previousOutput ? [previousOutput] : [],
+        });
       }
 
       const lastPreflight = typeof results.at(-1)?.preflight === "string" ? String(results.at(-1)?.preflight) : "";

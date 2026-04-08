@@ -36,6 +36,7 @@ Inside Pi, use:
 - `/autoorch` to toggle lightweight automatic orchestration routing
 - `/takomi-plan` to toggle planning bias
 - prompt shortcuts are suffixed with `-prompt` to avoid collisions with runtime commands, e.g. `/orch-prompt`, `/build-prompt`, `/design-prompt`, `/genesis-prompt`, `/takomi-prompt`, `/prime-prompt`
+- a project-local theme is available at `.pi/themes/takomi-noir.json`; select `takomi-noir` in `/settings` to use the Takomi UI palette
 - additional workflow prompts are available as direct slash commands:
   - `/vibe-primeAgent`
   - `/vibe-spawnTask`
@@ -55,6 +56,8 @@ Inside Pi, use:
 - Task packets can carry `workflow`, `skills`, `preferredModel`, `conversationId`, and `checklist` metadata.
 - The subagent tool supports `conversationId`, so reviewed work can be sent back to the same agent for continuation instead of restarting from scratch.
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, and `checklist` overrides.
+- Active subagent work now stays anchored below the editor so it remains visible near the input/footer while transcript history scrolls independently.
+- Use `/takomi-subagent-toggle` or `Alt+T` to expand or collapse the live Takomi subagent surface.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default
   - expand a lifecycle stage into additional tasks
