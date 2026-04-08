@@ -72,6 +72,11 @@ function renderChecklist(checklist?: TaskChecklistItem[]): string[] {
   return checklist.map((item) => `- [${item.done ? "x" : " "}] ${item.text}`);
 }
 
+function renderBullets(items?: string[], empty = "- None specified."): string[] {
+  if (!items?.length) return [empty];
+  return items.map((item) => `- ${item}`);
+}
+
 export function renderMasterPlan(sessionId: string, title: string, tasks: OrchestratorTask[]): string {
   const rows = tasks
     .map((task) => `| ${task.id} | ${task.title} | ${task.status} | ${task.role} | ${task.preferredAgent ?? "-"} | ${task.workflow ?? "-"} | ${task.preferredModel ?? task.preferredModelHint ?? "-"} | ${task.skills?.join(", ") ?? "-"} |`)
@@ -109,23 +114,53 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     `**Workflow:** ${task.workflow ?? "-"}`,
     task.preferredModel ? `**Model Override:** ${task.preferredModel}` : "",
     task.preferredModelHint ? `**Model Hint:** ${task.preferredModelHint}` : "",
-    task.skills?.length ? `**Skills:** ${task.skills.join(", ")}` : "",
+    task.skills?.length ? `**Required Skills:** ${task.skills.join(", ")}` : "",
     "",
     "## Context",
     "",
     context ?? "Add task-specific context here.",
     "",
+    "## Objective",
+    "",
+    task.objective ?? task.title,
+    "",
+    "## Scope",
+    "",
+    ...renderBullets(task.scope),
+    "",
     "## Checklist",
     "",
     ...renderChecklist(task.checklist),
     "",
+    "## Definition of Done",
+    "",
+    ...renderBullets(task.definitionOfDone),
+    "",
+    "## Expected Artifacts",
+    "",
+    ...renderBullets(task.expectedArtifacts),
+    "",
+    "## Dependencies",
+    "",
+    ...renderBullets(task.dependencies),
+    "",
+    "## Review Checkpoint",
+    "",
+    task.reviewCheckpoint ?? "Review before implementation handoff or final completion.",
+    "",
     "## Instructions",
     "",
-    "- complete the task within scope",
-    "- use the listed workflow and skills when they are provided",
-    "- report blockers clearly",
-    "- if review sends this back, continue using the same conversation id when possible",
-    "- summarize what changed and what remains",
+    ...renderBullets(task.instructions ?? [
+      "complete the task within scope",
+      "use the listed workflow and skills when they are provided",
+      "report blockers clearly",
+      "if review sends this back, continue using the same conversation id when possible",
+      "summarize what changed and what remains",
+    ]),
+    task.notes ? "" : "",
+    task.notes ? "## Notes" : "",
+    task.notes ? "" : "",
+    task.notes ?? "",
   ].filter(Boolean).join("\n");
 }
 

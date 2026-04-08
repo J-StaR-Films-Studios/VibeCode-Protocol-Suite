@@ -33,6 +33,10 @@ Inside Pi, use:
 - `/autoorch` to toggle lightweight automatic orchestration routing
 - `/takomi-plan` to toggle planning bias
 - prompt shortcuts are suffixed with `-prompt` to avoid collisions with runtime commands, e.g. `/orch-prompt`, `/build-prompt`, `/design-prompt`, `/genesis-prompt`, `/takomi-prompt`, `/prime-prompt`
+- additional workflow prompts are available as direct slash commands:
+  - `/vibe-primeAgent`
+  - `/vibe-spawnTask`
+  - `/vibe-syncDocs`
 
 ## Notable behavior
 

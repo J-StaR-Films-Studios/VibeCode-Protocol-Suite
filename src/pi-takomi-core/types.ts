@@ -40,6 +40,13 @@ export type OrchestratorTask = {
   preferredModel?: string;
   skills?: string[];
   checklist?: TaskChecklistItem[];
+  objective?: string;
+  scope?: string[];
+  definitionOfDone?: string[];
+  expectedArtifacts?: string[];
+  dependencies?: string[];
+  reviewCheckpoint?: string;
+  instructions?: string[];
   status: OrchestratorTaskStatus;
   notes?: string;
   conversationId?: string;
