@@ -2,7 +2,7 @@
 name: architect
 description: Plan, design, and clarify before implementation.
 tools: read,bash,grep,find,ls
-model: anthropic/claude-sonnet-4-5
+model: gpt-5.4
 ---
 You are the Takomi Architect.
 

@@ -6,17 +6,49 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { discoverProjectAgents } from "./agents";
 
+const ChecklistItemSchema = Type.Object({
+  text: Type.String(),
+  done: Type.Optional(Type.Boolean()),
+});
+
 const TaskSchema = Type.Object({
   agent: Type.String(),
   task: Type.String(),
+  workflow: Type.Optional(Type.String()),
+  skills: Type.Optional(Type.Array(Type.String())),
+  model: Type.Optional(Type.String()),
   conversationId: Type.Optional(Type.String()),
   cwd: Type.Optional(Type.String()),
+  checklist: Type.Optional(Type.Array(Type.Union([Type.String(), ChecklistItemSchema]))),
 });
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
   const currentScript = process.argv[1];
   if (currentScript) return { command: process.execPath, args: [currentScript, ...args] };
   return { command: "pi", args };
+}
+
+function formatChecklist(checklist?: Array<string | { text: string; done?: boolean }>): string {
+  if (!checklist?.length) return "";
+  return [
+    "Checklist:",
+    ...checklist.map((item) => typeof item === "string" ? `- [ ] ${item}` : `- [${item.done ? "x" : " "}] ${item.text}`),
+  ].join("\n");
+}
+
+function buildTaskPrompt(task: {
+  task: string;
+  workflow?: string;
+  skills?: string[];
+  checklist?: Array<string | { text: string; done?: boolean }>;
+}): string {
+  return [
+    task.workflow ? `Workflow: ${task.workflow}` : "",
+    task.skills?.length ? `Skills: ${task.skills.join(", ")}` : "",
+    formatChecklist(task.checklist),
+    "Task:",
+    task.task,
+  ].filter(Boolean).join("\n\n");
 }
 
 async function writePrompt(agentName: string, prompt: string) {
@@ -49,6 +81,31 @@ async function runAgent(cwd: string, args: string[], signal?: AbortSignal): Prom
   });
 }
 
+async function getAvailableModelKeys(ctx: { modelRegistry: { getAvailable: () => Promise<Array<{ provider: string; id: string }>> } }): Promise<string[]> {
+  const available = await ctx.modelRegistry.getAvailable().catch(() => []);
+  return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
+}
+
+async function resolvePreferredModel(ctx: { modelRegistry: { getAvailable: () => Promise<Array<{ provider: string; id: string }>> } }, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
+  const candidates = [requested, fallback].filter(Boolean) as string[];
+  if (candidates.length === 0) return {};
+  const keys = await getAvailableModelKeys(ctx);
+  const exact = candidates.find((candidate) => keys.includes(candidate));
+  if (exact) return { model: exact };
+  const loweredKeys = keys.map((key) => key.toLowerCase());
+  for (const candidate of candidates) {
+    const idx = loweredKeys.findIndex((key) => key === candidate.toLowerCase());
+    if (idx >= 0) return { model: keys[idx] };
+  }
+  for (const candidate of candidates) {
+    const idx = loweredKeys.findIndex((key) => key.includes(candidate.toLowerCase()) || candidate.toLowerCase().includes(key));
+    if (idx >= 0) return { model: keys[idx], warning: `Requested model '${candidate}' was unavailable; using '${keys[idx]}' instead.` };
+  }
+  const firstAvailable = keys.find((key) => key.includes("/"));
+  if (firstAvailable) return { model: firstAvailable, warning: `Requested models '${candidates.join("', '")}' were unavailable; using '${firstAvailable}' instead.` };
+  return { warning: `No available signed-in model matched '${candidates.join("', '")}'.` };
+}
+
 export default function takomiSubagents(pi: ExtensionAPI) {
   pi.registerTool({
     name: "takomi_subagent",
@@ -62,8 +119,12 @@ export default function takomiSubagents(pi: ExtensionAPI) {
     parameters: Type.Object({
       agent: Type.Optional(Type.String({ description: "Agent name for single execution" })),
       task: Type.Optional(Type.String({ description: "Task for single execution" })),
+      workflow: Type.Optional(Type.String({ description: "Workflow or playbook overlay for this task" })),
+      skills: Type.Optional(Type.Array(Type.String(), { description: "Extra skills to apply during the task" })),
+      model: Type.Optional(Type.String({ description: "Optional per-run model override" })),
       conversationId: Type.Optional(Type.String({ description: "Persistent conversation id to resume the same subagent session" })),
       cwd: Type.Optional(Type.String({ description: "Working directory override" })),
+      checklist: Type.Optional(Type.Array(Type.Union([Type.String(), ChecklistItemSchema]), { description: "Optional checklist for the subagent" })),
       chain: Type.Optional(Type.Array(TaskSchema, { description: "Sequential chain of subagent tasks" })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -76,7 +137,16 @@ export default function takomiSubagents(pi: ExtensionAPI) {
       const tasks = params.chain && params.chain.length > 0
         ? params.chain
         : params.agent && params.task
-          ? [{ agent: params.agent, task: params.task, conversationId: params.conversationId, cwd: params.cwd }]
+          ? [{
+              agent: params.agent,
+              task: params.task,
+              workflow: params.workflow,
+              skills: params.skills,
+              model: params.model,
+              conversationId: params.conversationId,
+              cwd: params.cwd,
+              checklist: params.checklist,
+            }]
           : [];
 
       if (tasks.length === 0) {
@@ -100,20 +170,33 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           };
         }
 
-        const effectiveTask = item.task.replaceAll("{previous}", previousOutput);
-        const promptPath = await writePrompt(config.name, config.systemPrompt);
+        const effectiveTask = buildTaskPrompt({
+          task: item.task.replaceAll("{previous}", previousOutput),
+          workflow: item.workflow,
+          skills: item.skills,
+          checklist: item.checklist,
+        });
+        const promptPath = await writePrompt(config.name, [
+          config.systemPrompt,
+          item.workflow ? `\nUse the ${item.workflow} workflow for this task.` : "",
+          item.skills?.length ? `\nUse these skills when relevant: ${item.skills.join(", ")}.` : "",
+        ].filter(Boolean).join("\n"));
         const conversationId = item.conversationId || `${config.name}-${Date.now()}`;
         const sessionPath = path.join(subagentSessionDir, `${conversationId}.jsonl`);
         const subagentCwd = item.cwd ? path.resolve(rootCwd, item.cwd) : rootCwd;
 
+        const resolvedModel = await resolvePreferredModel(ctx, item.model, config.model);
         const args = ["--append-system-prompt", promptPath, "-p", effectiveTask, "--session", sessionPath];
-        if (config.model) args.unshift("--model", config.model);
+        if (resolvedModel.model) args.unshift("--model", resolvedModel.model);
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
 
         const result = await runAgent(subagentCwd, args, signal);
         previousOutput = result.stdout.trim();
         results.push({
           agent: config.name,
+          workflow: item.workflow ?? "",
+          model: resolvedModel.model || "",
+          warning: resolvedModel.warning || "",
           conversationId,
           code: result.code,
           output: previousOutput,

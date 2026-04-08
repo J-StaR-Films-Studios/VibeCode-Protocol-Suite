@@ -26,7 +26,7 @@ export const WORKFLOWS: Record<TakomiWorkflowId, WorkflowDefinition> = {
     purpose: "Turn the approved genesis into a visual and UX direction before build execution.",
     preferredRole: "design",
     preferredAgent: "designer",
-    preferredModelHint: "Prefer Gemini or another strong design-oriented cloud model for this stage.",
+    preferredModelHint: "Prefer Gemini3.1 Pro or Gemini 3 Flash or another strong design-oriented cloud model for this stage.",
     nextStage: "build",
     playbook: [
       "Vibe Design playbook:",

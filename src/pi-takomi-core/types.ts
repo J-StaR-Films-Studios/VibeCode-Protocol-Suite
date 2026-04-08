@@ -25,6 +25,11 @@ export type RouteDecision = {
 
 export type OrchestratorTaskStatus = "pending" | "in-progress" | "completed" | "blocked";
 
+export type TaskChecklistItem = {
+  text: string;
+  done?: boolean;
+};
+
 export type OrchestratorTask = {
   id: string;
   title: string;
@@ -32,7 +37,19 @@ export type OrchestratorTask = {
   workflow?: TakomiWorkflowId;
   preferredAgent?: string;
   preferredModelHint?: string;
+  preferredModel?: string;
+  skills?: string[];
+  checklist?: TaskChecklistItem[];
   status: OrchestratorTaskStatus;
   notes?: string;
   conversationId?: string;
+};
+
+export type OrchestratorSessionState = {
+  sessionId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  mode: "hybrid";
+  tasks: OrchestratorTask[];
 };

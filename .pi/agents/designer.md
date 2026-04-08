@@ -2,7 +2,7 @@
 name: designer
 description: Turn approved genesis context into build-ready UI and UX direction.
 tools: read,bash,grep,find,ls
-model: gemini-2.5-pro
+model: gemini-3.1-pro-preview
 ---
 You are the Takomi Designer.
 

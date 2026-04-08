@@ -1,23 +1,29 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import {
+  buildSessionState,
   createSessionId,
   createTask,
   decideRoute,
   getSessionPaths,
   getWorkflowDefinition,
   listWorkflowDefinitions,
-  moveTaskStatus,
   renderMasterPlan,
   renderTaskFile,
+  serializeSessionState,
+  slugifyTaskTitle,
   type OrchestratorTask,
+  type OrchestratorTaskStatus,
   type TakomiRole,
   type TakomiWorkflowId,
   type VibeLifecycleStage,
 } from "../../../src/pi-takomi-core";
+import { discoverProjectAgents } from "../takomi-subagents/agents";
 
 type TakomiState = {
   enabled: boolean;
@@ -126,22 +132,190 @@ function shouldAutoRoute(text: string): boolean {
 }
 
 function buildTaskRows(tasks: OrchestratorTask[]): string {
-  return tasks.map((task) => `${task.id}: ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}`).join("\n");
+  return tasks.map((task) => `${task.id}: ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
 }
 
-async function writeOrchestratorSession(cwd: string, sessionId: string, title: string, tasks: OrchestratorTask[]) {
+function resolveTaskAgent(task: OrchestratorTask): string {
+  return task.preferredAgent ?? (task.role === "code" ? "coder" : task.role === "design" ? "designer" : task.role === "architect" ? "architect" : task.role === "review" ? "reviewer" : "orchestrator");
+}
+
+function appendTaskNote(existing: string | undefined, heading: string, body?: string): string {
+  if (!body?.trim()) return existing ?? "";
+  return [existing, "", `${heading}:`, body.trim()].filter(Boolean).join("\n").trim();
+}
+
+function applyChecklistUpdates(
+  current: OrchestratorTask["checklist"],
+  updates?: Array<{ text?: string; index?: number; done?: boolean }>,
+): OrchestratorTask["checklist"] {
+  if (!current?.length || !updates?.length) return current;
+  const next = current.map((item) => ({ ...item }));
+  for (const update of updates) {
+    const idx = typeof update.index === "number"
+      ? update.index
+      : typeof update.text === "string"
+        ? next.findIndex((item) => item.text === update.text)
+        : -1;
+    if (idx >= 0 && next[idx]) next[idx] = { ...next[idx], done: update.done ?? next[idx].done };
+  }
+  return next;
+}
+
+function getTaskFolder(paths: ReturnType<typeof getSessionPaths>, status: OrchestratorTask["status"]) {
+  switch (status) {
+    case "in-progress":
+      return paths.inProgress;
+    case "completed":
+      return paths.completed;
+    case "blocked":
+      return paths.blocked;
+    case "pending":
+    default:
+      return paths.pending;
+  }
+}
+
+function getTaskFileName(task: OrchestratorTask): string {
+  return `${task.id}_${slugifyTaskTitle(task.title)}.task.md`;
+}
+
+function formatChecklist(checklist?: Array<string | { text: string; done?: boolean }>): string {
+  if (!checklist?.length) return "";
+  return [
+    "Checklist:",
+    ...checklist.map((item) => typeof item === "string" ? `- [ ] ${item}` : `- [${item.done ? "x" : " "}] ${item.text}`),
+  ].join("\n");
+}
+
+function buildSubagentTaskPrompt(task: OrchestratorTask, extraInstructions?: string): string {
+  return [
+    task.workflow ? `Workflow: ${task.workflow}` : "",
+    task.skills?.length ? `Skills: ${task.skills.join(", ")}` : "",
+    formatChecklist(task.checklist),
+    "Task:",
+    extraInstructions?.trim() || task.notes || task.title,
+  ].filter(Boolean).join("\n\n");
+}
+
+function getPiInvocation(args: string[]): { command: string; args: string[] } {
+  const currentScript = process.argv[1];
+  if (currentScript) return { command: process.execPath, args: [currentScript, ...args] };
+  return { command: "pi", args };
+}
+
+async function writeTempPrompt(agentName: string, prompt: string) {
+  const tmpDir = path.join(os.tmpdir(), `takomi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await mkdir(tmpDir, { recursive: true });
+  const filePath = path.join(tmpDir, `${agentName}.md`);
+  await writeFile(filePath, prompt, "utf8");
+  return filePath;
+}
+
+async function runPiAgent(cwd: string, args: string[], signal?: AbortSignal): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve) => {
+    const invocation = getPiInvocation(args);
+    const proc = spawn(invocation.command, invocation.args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: false });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => {
+      stdout += d.toString();
+    });
+    proc.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
+    proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 0 }));
+    proc.on("error", () => resolve({ stdout, stderr, code: 1 }));
+    if (signal) {
+      const abort = () => proc.kill("SIGTERM");
+      if (signal.aborted) abort();
+      else signal.addEventListener("abort", abort, { once: true });
+    }
+  });
+}
+
+async function getAvailableModelKeys(ctx: ExtensionContext): Promise<string[]> {
+  const available = await ctx.modelRegistry.getAvailable().catch(() => []);
+  return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
+}
+
+async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
+  const candidates = [requested, fallback].filter(Boolean) as string[];
+  if (candidates.length === 0) return {};
+  const keys = await getAvailableModelKeys(ctx);
+  const exact = candidates.find((candidate) => keys.includes(candidate));
+  if (exact) return { model: exact };
+
+  const loweredKeys = keys.map((key) => key.toLowerCase());
+  for (const candidate of candidates) {
+    const idx = loweredKeys.findIndex((key) => key === candidate.toLowerCase());
+    if (idx >= 0) return { model: keys[idx] };
+  }
+
+  for (const candidate of candidates) {
+    const idx = loweredKeys.findIndex((key) => key.includes(candidate.toLowerCase()) || candidate.toLowerCase().includes(key));
+    if (idx >= 0) {
+      return {
+        model: keys[idx],
+        warning: `Requested model '${candidate}' was unavailable; using '${keys[idx]}' instead.`,
+      };
+    }
+  }
+
+  const firstAvailable = keys.find((key) => key.includes("/"));
+  if (firstAvailable) {
+    return {
+      model: firstAvailable,
+      warning: `Requested models '${candidates.join("', '")}' were unavailable; using '${firstAvailable}' instead.`,
+    };
+  }
+
+  return { warning: `No available signed-in model matched '${candidates.join("', '")}'.` };
+}
+
+async function loadSessionState(cwd: string, sessionId: string): Promise<{ title: string; tasks: OrchestratorTask[]; paths: ReturnType<typeof getSessionPaths> }> {
+  const paths = getSessionPaths(cwd, sessionId);
+  const raw = await readFile(paths.stateFile, "utf8");
+  const parsed = JSON.parse(raw) as { title: string; tasks: OrchestratorTask[] };
+  return { title: parsed.title, tasks: parsed.tasks ?? [], paths };
+}
+
+async function syncTaskArtifacts(cwd: string, sessionId: string, title: string, tasks: OrchestratorTask[]) {
   const paths = getSessionPaths(cwd, sessionId);
   await mkdir(paths.pending, { recursive: true });
   await mkdir(paths.inProgress, { recursive: true });
   await mkdir(paths.completed, { recursive: true });
+  await mkdir(paths.blocked, { recursive: true });
+  await mkdir(paths.stateDir, { recursive: true });
   await writeFile(paths.masterPlan, renderMasterPlan(sessionId, title, tasks), "utf8");
+  await writeFile(paths.summary, [
+    `# Orchestrator Summary: ${title}`,
+    "",
+    `- Session ID: ${sessionId}`,
+    `- Human docs: ${paths.root}`,
+    `- Machine state: ${paths.stateFile}`,
+    `- Runtime mode: hybrid`,
+  ].join("\n"), "utf8");
+  await writeFile(paths.stateFile, serializeSessionState(buildSessionState(sessionId, title, tasks)), "utf8");
+
+  for (const folder of [paths.pending, paths.inProgress, paths.completed, paths.blocked]) {
+    const entries = await readdir(folder).catch(() => [] as string[]);
+    for (const entry of entries) {
+      if (entry.endsWith(".task.md")) {
+        await rm(path.join(folder, entry), { force: true });
+      }
+    }
+  }
 
   for (const task of tasks) {
-    const filePath = path.join(paths.pending, `${task.id}_${task.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}.task.md`);
+    const filePath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
     await writeFile(filePath, renderTaskFile(task, `Parent session: ${sessionId}\n\nTask title: ${task.title}`), "utf8");
   }
 
   return paths;
+}
+
+async function writeOrchestratorSession(cwd: string, sessionId: string, title: string, tasks: OrchestratorTask[]) {
+  return syncTaskArtifacts(cwd, sessionId, title, tasks);
 }
 
 async function refreshUi(ctx: ExtensionContext, state: TakomiState) {
@@ -259,9 +433,22 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       const title = args.trim() || "Takomi Project";
       const sessionId = createSessionId();
       const tasks = [
-        createTask("01", "Genesis foundation", "architect", { workflow: "vibe-genesis", preferredAgent: "architect" }),
-        createTask("02", "Design handoff", "design", { workflow: "vibe-design", preferredAgent: "designer", preferredModelHint: "Prefer Gemini or another design-capable cloud model." }),
-        createTask("03", "Build orchestration", "orchestrator", { workflow: "vibe-build", preferredAgent: "orchestrator" }),
+        createTask("01", "Genesis foundation", "architect", {
+          workflow: "vibe-genesis",
+          preferredAgent: "architect",
+          checklist: ["Clarify scope", "Lock acceptance criteria", "Define boundaries"],
+        }),
+        createTask("02", "Design handoff", "design", {
+          workflow: "vibe-design",
+          preferredAgent: "designer",
+          preferredModelHint: "Prefer Gemini or another design-capable cloud model.",
+          checklist: ["Capture flows", "Define visual direction", "Produce build-ready handoff"],
+        }),
+        createTask("03", "Build orchestration", "orchestrator", {
+          workflow: "vibe-build",
+          preferredAgent: "orchestrator",
+          checklist: ["Break work into tasks", "Dispatch specialists", "Review and iterate"],
+        }),
       ];
       const paths = await writeOrchestratorSession(ctx.cwd, sessionId, title, tasks);
       await updateState(ctx, () => {
@@ -338,16 +525,35 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       "If a reviewed task needs more work, keep or reuse its conversationId so the same subagent can continue it.",
     ],
     parameters: Type.Object({
-      action: StringEnum(["init_session", "show_workflows", "show_session"] as const),
+      action: StringEnum(["init_session", "show_workflows", "show_session", "update_task", "redispatch_task", "review_and_redispatch"] as const),
       title: Type.Optional(Type.String()),
       sessionId: Type.Optional(Type.String()),
+      taskId: Type.Optional(Type.String()),
+      status: Type.Optional(StringEnum(["pending", "in-progress", "completed", "blocked"] as const)),
+      notes: Type.Optional(Type.String()),
+      rerunInstructions: Type.Optional(Type.String()),
+      checklistUpdates: Type.Optional(Type.Array(Type.Object({
+        text: Type.Optional(Type.String()),
+        index: Type.Optional(Type.Number()),
+        done: Type.Optional(Type.Boolean()),
+      }))),
       tasks: Type.Optional(Type.Array(Type.Object({
         id: Type.String(),
         title: Type.String(),
         role: StringEnum(["general", "orchestrator", "architect", "design", "code", "review"] as const),
         workflow: Type.Optional(StringEnum(["vibe-genesis", "vibe-design", "vibe-build"] as const)),
         preferredAgent: Type.Optional(Type.String()),
+        preferredModel: Type.Optional(Type.String()),
         preferredModelHint: Type.Optional(Type.String()),
+        skills: Type.Optional(Type.Array(Type.String())),
+        checklist: Type.Optional(Type.Array(Type.Union([
+          Type.String(),
+          Type.Object({
+            text: Type.String(),
+            done: Type.Optional(Type.Boolean()),
+          }),
+        ]))),
+        conversationId: Type.Optional(Type.String()),
       }))),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -364,27 +570,139 @@ export default function takomiRuntime(pi: ExtensionAPI) {
           return { content: [{ type: "text", text: "sessionId is required for show_session" }], details: {}, isError: true };
         }
         const paths = getSessionPaths(ctx.cwd, params.sessionId);
-        const masterPlan = await readFile(paths.masterPlan, "utf8").catch(() => "Master plan not found.");
+        const [masterPlan, stateJson] = await Promise.all([
+          readFile(paths.masterPlan, "utf8").catch(() => "Master plan not found."),
+          readFile(paths.stateFile, "utf8").catch(() => "{}"),
+        ]);
         return {
-          content: [{ type: "text", text: masterPlan }],
-          details: { paths },
+          content: [{ type: "text", text: `${masterPlan}\n\n---\n\nMachine state\n\n\
+${stateJson}` }],
+          details: { paths, state: JSON.parse(stateJson) },
+        };
+      }
+
+      if (params.action === "update_task") {
+        if (!params.sessionId || !params.taskId) {
+          return { content: [{ type: "text", text: "sessionId and taskId are required for update_task" }], details: {}, isError: true };
+        }
+        const { title, tasks } = await loadSessionState(ctx.cwd, params.sessionId);
+        const idx = tasks.findIndex((task) => task.id === params.taskId);
+        if (idx === -1) {
+          return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
+        }
+        const current = tasks[idx];
+        tasks[idx] = {
+          ...current,
+          status: (params.status ?? current.status) as OrchestratorTaskStatus,
+          notes: params.notes ?? current.notes,
+          checklist: applyChecklistUpdates(current.checklist, params.checklistUpdates),
+        };
+        const paths = await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+        return {
+          content: [{ type: "text", text: `Updated task ${params.taskId} in session ${params.sessionId}.\nStatus: ${tasks[idx].status}` }],
+          details: { sessionId: params.sessionId, task: tasks[idx], paths },
+        };
+      }
+
+      if (params.action === "redispatch_task" || params.action === "review_and_redispatch") {
+        if (!params.sessionId || !params.taskId) {
+          return { content: [{ type: "text", text: "sessionId and taskId are required for redispatch_task" }], details: {}, isError: true };
+        }
+        const { title, tasks } = await loadSessionState(ctx.cwd, params.sessionId);
+        const task = tasks.find((item) => item.id === params.taskId);
+        if (!task) {
+          return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
+        }
+        const agentName = resolveTaskAgent(task);
+        const agents = discoverProjectAgents(ctx.cwd);
+        const config = agents.find((agent) => agent.name === agentName);
+        if (!config) {
+          return { content: [{ type: "text", text: `Preferred agent '${agentName}' not found.` }], details: { availableAgents: agents.map((agent) => agent.name) }, isError: true };
+        }
+
+        task.status = "in-progress";
+        task.checklist = applyChecklistUpdates(task.checklist, params.checklistUpdates);
+        if (params.action === "review_and_redispatch") {
+          task.notes = appendTaskNote(task.notes, "Review feedback", params.notes);
+        } else if (params.notes) {
+          task.notes = params.notes;
+        }
+        const paths = await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+
+        if (ctx.hasUI) {
+          ctx.ui.setStatus("takomi-subagent", ctx.ui.theme.fg("accent", `↺ ${agentName}:${task.id}`));
+          ctx.ui.setWidget("takomi-subagent", [
+            ctx.ui.theme.fg("muted", "Takomi Active Subagent"),
+            `agent: ${agentName}`,
+            `task: ${task.id} — ${task.title}`,
+            `workflow: ${task.workflow ?? "-"}`,
+            `conversation: ${task.conversationId ?? "-"}`,
+          ], { placement: "belowEditor" });
+        }
+
+        const promptPath = await writeTempPrompt(config.name, [
+          config.systemPrompt,
+          task.workflow ? `\nUse the ${task.workflow} workflow for this task.` : "",
+          task.skills?.length ? `\nUse these skills when relevant: ${task.skills.join(", ")}.` : "",
+        ].filter(Boolean).join("\n"));
+        const sessionPath = path.join(ctx.cwd, ".pi", "takomi", "subagents", `${task.conversationId}.jsonl`);
+        await mkdir(path.dirname(sessionPath), { recursive: true });
+        const resolvedModel = await resolvePreferredModel(ctx, task.preferredModel, config.model);
+        if (resolvedModel.model) task.preferredModel = resolvedModel.model;
+        if (resolvedModel.warning) {
+          task.notes = appendTaskNote(task.notes, "Model fallback", resolvedModel.warning);
+          if (ctx.hasUI) ctx.ui.notify(resolvedModel.warning, "warning");
+        }
+        const args = ["--append-system-prompt", promptPath, "-p", buildSubagentTaskPrompt(task, params.rerunInstructions), "--session", sessionPath];
+        if (resolvedModel.model) args.unshift("--model", resolvedModel.model);
+        if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
+        const result = await runPiAgent(ctx.cwd, args, _signal);
+
+        if (ctx.hasUI) {
+          ctx.ui.setStatus("takomi-subagent", undefined);
+          ctx.ui.setWidget("takomi-subagent", undefined);
+        }
+
+        if (result.code !== 0) {
+          task.status = "blocked";
+          task.notes = appendTaskNote(task.notes, "Redispatch failure", result.stderr.trim() || result.stdout.trim());
+          await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+          return {
+            content: [{ type: "text", text: `Redispatch failed for task ${task.id}.\n\n${result.stderr || result.stdout || "No output"}` }],
+            details: { sessionId: params.sessionId, task, paths },
+            isError: true,
+          };
+        }
+
+        task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
+        await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+        return {
+          content: [{ type: "text", text: result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.` }],
+          details: { sessionId: params.sessionId, task, paths, agent: agentName, conversationId: task.conversationId, action: params.action },
         };
       }
 
       const sessionId = params.sessionId || createSessionId();
       const title = params.title || "Takomi Build Session";
-      const tasks = (params.tasks ?? []).map((task) => createTask(task.id, task.title, task.role, {
-        workflow: task.workflow,
-        preferredAgent: task.preferredAgent,
-        preferredModelHint: task.preferredModelHint,
+      const tasks = await Promise.all((params.tasks ?? []).map(async (task) => {
+        const resolvedModel = await resolvePreferredModel(ctx, task.preferredModel);
+        return createTask(task.id, task.title, task.role, {
+          workflow: task.workflow,
+          preferredAgent: task.preferredAgent,
+          preferredModel: resolvedModel.model,
+          preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
+          skills: task.skills,
+          checklist: task.checklist,
+          conversationId: task.conversationId,
+        });
       }));
       const paths = await writeOrchestratorSession(ctx.cwd, sessionId, title, tasks);
       state.activeSessionId = sessionId;
       persistState();
 
       return {
-        content: [{ type: "text", text: `Created Takomi orchestrator session ${sessionId}\n\n${buildTaskRows(tasks) || "No tasks provided."}` }],
-        details: { sessionId, paths, tasks },
+        content: [{ type: "text", text: `Created Takomi orchestrator session ${sessionId} in hybrid mode\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(tasks) || "No tasks provided."}` }],
+        details: { sessionId, paths, tasks, mode: "hybrid" },
       };
     },
   });

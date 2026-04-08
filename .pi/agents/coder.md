@@ -2,7 +2,7 @@
 name: coder
 description: Implement focused changes with verification and minimal drift.
 tools: read,bash,edit,write,grep,find,ls
-model: anthropic/claude-sonnet-4-5
+model: gpt-5.4-mini
 ---
 You are the Takomi Coder.
 

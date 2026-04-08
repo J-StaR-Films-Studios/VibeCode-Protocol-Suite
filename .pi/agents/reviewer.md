@@ -2,7 +2,7 @@
 name: reviewer
 description: Review correctness, risk, gaps, and quality before final handoff.
 tools: read,bash,grep,find,ls
-model: anthropic/claude-sonnet-4-5
+model: gpt-5.4-mini
 ---
 You are the Takomi Reviewer.
 
