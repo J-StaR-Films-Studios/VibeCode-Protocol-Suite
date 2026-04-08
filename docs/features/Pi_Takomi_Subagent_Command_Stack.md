@@ -112,11 +112,12 @@ Lineage resolution rules for this pass:
 
 ## Data Flow
 
-1. A runtime-board or `takomi_subagent` launch path starts a run through `getTakomiSubagentController()`.
-2. The controller registers or updates the run, focuses it, and refreshes status/widget output.
-3. The controller derives a focused path from real parent lineage when available and activity ordering when not.
-4. The renderer converts that derived state into compact, expanded, or fullscreen output anchored near the command line.
-5. Completion and blocked states stay visible until newer activity displaces them or the session resets.
+1. A runtime-board launch path starts a run through `getTakomiSubagentController()`.
+2. A direct `takomi_subagent` tool run emits lifecycle events over the shared Pi extension bus.
+3. The runtime extension consumes those events and forwards them into the shared controller using the live runtime UI context.
+4. The controller derives a focused path from real parent lineage when available and activity ordering when not.
+5. The renderer converts that derived state into compact, expanded, or fullscreen output anchored near the command line.
+6. Completion and blocked states stay visible until newer activity displaces them or the session resets.
 
 ## Validation Checklist
 
@@ -135,6 +136,7 @@ Lineage resolution rules for this pass:
 
 - Added a shared controller at `.pi/extensions/takomi-runtime/subagent-controller.ts` and moved the controller-owned state contract into `.pi/extensions/takomi-runtime/subagent-types.ts`.
 - Added `.pi/extensions/takomi-runtime/subagent-render.ts` to render compact, expanded, and fullscreen stack variants from one derived controller state.
-- Rewired `.pi/extensions/takomi-runtime/index.ts` and `.pi/extensions/takomi-subagents/index.ts` to call `getTakomiSubagentController()` instead of creating separate UI owners.
+- Rewired runtime-board handling in `.pi/extensions/takomi-runtime/index.ts` to call `getTakomiSubagentController()` directly.
+- Rewired direct `takomi_subagent` handling in `.pi/extensions/takomi-subagents/index.ts` to emit runtime-owned lifecycle events instead of mutating UI state from the tool extension.
 - Reduced `.pi/extensions/takomi-runtime/ui.ts` to runtime HUD/footer compatibility only.
 - Live Pi verification for focus cycling and overlay behavior is still pending.

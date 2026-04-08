@@ -10,6 +10,7 @@ Repair and finish the Takomi Pi TUI overhaul so the runtime loads cleanly, the f
 - `.pi/extensions/takomi-runtime/index.ts`
   - own Takomi runtime state, footer installation, command registration, and session wiring
   - reset and drive the shared subagent controller from runtime-board flows
+  - consume direct subagent lifecycle events from the shared Pi event bus
   - keep footer installation one-time and feed it live state through references
 - `.pi/extensions/takomi-runtime/ui.ts`
   - render the Takomi HUD widget above the editor
@@ -26,7 +27,8 @@ Repair and finish the Takomi Pi TUI overhaul so the runtime loads cleanly, the f
 - `.pi/extensions/takomi-runtime/shared.ts`
   - host shared string, checklist, model-preflight, prompt, and Pi-process utilities used by both runtime and subagent extensions
 - `.pi/extensions/takomi-subagents/index.ts`
-  - continue to use shared helpers and the shared subagent controller without duplicating process/model helper logic
+  - continue to use shared helpers without duplicating process/model helper logic
+  - emit direct subagent lifecycle events so the runtime extension remains the single UI owner
 
 ### Docs
 - `docs/features/Pi_Takomi_Command_Center.md`

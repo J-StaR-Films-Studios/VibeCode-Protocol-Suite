@@ -4,6 +4,7 @@ export type SubagentViewMode = "compact" | "expanded" | "fullscreen";
 export type SubagentFocusDirection = "next" | "prev";
 export type TakomiSubagentStatus = "running" | "completed" | "blocked";
 export type TakomiSubagentSource = "runtime-board" | "takomi-tool";
+export const TAKOMI_SUBAGENT_EVENT_CHANNEL = "takomi:subagent-runtime";
 
 export type TakomiSubagentRun = {
   runKey: string;
@@ -66,3 +67,10 @@ export interface TakomiSubagentController {
   closeFullscreen(ctx?: import("@mariozechner/pi-coding-agent").ExtensionContext): SubagentViewMode;
   getKnownParentRunKey(parentTaskId: string): string | undefined;
 }
+
+export type TakomiSubagentRuntimeEvent =
+  | { type: "start"; runKey?: string; state: TakomiSubagentRunInit }
+  | { type: "update"; runKey?: string; patch: TakomiSubagentRunPatch }
+  | { type: "appendLog"; runKey?: string; chunk: string }
+  | { type: "complete"; runKey?: string; patch?: TakomiSubagentRunPatch }
+  | { type: "block"; runKey?: string; patch?: TakomiSubagentRunPatch };

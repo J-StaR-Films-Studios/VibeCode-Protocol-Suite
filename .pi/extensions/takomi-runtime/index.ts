@@ -35,6 +35,10 @@ import {
 } from "./ui";
 import { getTakomiSubagentController } from "./subagent-controller";
 import {
+  TAKOMI_SUBAGENT_EVENT_CHANNEL,
+  type TakomiSubagentRuntimeEvent,
+} from "./subagent-types";
+import {
   visibleWidth,
   truncateToWidth,
   formatFooterNumber,
@@ -393,9 +397,20 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   let state = cloneState(DEFAULT_STATE);
   const subagentController = getTakomiSubagentController();
   const contextPanel = new TakomiContextPanel();
+  let runtimeCtx: ExtensionContext | undefined;
+  const pendingSubagentEvents: TakomiSubagentRuntimeEvent[] = [];
 
   // Wire context panel events and commands (Alt+C, /takomi-context)
   wireContextPanel(pi, contextPanel);
+
+  pi.events.on(TAKOMI_SUBAGENT_EVENT_CHANNEL, (payload) => {
+    const event = payload as TakomiSubagentRuntimeEvent;
+    if (!runtimeCtx) {
+      pendingSubagentEvents.push(event);
+      return;
+    }
+    void applySubagentRuntimeEvent(event, runtimeCtx);
+  });
 
   function persistState() {
     pi.appendEntry(STATE_ENTRY, state);
@@ -410,6 +425,34 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       autoOrch: state.autoOrch,
       planMode: state.planMode,
     });
+  }
+
+  async function applySubagentRuntimeEvent(event: TakomiSubagentRuntimeEvent, ctx: ExtensionContext): Promise<void> {
+    switch (event.type) {
+      case "start":
+        await subagentController.start(ctx, event.state, event.runKey);
+        break;
+      case "update":
+        await subagentController.update(ctx, event.patch, event.runKey);
+        break;
+      case "appendLog":
+        await subagentController.appendLog(ctx, event.chunk, event.runKey);
+        break;
+      case "complete":
+        await subagentController.complete(ctx, event.patch, event.runKey);
+        break;
+      case "block":
+        await subagentController.block(ctx, event.patch, event.runKey);
+        break;
+    }
+  }
+
+  function flushPendingSubagentEvents(): void {
+    if (!runtimeCtx || pendingSubagentEvents.length === 0) return;
+    const queued = pendingSubagentEvents.splice(0, pendingSubagentEvents.length);
+    for (const event of queued) {
+      void applySubagentRuntimeEvent(event, runtimeCtx);
+    }
   }
 
   async function updateState(ctx: ExtensionContext, mutator: () => void, message?: string | (() => string)) {
@@ -1119,6 +1162,7 @@ ${stateJson}` }],
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    runtimeCtx = ctx;
     subagentController.reset(ctx);
     contextPanel.resetSession();
     const entries = ctx.sessionManager.getEntries();
@@ -1133,5 +1177,6 @@ ${stateJson}` }],
     syncContextPanelState();
     await refreshUi(ctx, state);
     contextPanel.show(ctx);
+    flushPendingSubagentEvents();
   });
 }
