@@ -1,6 +1,4 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
-import os from "node:os";
 import path from "node:path";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -30,7 +28,26 @@ import {
   type VibeLifecycleStage,
 } from "../../../src/pi-takomi-core";
 import { discoverProjectAgents, type TakomiAgentConfig } from "../takomi-subagents/agents";
-import { getTakomiSubagentViewMode, renderRuntimeStatus, renderRuntimeWidget, setTakomiSubagentViewMode, TakomiSubagentUi, toggleTakomiSubagentViewMode } from "./ui";
+import {
+  cycleTakomiSubagentViewMode,
+  cycleTakomiSubagentFocus,
+  renderRuntimeStatus,
+  renderRuntimeWidget,
+  setTakomiSubagentViewMode,
+  TakomiFooterComponent,
+  TakomiSubagentUi,
+} from "./ui";
+import {
+  visibleWidth,
+  truncateToWidth,
+  formatFooterNumber,
+  writeTempPrompt,
+  buildTaskPrompt,
+  runPiAgentJson,
+  resolvePreferredModel,
+  runModelPreflight,
+} from "./shared";
+import { TakomiContextPanel, wireContextPanel } from "./context-panel";
 
 type TakomiState = {
   enabled: boolean;
@@ -188,243 +205,14 @@ function getTaskFileName(task: OrchestratorTask): string {
   return `${task.id}_${slugifyTaskTitle(task.title)}.task.md`;
 }
 
-function formatChecklist(checklist?: Array<string | { text: string; done?: boolean }>): string {
-  if (!checklist?.length) return "";
-  return [
-    "Checklist:",
-    ...checklist.map((item) => typeof item === "string" ? `- [ ] ${item}` : `- [${item.done ? "x" : " "}] ${item.text}`),
-  ].join("\n");
-}
-
 function buildSubagentTaskPrompt(task: OrchestratorTask, extraInstructions?: string): string {
-  return [
-    task.stage ? `Stage: ${task.stage}` : "",
-    task.workflow ? `Workflow: ${task.workflow}` : "",
-    task.skills?.length ? `Skills: ${task.skills.join(", ")}` : "",
-    formatChecklist(task.checklist),
-    "Task:",
-    extraInstructions?.trim() || task.notes || task.title,
-  ].filter(Boolean).join("\n\n");
-}
-
-function getPiInvocation(args: string[]): { command: string; args: string[] } {
-  const currentScript = process.argv[1];
-  if (currentScript) return { command: process.execPath, args: [currentScript, ...args] };
-  return { command: "pi", args };
-}
-
-async function writeTempPrompt(agentName: string, prompt: string) {
-  const tmpDir = path.join(os.tmpdir(), `takomi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-  await mkdir(tmpDir, { recursive: true });
-  const filePath = path.join(tmpDir, `${agentName}.md`);
-  await writeFile(filePath, prompt, "utf8");
-  return filePath;
-}
-
-type RunHooks = {
-  onStdout?: (chunk: string) => void;
-  onStderr?: (chunk: string) => void;
-};
-
-type JsonRunHooks = {
-  onEventText?: (line: string) => void;
-  onStderr?: (chunk: string) => void;
-};
-
-function extractAssistantText(message: unknown): string {
-  if (!message || typeof message !== "object") return "";
-  const content = (message as { content?: unknown }).content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((block): block is { type?: string; text?: string } => Boolean(block) && typeof block === "object")
-    .filter((block) => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text ?? "")
-    .join("\n")
-    .trim();
-}
-
-function summarizeJsonEvent(event: Record<string, unknown>): string | undefined {
-  const type = typeof event.type === "string" ? event.type : "";
-  if (type === "tool_execution_start") {
-    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
-    return `Tool start: ${toolName}`;
-  }
-  if (type === "tool_execution_update") {
-    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
-    const partial = event.partialResult;
-    if (partial && typeof partial === "object") {
-      const partialText = extractAssistantText(partial);
-      if (partialText) return `${toolName}: ${partialText.split(/\r?\n/).find(Boolean)?.trim()}`;
-      const details = (partial as { details?: { output?: string; stdout?: string } }).details;
-      const output = details?.output ?? details?.stdout;
-      if (typeof output === "string" && output.trim()) {
-        return `${toolName}: ${output.split(/\r?\n/).find(Boolean)?.trim()}`;
-      }
-    }
-    return `${toolName}: update`;
-  }
-  if (type === "tool_execution_end") {
-    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
-    const isError = event.isError === true;
-    return isError ? `Tool failed: ${toolName}` : `Tool complete: ${toolName}`;
-  }
-  if (type === "message_update") {
-    const assistantEvent = event.assistantMessageEvent;
-    if (assistantEvent && typeof assistantEvent === "object") {
-      const delta = (assistantEvent as { delta?: unknown }).delta;
-      if (typeof delta === "string" && delta.trim()) return delta.trim();
-    }
-    const messageText = extractAssistantText(event.message);
-    if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
-  }
-  if (type === "message_end") {
-    const message = event.message;
-    if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
-      const messageText = extractAssistantText(message);
-      if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
-    }
-  }
-  return undefined;
-}
-
-async function runPiAgent(cwd: string, args: string[], signal?: AbortSignal, hooks?: RunHooks): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const invocation = getPiInvocation(args);
-    const proc = spawn(invocation.command, invocation.args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: false });
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d) => {
-      const chunk = d.toString();
-      stdout += chunk;
-      hooks?.onStdout?.(chunk);
-    });
-    proc.stderr.on("data", (d) => {
-      const chunk = d.toString();
-      stderr += chunk;
-      hooks?.onStderr?.(chunk);
-    });
-    proc.on("close", (code) => resolve({ stdout, stderr, code: code ?? 0 }));
-    proc.on("error", () => resolve({ stdout, stderr, code: 1 }));
-    if (signal) {
-      const abort = () => proc.kill("SIGTERM");
-      if (signal.aborted) abort();
-      else signal.addEventListener("abort", abort, { once: true });
-    }
+  return buildTaskPrompt({
+    task: extraInstructions?.trim() || task.notes || task.title,
+    workflow: task.workflow,
+    skills: task.skills,
+    checklist: task.checklist,
+    stage: task.stage,
   });
-}
-
-async function runPiAgentJson(cwd: string, args: string[], signal?: AbortSignal, hooks?: JsonRunHooks): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve) => {
-    const invocation = getPiInvocation(args);
-    const proc = spawn(invocation.command, invocation.args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: false });
-    let stdout = "";
-    let stderr = "";
-    let lineBuffer = "";
-    let finalAssistantText = "";
-
-    const consumeLine = (line: string) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      stdout += `${line}\n`;
-      try {
-        const event = JSON.parse(trimmed) as Record<string, unknown>;
-        const messageText = summarizeJsonEvent(event);
-        if (messageText) hooks?.onEventText?.(messageText);
-
-        if (event.type === "message_end") {
-          const message = event.message;
-          if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
-            const text = extractAssistantText(message);
-            if (text) finalAssistantText = text;
-          }
-        }
-        if (event.type === "agent_end") {
-          const messages = (event.messages as unknown[] | undefined) ?? [];
-          for (let i = messages.length - 1; i >= 0; i--) {
-            const message = messages[i];
-            if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
-              const text = extractAssistantText(message);
-              if (text) {
-                finalAssistantText = text;
-                break;
-              }
-            }
-          }
-        }
-      } catch {
-        hooks?.onEventText?.(trimmed);
-      }
-    };
-
-    proc.stdout.on("data", (d) => {
-      lineBuffer += d.toString();
-      let newlineIndex = lineBuffer.indexOf("\n");
-      while (newlineIndex >= 0) {
-        const line = lineBuffer.slice(0, newlineIndex);
-        lineBuffer = lineBuffer.slice(newlineIndex + 1);
-        consumeLine(line);
-        newlineIndex = lineBuffer.indexOf("\n");
-      }
-    });
-    proc.stderr.on("data", (d) => {
-      const chunk = d.toString();
-      stderr += chunk;
-      hooks?.onStderr?.(chunk);
-    });
-    proc.on("close", (code) => {
-      if (lineBuffer.trim()) consumeLine(lineBuffer);
-      resolve({ stdout: finalAssistantText || stdout.trim(), stderr, code: code ?? 0 });
-    });
-    proc.on("error", () => resolve({ stdout: finalAssistantText || stdout.trim(), stderr, code: 1 }));
-    if (signal) {
-      const abort = () => proc.kill("SIGTERM");
-      if (signal.aborted) abort();
-      else signal.addEventListener("abort", abort, { once: true });
-    }
-  });
-}
-
-async function getAvailableModelKeys(ctx: ExtensionContext): Promise<string[]> {
-  try {
-    const available = await Promise.resolve(ctx.modelRegistry.getAvailable());
-    return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
-  } catch {
-    return [];
-  }
-}
-
-async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
-  const candidates = [requested, fallback].filter(Boolean) as string[];
-  if (candidates.length === 0) return {};
-  const keys = await getAvailableModelKeys(ctx);
-  const exact = candidates.find((candidate) => keys.includes(candidate));
-  if (exact) return { model: exact };
-
-  const loweredKeys = keys.map((key) => key.toLowerCase());
-  for (const candidate of candidates) {
-    const idx = loweredKeys.findIndex((key) => key === candidate.toLowerCase());
-    if (idx >= 0) return { model: keys[idx] };
-  }
-
-  for (const candidate of candidates) {
-    const idx = loweredKeys.findIndex((key) => key.includes(candidate.toLowerCase()) || candidate.toLowerCase().includes(key));
-    if (idx >= 0) {
-      return {
-        model: keys[idx],
-        warning: `Requested model '${candidate}' was unavailable; using '${keys[idx]}' instead.`,
-      };
-    }
-  }
-
-  const firstAvailable = keys.find((key) => key.includes("/"));
-  if (firstAvailable) {
-    return {
-      model: firstAvailable,
-      warning: `Requested models '${candidates.join("', '")}' were unavailable; using '${firstAvailable}' instead.`,
-    };
-  }
-
-  return { warning: `No available signed-in model matched '${candidates.join("', '")}'.` };
 }
 
 async function hasGenesisArtifacts(cwd: string): Promise<boolean> {
@@ -436,30 +224,6 @@ async function hasGenesisArtifacts(cwd: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function listModelsViaPi(cwd: string, signal?: AbortSignal): Promise<{ ok: boolean; output: string }> {
-  const result = await runPiAgent(cwd, ["--list-models"], signal);
-  const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n").trim();
-  return { ok: result.code === 0 && Boolean(output), output: output || "No model list output returned." };
-}
-
-async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?: string, fallback?: string, signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
-  const cli = await listModelsViaPi(cwd, signal);
-  const resolved = await resolvePreferredModel(ctx, requested, fallback);
-  const requestedSummary = [requested, fallback].filter(Boolean).join(" -> ") || "auto";
-  const status = resolved.model
-    ? `Selected model: ${resolved.model}`
-    : `No confirmed model matched request: ${requestedSummary}`;
-  const report = [
-    "Model preflight (`pi --list-models`)",
-    cli.ok ? cli.output : `Preflight command failed or was empty.\n${cli.output}`,
-    "",
-    `Requested: ${requestedSummary}`,
-    status,
-    resolved.warning ? `Warning: ${resolved.warning}` : "",
-  ].filter(Boolean).join("\n");
-  return { ...resolved, report, cliOk: cli.ok };
 }
 
 async function loadSessionState(cwd: string, sessionId: string): Promise<{ state: OrchestratorSessionState; paths: ReturnType<typeof getSessionPaths> }> {
@@ -571,32 +335,16 @@ async function materializeTasksFromInput(
   return nextTasks;
 }
 
-function stripAnsi(value: string): string {
-  return value
-    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
-}
+// stripAnsi, visibleWidth, truncateToWidth, formatFooterNumber
+// are imported from "./shared"
 
-function visibleWidth(value: string): number {
-  return stripAnsi(value).length;
-}
-
-function truncateToWidth(value: string, width: number): string {
-  const plain = stripAnsi(value);
-  if (plain.length <= width) return plain;
-  if (width <= 3) return plain.slice(0, width);
-  return `${plain.slice(0, width - 3)}...`;
-}
-
-function formatFooterNumber(value: number): string {
-  if (value < 1000) return `${value}`;
-  return `${(value / 1000).toFixed(1)}k`;
-}
-
-function installTakomiFooter(ctx: ExtensionContext, state: TakomiState): void {
+function installTakomiFooter(ctx: ExtensionContext, stateRef: { current: TakomiState }): void {
+  ctx.ui.setFooter((tui, theme, footerData) => new TakomiFooterComponent(tui, theme, footerData, ctx, () => stateRef.current));
+  return;
   ctx.ui.setFooter((_tui, theme, footerData) => ({
     invalidate() {},
     render(width: number): string[] {
+      const state = stateRef.current;
       let input = 0;
       let output = 0;
       let cost = 0;
@@ -629,25 +377,48 @@ function installTakomiFooter(ctx: ExtensionContext, state: TakomiState): void {
   }));
 }
 
+// Mutable state ref so the footer closure always reads the latest state
+const footerStateRef: { current: TakomiState; installed: boolean } = { current: cloneState(DEFAULT_STATE), installed: false };
+
 async function refreshUi(ctx: ExtensionContext, state: TakomiState) {
   if (!ctx.hasUI) return;
+  footerStateRef.current = state;
   ctx.ui.setStatus("takomi-runtime", renderRuntimeStatus(ctx.ui.theme, state));
   const widget = renderRuntimeWidget(ctx.ui.theme, state);
   ctx.ui.setWidget("takomi-runtime", widget.length > 0 ? widget : undefined);
-  installTakomiFooter(ctx, state);
+  if (!footerStateRef.installed) {
+    installTakomiFooter(ctx, footerStateRef);
+    footerStateRef.installed = true;
+  }
 }
 
 export default function takomiRuntime(pi: ExtensionAPI) {
   let state = cloneState(DEFAULT_STATE);
   const subagentUi = new TakomiSubagentUi("takomi-runtime-subagent");
+  const contextPanel = new TakomiContextPanel();
+
+  // Wire context panel events and commands (Alt+C, /takomi-context)
+  wireContextPanel(pi, contextPanel);
 
   function persistState() {
     pi.appendEntry(STATE_ENTRY, state);
   }
 
+  function syncContextPanelState() {
+    contextPanel.setRuntimeState({
+      role: state.role,
+      stage: state.stage,
+      workflow: state.workflow,
+      activeSessionId: state.activeSessionId,
+      autoOrch: state.autoOrch,
+      planMode: state.planMode,
+    });
+  }
+
   async function updateState(ctx: ExtensionContext, mutator: () => void, message?: string | (() => string)) {
     mutator();
     persistState();
+    syncContextPanelState();
     await refreshUi(ctx, state);
     const resolvedMessage = typeof message === "function" ? message() : message;
     if (resolvedMessage) ctx.ui.notify(resolvedMessage, "info");
@@ -773,7 +544,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-expand", {
     description: "Expand the live Takomi subagent surface",
     handler: async (_args, ctx) => {
-      setTakomiSubagentViewMode("expanded");
+      setTakomiSubagentViewMode("expanded", ctx);
       ctx.ui.notify("Takomi subagent view expanded", "info");
     },
   });
@@ -781,24 +552,72 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-collapse", {
     description: "Collapse the live Takomi subagent surface",
     handler: async (_args, ctx) => {
-      setTakomiSubagentViewMode("compact");
+      setTakomiSubagentViewMode("compact", ctx);
       ctx.ui.notify("Takomi subagent view collapsed", "info");
     },
   });
 
   pi.registerCommand("takomi-subagent-toggle", {
-    description: "Toggle the live Takomi subagent surface between compact and expanded",
+    description: "Cycle the live Takomi subagent surface: compact → expanded → fullscreen",
     handler: async (_args, ctx) => {
-      const mode = toggleTakomiSubagentViewMode();
+      const mode = cycleTakomiSubagentViewMode(ctx);
       ctx.ui.notify(`Takomi subagent view ${mode}`, "info");
     },
   });
 
+  pi.registerCommand("takomi-subagent-fullscreen", {
+    description: "Show the Takomi subagent in fullscreen overlay",
+    handler: async (_args, ctx) => {
+      setTakomiSubagentViewMode("fullscreen", ctx);
+      ctx.ui.notify("Takomi subagent view fullscreen", "info");
+    },
+  });
+
+  pi.registerCommand("takomi-subagent-next", {
+    description: "Switch focus to the next tracked Takomi subagent",
+    handler: async (_args, ctx) => {
+      const changed = cycleTakomiSubagentFocus("next", ctx);
+      ctx.ui.notify(changed ? "Takomi subagent focus advanced" : "No additional Takomi subagents to cycle", changed ? "info" : "warning");
+    },
+  });
+
+  pi.registerCommand("takomi-subagent-prev", {
+    description: "Switch focus to the previous tracked Takomi subagent",
+    handler: async (_args, ctx) => {
+      const changed = cycleTakomiSubagentFocus("prev", ctx);
+      ctx.ui.notify(changed ? "Takomi subagent focus moved back" : "No additional Takomi subagents to cycle", changed ? "info" : "warning");
+    },
+  });
+
   pi.registerShortcut("alt+t", {
-    description: "Toggle Takomi subagent detail",
+    description: "Cycle Takomi subagent detail (compact -> expanded -> fullscreen)",
     handler: async (ctx) => {
-      const mode = toggleTakomiSubagentViewMode();
+      const mode = cycleTakomiSubagentViewMode(ctx);
       ctx.ui.notify(`Takomi subagent view ${mode}`, "info");
+    },
+  });
+
+  pi.registerShortcut("alt+shift+t", {
+    description: "Open Takomi subagent fullscreen overlay",
+    handler: async (ctx) => {
+      setTakomiSubagentViewMode("fullscreen", ctx);
+      ctx.ui.notify("Takomi subagent view fullscreen", "info");
+    },
+  });
+
+  pi.registerShortcut("alt+n", {
+    description: "Switch to the next Takomi subagent",
+    handler: async (ctx) => {
+      const changed = cycleTakomiSubagentFocus("next", ctx);
+      if (!changed) ctx.ui.notify("No additional Takomi subagents to cycle", "warning");
+    },
+  });
+
+  pi.registerShortcut("alt+p", {
+    description: "Switch to the previous Takomi subagent",
+    handler: async (ctx) => {
+      const changed = cycleTakomiSubagentFocus("prev", ctx);
+      if (!changed) ctx.ui.notify("No additional Takomi subagents to cycle", "warning");
     },
   });
 
@@ -807,7 +626,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       await updateState(ctx, () => {
         state = cloneState(DEFAULT_STATE);
-        setTakomiSubagentViewMode("compact");
+        setTakomiSubagentViewMode("compact", ctx);
       }, "Takomi runtime state reset");
     },
   });
@@ -979,6 +798,7 @@ ${stateJson}` }],
           },
         );
         const paths = await syncTaskArtifacts(ctx.cwd, nextState);
+        const runKey = task.conversationId ?? task.id;
 
         await subagentUi.start(ctx, {
           title: "Takomi Active Subagent",
@@ -991,7 +811,7 @@ ${stateJson}` }],
           summary: params.action === "review_and_redispatch"
             ? "Review feedback accepted. Relaunching the same specialist thread."
             : "Redispatching task to the preferred specialist.",
-        });
+        }, runKey);
 
         const promptPath = await writeTempPrompt(config.name, [
           config.systemPrompt,
@@ -1004,12 +824,12 @@ ${stateJson}` }],
         task.notes = appendTaskNote(task.notes, "Model preflight", preflight.report);
         if (preflight.model) {
           task.preferredModel = preflight.model;
-          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` });
+          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, runKey);
         }
         if (preflight.warning) {
           task.notes = appendTaskNote(task.notes, "Model fallback", preflight.warning);
           if (ctx.hasUI) ctx.ui.notify(preflight.warning, "warning");
-          await subagentUi.update(ctx, { summary: preflight.warning });
+          await subagentUi.update(ctx, { summary: preflight.warning }, runKey);
         }
         if (!preflight.model) {
           task.status = "blocked";
@@ -1028,7 +848,7 @@ ${stateJson}` }],
             model: task.preferredModel,
             summary: "Redispatch blocked before launch.",
             logs: [...(task.notes ? [task.notes] : []), preflight.report],
-          });
+          }, runKey);
           return {
             content: [{ type: "text", text: `Redispatch blocked before launch.\n\n${preflight.report}` }],
             details: { sessionId: params.sessionId, task, paths, preflight },
@@ -1040,10 +860,10 @@ ${stateJson}` }],
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
         const result = await runPiAgentJson(ctx.cwd, args, _signal, {
           onEventText: (line) => {
-            void subagentUi.appendLog(ctx, line);
+            void subagentUi.appendLog(ctx, line, runKey);
           },
           onStderr: (chunk) => {
-            void subagentUi.appendLog(ctx, chunk);
+            void subagentUi.appendLog(ctx, chunk, runKey);
           },
         });
 
@@ -1065,7 +885,7 @@ ${stateJson}` }],
             model: task.preferredModel,
             summary: `Redispatch failed for ${task.id}.`,
             logs: [result.stderr || result.stdout || "No output"],
-          });
+          }, runKey);
           return {
             content: [{ type: "text", text: `Redispatch failed for task ${task.id}.\n\n${result.stderr || result.stdout || "No output"}` }],
             details: { sessionId: params.sessionId, task, paths },
@@ -1078,7 +898,7 @@ ${stateJson}` }],
           model: task.preferredModel,
           summary: result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.`,
           logs: result.stdout.trim() ? [result.stdout.trim()] : [],
-        });
+        }, runKey);
         nextState = buildSessionState(
           sessionState.sessionId,
           sessionState.title,
@@ -1117,6 +937,7 @@ ${stateJson}` }],
         const paths = await writeOrchestratorSession(ctx.cwd, nextState);
         state.activeSessionId = nextState.sessionId;
         persistState();
+        syncContextPanelState();
 
         return {
           content: [{ type: "text", text: `Expanded ${params.stage} stage in session ${nextState.sessionId}.\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(nextState.tasks)}` }],
@@ -1148,6 +969,7 @@ ${stateJson}` }],
       state.stage = nextState.lifecycle.genesis.status === "completed" ? "build" : "genesis";
       state.workflow = state.stage === "genesis" ? "vibe-genesis" : "vibe-build";
       persistState();
+      syncContextPanelState();
 
       return {
         content: [{ type: "text", text: `Created Takomi orchestrator session ${nextState.sessionId} in hybrid mode\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(nextState.tasks) || "No tasks provided."}` }],
@@ -1257,6 +1079,8 @@ ${stateJson}` }],
       }
     }
 
+    syncContextPanelState();
     await refreshUi(ctx, state);
+    contextPanel.show(ctx);
   });
 }

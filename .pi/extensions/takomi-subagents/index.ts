@@ -369,11 +369,11 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           conversationId,
           checklist: item.checklist,
           summary: "Preparing delegated run.",
-        });
+        }, conversationId);
 
         const preflight = await runModelPreflight(ctx, subagentCwd, item.model, config.model, signal);
         if (preflight.model) {
-          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` });
+          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, conversationId);
         }
         if (!preflight.model) {
           results.push({
@@ -389,7 +389,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           await subagentUi.block(ctx, {
             summary: `Subagent ${config.name} blocked before launch.`,
             logs: [preflight.warning || "No model matched the requested run."],
-          });
+          }, conversationId);
           return {
             content: [{ type: "text", text: `Subagent ${config.name} blocked before launch.\n\n${preflight.report}` }],
             details: { results, preflight },
@@ -403,10 +403,10 @@ export default function takomiSubagents(pi: ExtensionAPI) {
 
         const result = await runAgentJson(subagentCwd, args, signal, {
           onEventText: (line) => {
-            void subagentUi.appendLog(ctx, line);
+            void subagentUi.appendLog(ctx, line, conversationId);
           },
           onStderr: (chunk) => {
-            void subagentUi.appendLog(ctx, chunk);
+            void subagentUi.appendLog(ctx, chunk, conversationId);
           },
         });
         previousOutput = result.stdout.trim();
@@ -427,7 +427,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
             model: preflight.model,
             summary: `Subagent ${config.name} failed.`,
             logs: [result.stderr || result.stdout || "No output"],
-          });
+          }, conversationId);
           return {
             content: [{ type: "text", text: `${preflight.report}\n\nSubagent ${config.name} failed.\n\n${result.stderr || result.stdout || "No output"}` }],
             details: { results, preflight },
@@ -439,7 +439,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           model: preflight.model,
           summary: previousOutput || `Subagent ${config.name} run complete.`,
           logs: previousOutput ? [previousOutput] : [],
-        });
+        }, conversationId);
       }
 
       const lastPreflight = typeof results.at(-1)?.preflight === "string" ? String(results.at(-1)?.preflight) : "";
