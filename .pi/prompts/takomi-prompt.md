@@ -19,6 +19,16 @@ Use the Takomi lifecycle for this request.
 - Use stronger Takomi structure instead of generic freelancing.
 - When appropriate, create or use task packets, workflows, skills, and review gates.
 - Prefer continuity when sending work back to the same specialist.
+- Do not skip lifecycle stages casually. For net-new projects, default to **Genesis → Design → Build** unless the user explicitly says a stage is already complete.
+- If the active runtime prompt conflicts with the user request, call out the conflict and route deliberately instead of silently freelancing.
+
+## Mandatory Provider / Model Preflight
+Before using `takomi_subagent`, setting a model override, or naming a provider:
+- run the local command that lists available providers/models for the current Pi environment
+- choose only from the returned available options
+- do **not** hardcode a model/provider from memory
+- if auth is missing or the intended provider is unavailable, report that immediately and continue without that subagent unless the user approves another route
+- include the confirmed provider/model in the orchestration update before dispatch
 
 ## If the request is broad
 Do all of the following:

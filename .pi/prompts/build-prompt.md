@@ -20,6 +20,12 @@ Before writing code, load and internalize:
 - `docs/issues/`
 - `docs/mockups/` if present
 
+Before using `takomi_subagent`, setting a model override, or naming a provider:
+- run the local command that lists available providers/models for the current Pi environment
+- choose only from the returned available options
+- do **not** hardcode a model/provider from memory
+- if auth is missing or the intended provider is unavailable, report that immediately and continue without that subagent unless the user approves another route
+
 Acknowledge that you will:
 - run `tsc --noEmit` after every TypeScript file edit when relevant
 - reference issue files for each FR implemented

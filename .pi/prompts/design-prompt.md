@@ -9,6 +9,13 @@ Your goal is to define the visual identity of the project before implementation 
 
 ---
 
+## Mandatory Provider / Model Preflight
+Before using `takomi_subagent`, setting a model override, or naming a provider:
+- run the local command that lists available providers/models for the current Pi environment
+- choose only from the returned available options
+- do **not** hardcode a model/provider from memory
+- if auth is missing or the intended provider is unavailable, report that immediately and continue without that subagent unless the user approves another route
+
 ## Core Responsibilities
 1. **Brand Discovery** — understand the visual vibe
 2. **Sitemap Architecture** — define the complete visual sitemap
