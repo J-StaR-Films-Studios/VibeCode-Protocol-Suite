@@ -2,9 +2,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { discoverProjectAgents } from "./agents";
+import { discoverProjectAgents, type TakomiAgentConfig } from "./agents";
 
 const ChecklistItemSchema = Type.Object({
   text: Type.String(),
@@ -81,12 +81,16 @@ async function runAgent(cwd: string, args: string[], signal?: AbortSignal): Prom
   });
 }
 
-async function getAvailableModelKeys(ctx: { modelRegistry: { getAvailable: () => Promise<Array<{ provider: string; id: string }>> } }): Promise<string[]> {
-  const available = await ctx.modelRegistry.getAvailable().catch(() => []);
-  return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
+async function getAvailableModelKeys(ctx: ExtensionContext): Promise<string[]> {
+  try {
+    const available = await Promise.resolve(ctx.modelRegistry.getAvailable());
+    return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
+  } catch {
+    return [];
+  }
 }
 
-async function resolvePreferredModel(ctx: { modelRegistry: { getAvailable: () => Promise<Array<{ provider: string; id: string }>> } }, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
+async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
   const candidates = [requested, fallback].filter(Boolean) as string[];
   if (candidates.length === 0) return {};
   const keys = await getAvailableModelKeys(ctx);
@@ -129,8 +133,8 @@ export default function takomiSubagents(pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const rootCwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
-      const agents = discoverProjectAgents(rootCwd);
-      const byName = new Map(agents.map((agent) => [agent.name, agent]));
+      const agents: TakomiAgentConfig[] = discoverProjectAgents(rootCwd);
+      const byName = new Map<string, TakomiAgentConfig>(agents.map((agent: TakomiAgentConfig) => [agent.name, agent]));
       const subagentSessionDir = path.join(rootCwd, ".pi", "takomi", "subagents");
       await mkdir(subagentSessionDir, { recursive: true });
 
@@ -152,7 +156,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
       if (tasks.length === 0) {
         return {
           content: [{ type: "text", text: "No subagent task provided." }],
-          details: { results: [], availableAgents: agents.map((agent) => agent.name) },
+          details: { results: [], availableAgents: agents.map((agent: TakomiAgentConfig) => agent.name) },
           isError: true,
         };
       }
@@ -164,8 +168,8 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         const config = byName.get(item.agent);
         if (!config) {
           return {
-            content: [{ type: "text", text: `Unknown subagent '${item.agent}'. Available: ${agents.map((agent) => agent.name).join(", ")}` }],
-            details: { results, availableAgents: agents.map((agent) => agent.name) },
+            content: [{ type: "text", text: `Unknown subagent '${item.agent}'. Available: ${agents.map((agent: TakomiAgentConfig) => agent.name).join(", ")}` }],
+            details: { results, availableAgents: agents.map((agent: TakomiAgentConfig) => agent.name) },
             isError: true,
           };
         }

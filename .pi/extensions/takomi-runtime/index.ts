@@ -23,7 +23,7 @@ import {
   type TakomiWorkflowId,
   type VibeLifecycleStage,
 } from "../../../src/pi-takomi-core";
-import { discoverProjectAgents } from "../takomi-subagents/agents";
+import { discoverProjectAgents, type TakomiAgentConfig } from "../takomi-subagents/agents";
 
 type TakomiState = {
   enabled: boolean;
@@ -149,12 +149,12 @@ function applyChecklistUpdates(
   updates?: Array<{ text?: string; index?: number; done?: boolean }>,
 ): OrchestratorTask["checklist"] {
   if (!current?.length || !updates?.length) return current;
-  const next = current.map((item) => ({ ...item }));
+  const next = current.map((item: NonNullable<OrchestratorTask["checklist"]>[number]) => ({ ...item }));
   for (const update of updates) {
     const idx = typeof update.index === "number"
       ? update.index
       : typeof update.text === "string"
-        ? next.findIndex((item) => item.text === update.text)
+        ? next.findIndex((item: NonNullable<OrchestratorTask["checklist"]>[number]) => item.text === update.text)
         : -1;
     if (idx >= 0 && next[idx]) next[idx] = { ...next[idx], done: update.done ?? next[idx].done };
   }
@@ -234,8 +234,12 @@ async function runPiAgent(cwd: string, args: string[], signal?: AbortSignal): Pr
 }
 
 async function getAvailableModelKeys(ctx: ExtensionContext): Promise<string[]> {
-  const available = await ctx.modelRegistry.getAvailable().catch(() => []);
-  return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
+  try {
+    const available = await Promise.resolve(ctx.modelRegistry.getAvailable());
+    return available.flatMap((model) => [`${model.provider}/${model.id}`, model.id]);
+  } catch {
+    return [];
+  }
 }
 
 async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
@@ -340,11 +344,12 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     pi.appendEntry(STATE_ENTRY, state);
   }
 
-  async function updateState(ctx: ExtensionContext, mutator: () => void, message?: string) {
+  async function updateState(ctx: ExtensionContext, mutator: () => void, message?: string | (() => string)) {
     mutator();
     persistState();
     await refreshUi(ctx, state);
-    if (message) ctx.ui.notify(message, "info");
+    const resolvedMessage = typeof message === "function" ? message() : message;
+    if (resolvedMessage) ctx.ui.notify(resolvedMessage, "info");
   }
 
   pi.registerCommand("takomi", {
@@ -436,18 +441,18 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         createTask("01", "Genesis foundation", "architect", {
           workflow: "vibe-genesis",
           preferredAgent: "architect",
-          checklist: ["Clarify scope", "Lock acceptance criteria", "Define boundaries"],
+          checklist: [{ text: "Clarify scope" }, { text: "Lock acceptance criteria" }, { text: "Define boundaries" }],
         }),
         createTask("02", "Design handoff", "design", {
           workflow: "vibe-design",
           preferredAgent: "designer",
           preferredModelHint: "Prefer Gemini or another design-capable cloud model.",
-          checklist: ["Capture flows", "Define visual direction", "Produce build-ready handoff"],
+          checklist: [{ text: "Capture flows" }, { text: "Define visual direction" }, { text: "Produce build-ready handoff" }],
         }),
         createTask("03", "Build orchestration", "orchestrator", {
           workflow: "vibe-build",
           preferredAgent: "orchestrator",
-          checklist: ["Break work into tasks", "Dispatch specialists", "Review and iterate"],
+          checklist: [{ text: "Break work into tasks" }, { text: "Dispatch specialists" }, { text: "Review and iterate" }],
         }),
       ];
       const paths = await writeOrchestratorSession(ctx.cwd, sessionId, title, tasks);
@@ -467,7 +472,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       await updateState(ctx, () => {
         state.enabled = true;
         state.autoOrch = !state.autoOrch;
-      }, `Takomi auto-orchestrator ${state.autoOrch ? "enabled" : "disabled"}`);
+      }, () => `Takomi auto-orchestrator ${state.autoOrch ? "enabled" : "disabled"}`);
     },
   });
 
@@ -477,7 +482,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       await updateState(ctx, () => {
         state.enabled = true;
         state.planMode = !state.planMode;
-      }, `Takomi plan mode ${state.planMode ? "enabled" : "disabled"}`);
+      }, () => `Takomi plan mode ${state.planMode ? "enabled" : "disabled"}`);
     },
   });
 
@@ -510,7 +515,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       const workflows = listWorkflowDefinitions();
       return {
         content: [{ type: "text", text: workflows.map((workflow) => `${workflow.id}: ${workflow.purpose}`).join("\n") }],
-        details: { workflows },
+        details: undefined,
       };
     },
   });
@@ -614,10 +619,10 @@ ${stateJson}` }],
           return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
         }
         const agentName = resolveTaskAgent(task);
-        const agents = discoverProjectAgents(ctx.cwd);
-        const config = agents.find((agent) => agent.name === agentName);
+        const agents: TakomiAgentConfig[] = discoverProjectAgents(ctx.cwd);
+        const config = agents.find((agent: TakomiAgentConfig) => agent.name === agentName);
         if (!config) {
-          return { content: [{ type: "text", text: `Preferred agent '${agentName}' not found.` }], details: { availableAgents: agents.map((agent) => agent.name) }, isError: true };
+          return { content: [{ type: "text", text: `Preferred agent '${agentName}' not found.` }], details: { availableAgents: agents.map((agent: TakomiAgentConfig) => agent.name) }, isError: true };
         }
 
         task.status = "in-progress";
@@ -692,7 +697,7 @@ ${stateJson}` }],
           preferredModel: resolvedModel.model,
           preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
           skills: task.skills,
-          checklist: task.checklist,
+          checklist: (task.checklist ?? []).map((item) => typeof item === "string" ? { text: item } : item),
           conversationId: task.conversationId,
         });
       }));
