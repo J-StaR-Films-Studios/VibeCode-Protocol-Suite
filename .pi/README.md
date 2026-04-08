@@ -15,6 +15,9 @@ It is intentionally separate from the existing cross-harness assets under `asset
 
 Pi auto-discovers `.pi/`, so this is the fastest way to test and iterate.
 
+At runtime, Takomi for Pi is intended to be self-contained inside this `.pi/` bundle plus the embedded core under `src/pi-takomi-core/`.
+The older assets under `assets/.agent/` and `assets/Takomi-Agents/` are reference or migration material, not runtime dependencies for the Pi-native Takomi experience.
+
 Later, this can become:
 - a package under `assets/pi/` or `packages/`
 - an npm-distributed Pi package

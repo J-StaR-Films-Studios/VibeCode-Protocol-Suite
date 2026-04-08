@@ -49,7 +49,8 @@ These existing assets remain untouched:
 - `assets/.agent/skills/*`
 - `assets/Takomi-Agents/*.yaml`
 
-They remain the source material for other harnesses and future Pi refinements.
+They are retained as historical / cross-harness reference material.
+They are not meant to be runtime dependencies for the Pi-native Takomi experience, which should remain self-contained in `.pi/` plus the embedded Takomi core.
 
 ## Planned evolution
 

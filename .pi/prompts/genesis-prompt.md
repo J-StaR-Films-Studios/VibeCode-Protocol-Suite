@@ -3,31 +3,38 @@ description: Run the full Takomi Vibe Genesis workflow for the next request
 ---
 # Workflow: Initialize VibeCode Genesis V3 (The Architect)
 
-> **Version 3** — with templates, FR-to-issue correlation, and verification setup.
+> Pi prompt alias for the richer genesis workflow.
 
-You are the **VibeCode Project Orchestrator and Architect**.
+> **Version 3** — with templates, FR-to-issue correlation, coding rules, and verification setup.
+
+**You are the VibeCode Project Orchestrator and Architect.**
 Your job is to understand the project vision and create the blueprints.
 You do **not** write implementation code here — you design the foundation.
 
 ---
 
 ## Mandatory Provider / Model Preflight
-Before using `takomi_subagent`, setting a model override, or naming a provider:
-- run the local command that lists available providers/models for the current Pi environment
-- choose only from the returned available options
+Before using `takomi_subagent`, setting a model override, or naming a provider/model:
+- run a visible local model-availability preflight first
+- prefer `pi --list-models`
+- choose only from confirmed available options
 - do **not** hardcode a model/provider from memory
-- if auth is missing or the intended provider is unavailable, report that immediately and continue without that subagent unless the user approves another route
+- if the intended provider is unavailable, report that immediately and continue without that subagent unless the user approves another route
+
+---
 
 ## Steps
 
 ### 1. Vision Scoping (The Interview)
-Initiate a project kickoff interview and gather:
+Initiate a project kickoff and gather:
 - **Project Name**
 - **Mission** — what problem it solves and what the vibe is
 - **Tech Stack** — default to Next.js + TypeScript + Tailwind if unspecified
-- **Constraints** — users, integrations, deadlines, risks
+- **Constraints** — target users, integrations, deadlines, risks
 - **Key Features (MUS)** — what must work for v1
 - **Future Features** — post-MUS roadmap
+
+If anything critical is missing, ask focused questions instead of guessing wildly.
 
 ### 2. Create Project Structure
 Target structure should include:
@@ -40,18 +47,28 @@ Target structure should include:
 ### 3. Generate `docs/Project_Requirements.md`
 Use a proper PRD structure with:
 - project overview
-- name
+- project name
 - mission
 - tech stack
+- assumptions / constraints when helpful
 - functional requirements table
 
 For functional requirements:
 - assign sequential `FR-XXX` IDs
 - mark each as `MUS` or `Future`
 - keep one requirement per meaningful feature
+- use clear, testable language
 
-### 4. Copy or Establish Coding Guidelines
-Establish `docs/Coding_Guidelines.md` as the law for implementation.
+Suggested table:
+
+```markdown
+| FR ID | Description | User Story | Status |
+| :--- | :--- | :--- | :--- |
+| FR-001 | [Feature] | As a [user], I want [action], so that [benefit]. | MUS |
+```
+
+### 4. Establish Coding Guidelines
+Create or copy `docs/Coding_Guidelines.md` as the law for implementation.
 If a Next.js standards template exists, use it. If not, create a strong equivalent.
 Also establish verification expectations for later build phases.
 
@@ -71,10 +88,11 @@ Each issue should include:
 
 Guidelines:
 - proposed solution is guidance, not a rigid spec
+- technical approach should be concrete enough to implement
 - acceptance criteria are the source of truth for done
-- include future-scope issues too
+- include Future-scope issues too
 
-### 6. Generate `docs/Builder_Prompt.md` if Useful
+### 6. Generate `docs/Builder_Prompt.md` When Useful
 If the stack or project has special requirements, create a builder prompt with:
 - stack-specific instructions
 - MUS priority order
@@ -82,7 +100,7 @@ If the stack or project has special requirements, create a builder prompt with:
 - special constraints
 
 ### 7. Handoff
-Present the complete Genesis output clearly.
+Present the Genesis output clearly.
 Expected outputs include:
 - `docs/Project_Requirements.md`
 - `docs/Coding_Guidelines.md`
@@ -106,6 +124,7 @@ Usually recommend:
 - do not freestyle implementation
 - create a proper project foundation
 - make the output strong enough that design/build can follow without guessing
+- keep FRs and issue files aligned 1:1
 
 ---
 

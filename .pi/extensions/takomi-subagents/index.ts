@@ -110,6 +110,30 @@ async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, 
   return { warning: `No available signed-in model matched '${candidates.join("', '")}'.` };
 }
 
+async function listModelsViaPi(cwd: string, signal?: AbortSignal): Promise<{ ok: boolean; output: string }> {
+  const result = await runAgent(cwd, ["--list-models"], signal);
+  const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n").trim();
+  return { ok: result.code === 0 && Boolean(output), output: output || "No model list output returned." };
+}
+
+async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?: string, fallback?: string, signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
+  const cli = await listModelsViaPi(cwd, signal);
+  const resolved = await resolvePreferredModel(ctx, requested, fallback);
+  const requestedSummary = [requested, fallback].filter(Boolean).join(" -> ") || "auto";
+  const status = resolved.model
+    ? `Selected model: ${resolved.model}`
+    : `No confirmed model matched request: ${requestedSummary}`;
+  const report = [
+    "Model preflight (`pi --list-models`)",
+    cli.ok ? cli.output : `Preflight command failed or was empty.\n${cli.output}`,
+    "",
+    `Requested: ${requestedSummary}`,
+    status,
+    resolved.warning ? `Warning: ${resolved.warning}` : "",
+  ].filter(Boolean).join("\n");
+  return { ...resolved, report, cliOk: cli.ok };
+}
+
 export default function takomiSubagents(pi: ExtensionAPI) {
   pi.registerTool({
     name: "takomi_subagent",
@@ -189,9 +213,27 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         const sessionPath = path.join(subagentSessionDir, `${conversationId}.jsonl`);
         const subagentCwd = item.cwd ? path.resolve(rootCwd, item.cwd) : rootCwd;
 
-        const resolvedModel = await resolvePreferredModel(ctx, item.model, config.model);
+        const preflight = await runModelPreflight(ctx, subagentCwd, item.model, config.model, signal);
+        if (!preflight.model) {
+          results.push({
+            agent: config.name,
+            workflow: item.workflow ?? "",
+            model: "",
+            warning: preflight.warning || "",
+            conversationId,
+            code: 1,
+            output: "",
+            stderr: preflight.report,
+          });
+          return {
+            content: [{ type: "text", text: `Subagent ${config.name} blocked before launch.\n\n${preflight.report}` }],
+            details: { results, preflight },
+            isError: true,
+          };
+        }
+
         const args = ["--append-system-prompt", promptPath, "-p", effectiveTask, "--session", sessionPath];
-        if (resolvedModel.model) args.unshift("--model", resolvedModel.model);
+        args.unshift("--model", preflight.model);
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
 
         const result = await runAgent(subagentCwd, args, signal);
@@ -199,25 +241,27 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         results.push({
           agent: config.name,
           workflow: item.workflow ?? "",
-          model: resolvedModel.model || "",
-          warning: resolvedModel.warning || "",
+          model: preflight.model,
+          warning: preflight.warning || "",
           conversationId,
           code: result.code,
           output: previousOutput,
           stderr: result.stderr.trim(),
+          preflight: preflight.report,
         });
 
         if (result.code !== 0) {
           return {
-            content: [{ type: "text", text: `Subagent ${config.name} failed.\n\n${result.stderr || result.stdout || "No output"}` }],
-            details: { results },
+            content: [{ type: "text", text: `${preflight.report}\n\nSubagent ${config.name} failed.\n\n${result.stderr || result.stdout || "No output"}` }],
+            details: { results, preflight },
             isError: true,
           };
         }
       }
 
+      const lastPreflight = typeof results.at(-1)?.preflight === "string" ? String(results.at(-1)?.preflight) : "";
       return {
-        content: [{ type: "text", text: previousOutput || "Subagent run complete." }],
+        content: [{ type: "text", text: [lastPreflight, previousOutput || "Subagent run complete."].filter(Boolean).join("\n\n") }],
         details: { results },
       };
     },

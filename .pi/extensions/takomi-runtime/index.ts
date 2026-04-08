@@ -60,10 +60,12 @@ function formatState(state: TakomiState): string {
   ].filter(Boolean).join(" | ");
 }
 
-function setStageAndWorkflow(state: TakomiState, stage: VibeLifecycleStage) {
+function setStageAndWorkflow(state: TakomiState, stage: VibeLifecycleStage, options?: { preserveRole?: boolean }) {
   state.stage = stage;
   state.workflow = stage === "genesis" ? "vibe-genesis" : stage === "design" ? "vibe-design" : "vibe-build";
-  state.role = stage === "design" ? "design" : stage === "build" ? "orchestrator" : "architect";
+  if (!options?.preserveRole) {
+    state.role = stage === "design" ? "design" : stage === "build" ? "orchestrator" : "architect";
+  }
   state.enabled = true;
 }
 
@@ -276,6 +278,41 @@ async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, 
   return { warning: `No available signed-in model matched '${candidates.join("', '")}'.` };
 }
 
+async function hasGenesisArtifacts(cwd: string): Promise<boolean> {
+  try {
+    await readFile(path.join(cwd, "docs", "Project_Requirements.md"), "utf8");
+    await readFile(path.join(cwd, "docs", "Coding_Guidelines.md"), "utf8");
+    const issues = await readdir(path.join(cwd, "docs", "issues"));
+    return issues.some((entry) => entry.endsWith(".md"));
+  } catch {
+    return false;
+  }
+}
+
+async function listModelsViaPi(cwd: string, signal?: AbortSignal): Promise<{ ok: boolean; output: string }> {
+  const result = await runPiAgent(cwd, ["--list-models"], signal);
+  const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n").trim();
+  return { ok: result.code === 0 && Boolean(output), output: output || "No model list output returned." };
+}
+
+async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?: string, fallback?: string, signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
+  const cli = await listModelsViaPi(cwd, signal);
+  const resolved = await resolvePreferredModel(ctx, requested, fallback);
+  const requestedSummary = [requested, fallback].filter(Boolean).join(" -> ") || "auto";
+  const status = resolved.model
+    ? `Selected model: ${resolved.model}`
+    : `No confirmed model matched request: ${requestedSummary}`;
+  const report = [
+    "Model preflight (`pi --list-models`)",
+    cli.ok ? cli.output : `Preflight command failed or was empty.\n${cli.output}`,
+    "",
+    `Requested: ${requestedSummary}`,
+    status,
+    resolved.warning ? `Warning: ${resolved.warning}` : "",
+  ].filter(Boolean).join("\n");
+  return { ...resolved, report, cliOk: cli.ok };
+}
+
 async function loadSessionState(cwd: string, sessionId: string): Promise<{ title: string; tasks: OrchestratorTask[]; paths: ReturnType<typeof getSessionPaths> }> {
   const paths = getSessionPaths(cwd, sessionId);
   const raw = await readFile(paths.stateFile, "utf8");
@@ -364,12 +401,13 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("orch", {
     description: "Bias the session toward Takomi orchestrator behavior",
     handler: async (_args, ctx) => {
+      const hasGenesis = await hasGenesisArtifacts(ctx.cwd);
       await updateState(ctx, () => {
         state.enabled = true;
         state.role = "orchestrator";
-        state.stage = "build";
-        state.workflow = "vibe-build";
-      }, "Takomi role set to orchestrator");
+        state.stage = hasGenesis ? "build" : "genesis";
+        state.workflow = hasGenesis ? "vibe-build" : "vibe-genesis";
+      }, hasGenesis ? "Takomi role set to orchestrator" : "Takomi role set to orchestrator (Genesis-first: project foundation missing)");
     },
   });
 
@@ -406,7 +444,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-genesis", {
     description: "Activate the Takomi genesis stage",
     handler: async (_args, ctx) => {
-      await updateState(ctx, () => setStageAndWorkflow(state, "genesis"), "Takomi stage set to Vibe Genesis");
+      await updateState(ctx, () => setStageAndWorkflow(state, "genesis", { preserveRole: state.role === "orchestrator" }), "Takomi stage set to Vibe Genesis");
     },
   });
 
@@ -438,9 +476,9 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       const title = args.trim() || "Takomi Project";
       const sessionId = createSessionId();
       const tasks = [
-        createTask("01", "Genesis foundation", "architect", {
+        createTask("01", "Genesis foundation", "orchestrator", {
           workflow: "vibe-genesis",
-          preferredAgent: "architect",
+          preferredAgent: "orchestrator",
           objective: "Create the project foundation before any design or implementation starts.",
           scope: ["Clarify scope", "Lock acceptance criteria", "Define implementation boundaries"],
           checklist: [{ text: "Clarify scope" }, { text: "Lock acceptance criteria" }, { text: "Define boundaries" }],
@@ -671,14 +709,24 @@ ${stateJson}` }],
         ].filter(Boolean).join("\n"));
         const sessionPath = path.join(ctx.cwd, ".pi", "takomi", "subagents", `${task.conversationId}.jsonl`);
         await mkdir(path.dirname(sessionPath), { recursive: true });
-        const resolvedModel = await resolvePreferredModel(ctx, task.preferredModel, config.model);
-        if (resolvedModel.model) task.preferredModel = resolvedModel.model;
-        if (resolvedModel.warning) {
-          task.notes = appendTaskNote(task.notes, "Model fallback", resolvedModel.warning);
-          if (ctx.hasUI) ctx.ui.notify(resolvedModel.warning, "warning");
+        const preflight = await runModelPreflight(ctx, ctx.cwd, task.preferredModel, config.model, _signal);
+        task.notes = appendTaskNote(task.notes, "Model preflight", preflight.report);
+        if (preflight.model) task.preferredModel = preflight.model;
+        if (preflight.warning) {
+          task.notes = appendTaskNote(task.notes, "Model fallback", preflight.warning);
+          if (ctx.hasUI) ctx.ui.notify(preflight.warning, "warning");
+        }
+        if (!preflight.model) {
+          task.status = "blocked";
+          await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
+          return {
+            content: [{ type: "text", text: `Redispatch blocked before launch.\n\n${preflight.report}` }],
+            details: { sessionId: params.sessionId, task, paths, preflight },
+            isError: true,
+          };
         }
         const args = ["--append-system-prompt", promptPath, "-p", buildSubagentTaskPrompt(task, params.rerunInstructions), "--session", sessionPath];
-        if (resolvedModel.model) args.unshift("--model", resolvedModel.model);
+        args.unshift("--model", preflight.model);
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
         const result = await runPiAgent(ctx.cwd, args, _signal);
 
@@ -701,8 +749,8 @@ ${stateJson}` }],
         task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
         await syncTaskArtifacts(ctx.cwd, params.sessionId, title, tasks);
         return {
-          content: [{ type: "text", text: result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.` }],
-          details: { sessionId: params.sessionId, task, paths, agent: agentName, conversationId: task.conversationId, action: params.action },
+          content: [{ type: "text", text: `${preflight.report}\n\n${result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.`}` }],
+          details: { sessionId: params.sessionId, task, paths, agent: agentName, conversationId: task.conversationId, action: params.action, preflight },
         };
       }
 
@@ -752,13 +800,13 @@ ${stateJson}` }],
     if (lowered.startsWith("use takomi ")) {
       state.enabled = true;
       const route = decideRoute(text.slice("use takomi ".length));
-      if (route.stage) setStageAndWorkflow(state, route.stage);
+      if (route.stage) setStageAndWorkflow(state, route.stage, { preserveRole: state.role === "orchestrator" && route.stage === "genesis" });
       else if (route.role !== "general") state.role = route.role;
       return { action: "transform", text: `Use the Takomi runtime for this request: ${text.slice("use takomi ".length)}` };
     }
 
     if (/\bvibe genesis\b/i.test(text)) {
-      setStageAndWorkflow(state, "genesis");
+      setStageAndWorkflow(state, "genesis", { preserveRole: state.role === "orchestrator" });
       return { action: "transform", text };
     }
     if (/\bvibe design\b/i.test(text)) {
@@ -777,17 +825,27 @@ ${stateJson}` }],
     if (!state.enabled) return;
 
     let effectiveState = cloneState(state);
+    const runtimeCwd = typeof (event as { cwd?: string }).cwd === "string" ? (event as { cwd?: string }).cwd as string : process.cwd();
+    const genesisExists = await hasGenesisArtifacts(runtimeCwd);
     if (state.autoOrch && shouldAutoRoute(event.prompt)) {
       effectiveState.role = "orchestrator";
-      effectiveState.stage = "build";
-      effectiveState.workflow = "vibe-build";
+      effectiveState.stage = genesisExists ? "build" : "genesis";
+      effectiveState.workflow = genesisExists ? "vibe-build" : "vibe-genesis";
     }
 
     const route = decideRoute(event.prompt);
     if (!effectiveState.stage && route.stage) {
       effectiveState.stage = route.stage;
       effectiveState.workflow = route.workflow;
-      effectiveState.role = route.role;
+      effectiveState.role = effectiveState.role === "orchestrator" && route.stage === "genesis" ? "orchestrator" : route.role;
+    }
+
+    let routingNote = route.reason;
+    const explicitLifecycleWaiver = /skip genesis|waive genesis|genesis complete|already have (a )?(prd|requirements)|design complete|jump straight to build/i.test(event.prompt);
+    if (!genesisExists && effectiveState.role === "orchestrator" && !explicitLifecycleWaiver) {
+      effectiveState.stage = "genesis";
+      effectiveState.workflow = "vibe-genesis";
+      routingNote = "Blank project detected; orchestrator remains in control and must honor Genesis → Design → Build.";
     }
 
     const parts = [
@@ -795,7 +853,10 @@ ${stateJson}` }],
       rolePrompt(effectiveState.role),
       effectiveState.planMode ? planPrompt() : "",
       getInjectedPlaybook(effectiveState),
-      `Routing note: ${route.reason}`,
+      `Routing note: ${routingNote}`,
+      !genesisExists ? "Project foundation is missing or incomplete. Do not skip Genesis unless the user explicitly waives it." : "",
+      "Task fan-out is flexible. Do not force exactly three tasks; decompose design/build work to fit the actual scope.",
+      "Before any subagent dispatch or model override, run and surface a visible `pi --list-models` preflight. Never fail silently on model availability.",
       "When useful, state the current Takomi stage and the recommended next stage.",
       effectiveState.stage === "build"
         ? "For build orchestration, it is valid to dispatch tasks to specialist subagents, review them, and send fixes back to the same agent by reusing its conversation id."
