@@ -5,7 +5,7 @@ import os from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { discoverProjectAgents, type TakomiAgentConfig } from "./agents";
-import { TakomiSubagentUi } from "../takomi-runtime/ui";
+import { getTakomiSubagentController } from "../takomi-runtime/subagent-controller";
 
 const ChecklistItemSchema = Type.Object({
   text: Type.String(),
@@ -277,11 +277,7 @@ async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?:
 }
 
 export default function takomiSubagents(pi: ExtensionAPI) {
-  const subagentUi = new TakomiSubagentUi("takomi-subagent");
-
-  pi.on("session_start", async (_event, ctx) => {
-    subagentUi.reset(ctx);
-  });
+  const subagentController = getTakomiSubagentController();
 
   pi.registerTool({
     name: "takomi_subagent",
@@ -361,19 +357,19 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         const sessionPath = path.join(subagentSessionDir, `${conversationId}.jsonl`);
         const subagentCwd = item.cwd ? path.resolve(rootCwd, item.cwd) : rootCwd;
 
-        await subagentUi.start(ctx, {
-          title: "Takomi Active Subagent",
+        await subagentController.start(ctx, {
           agent: config.name,
           taskLabel: item.task.split(/\r?\n/)[0]?.trim() || item.agent,
           workflow: item.workflow,
           conversationId,
           checklist: item.checklist,
           summary: "Preparing delegated run.",
+          source: "takomi-tool",
         }, conversationId);
 
         const preflight = await runModelPreflight(ctx, subagentCwd, item.model, config.model, signal);
         if (preflight.model) {
-          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, conversationId);
+          await subagentController.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, conversationId);
         }
         if (!preflight.model) {
           results.push({
@@ -386,7 +382,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
             output: "",
             stderr: preflight.report,
           });
-          await subagentUi.block(ctx, {
+          await subagentController.block(ctx, {
             summary: `Subagent ${config.name} blocked before launch.`,
             logs: [preflight.warning || "No model matched the requested run."],
           }, conversationId);
@@ -403,10 +399,10 @@ export default function takomiSubagents(pi: ExtensionAPI) {
 
         const result = await runAgentJson(subagentCwd, args, signal, {
           onEventText: (line) => {
-            void subagentUi.appendLog(ctx, line, conversationId);
+            void subagentController.appendLog(ctx, line, conversationId);
           },
           onStderr: (chunk) => {
-            void subagentUi.appendLog(ctx, chunk, conversationId);
+            void subagentController.appendLog(ctx, chunk, conversationId);
           },
         });
         previousOutput = result.stdout.trim();
@@ -423,7 +419,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         });
 
         if (result.code !== 0) {
-          await subagentUi.block(ctx, {
+          await subagentController.block(ctx, {
             model: preflight.model,
             summary: `Subagent ${config.name} failed.`,
             logs: [result.stderr || result.stdout || "No output"],
@@ -435,7 +431,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           };
         }
 
-        await subagentUi.complete(ctx, {
+        await subagentController.complete(ctx, {
           model: preflight.model,
           summary: previousOutput || `Subagent ${config.name} run complete.`,
           logs: previousOutput ? [previousOutput] : [],

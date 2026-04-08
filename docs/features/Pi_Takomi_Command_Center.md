@@ -2,48 +2,56 @@
 
 ## Goal
 
-Repair and finish the Takomi Pi TUI overhaul so the runtime loads cleanly, the footer stays pinned, the active subagent surface supports compact, expanded, and fullscreen modes, and the context sidebar can be toggled without breaking the session.
+Repair and finish the Takomi Pi TUI overhaul so the runtime loads cleanly, the footer stays pinned, the active subagent surface uses a single shared controller, and the bottom command stack supports compact, expanded, and fullscreen modes without fighting the context sidebar.
 
 ## Components
 
 ### Client / Runtime
 - `.pi/extensions/takomi-runtime/index.ts`
   - own Takomi runtime state, footer installation, command registration, and session wiring
-  - route subagent view toggles across compact, expanded, and fullscreen
+  - reset and drive the shared subagent controller from runtime-board flows
   - keep footer installation one-time and feed it live state through references
 - `.pi/extensions/takomi-runtime/ui.ts`
   - render the Takomi HUD widget above the editor
-  - render sticky subagent cards below the editor
-  - launch and dismiss fullscreen subagent overlays with Pi `custom(..., { overlay: true })`
+  - remain a thin compatibility layer for runtime HUD/footer helpers rather than subagent ownership
+- `.pi/extensions/takomi-runtime/subagent-controller.ts`
+  - own the canonical subagent registry, focus state, view mode, and fullscreen lifecycle
+- `.pi/extensions/takomi-runtime/subagent-render.ts`
+  - render the bottom command stack for compact, expanded, and fullscreen modes
+- `.pi/extensions/takomi-runtime/subagent-types.ts`
+  - define controller-owned run and view types shared across launch paths
 - `.pi/extensions/takomi-runtime/context-panel.ts`
   - render a non-capturing right-side overlay with session context
   - track file edits and tool activity from runtime events
 - `.pi/extensions/takomi-runtime/shared.ts`
   - host shared string, checklist, model-preflight, prompt, and Pi-process utilities used by both runtime and subagent extensions
 - `.pi/extensions/takomi-subagents/index.ts`
-  - continue to use shared helpers and the runtime subagent UI without duplicating process/model helper logic
+  - continue to use shared helpers and the shared subagent controller without duplicating process/model helper logic
 
 ### Docs
 - `docs/features/Pi_Takomi_Command_Center.md`
-  - track implementation notes and completion status for this repair
+  - track implementation notes and completion status for the broader Pi Takomi runtime work
+- `docs/features/Pi_Takomi_Subagent_Command_Stack.md`
+  - track the single-controller command-stack refactor
 
 ## Data Flow
 
 1. Pi starts a session and loads the Takomi runtime extension.
 2. `index.ts` restores persisted Takomi state, installs the footer once, and refreshes the HUD widget.
-3. When a delegated task starts, `TakomiSubagentUi` renders a sticky widget below the editor and updates the footer status.
-4. Multiple delegated runs are now tracked by conversation/thread id instead of sharing one global subagent card.
-5. `Alt+T` or `/takomi-subagent-toggle` cycles compact -> expanded -> fullscreen -> compact.
-6. `Alt+N` / `Alt+P` and `/takomi-subagent-next` / `/takomi-subagent-prev` switch focus between tracked subagents.
-7. Fullscreen mode uses a Pi overlay component and returns to compact mode when dismissed.
-8. On session start, the context overlay now auto-opens on the right when the terminal is wide enough, and `Alt+C` or `/takomi-context` toggles it afterward.
-9. `tool_result` events feed the context panel with recent file mutations and tool counts.
+3. When a delegated task starts, the shared controller renders a sticky widget below the editor and updates the footer status.
+4. Multiple delegated runs are tracked in one controller-owned registry rather than by several UI owners.
+5. `Alt+T` or `/takomi-subagent-toggle` cycles `compact -> expanded -> fullscreen -> compact`.
+6. `Alt+N` / `Alt+P` and `/takomi-subagent-next` / `/takomi-subagent-prev` switch focus between controller-visible runs.
+7. Fullscreen mode uses a controller-owned Pi overlay and returns to the prior non-fullscreen mode when dismissed with `Esc`.
+8. Runtime-board tasks use real parent lineage when available and fall back to activity ordering when not.
+9. On session start, the context overlay can still auto-open on the right when the terminal is wide enough, but the bottom stack remains the primary subagent surface.
+10. `tool_result` events feed the context panel with recent file mutations and tool counts.
 
 ## Database Schema
 
 No database changes.
 
-State remains session-local plus Takomi’s existing file-based session artifacts under `.pi/takomi/`.
+State remains session-local plus Takomi's existing file-based session artifacts under `.pi/takomi/`.
 
 ## Risks / Regressions
 
@@ -57,19 +65,16 @@ State remains session-local plus Takomi’s existing file-based session artifact
 - [x] Remove malformed duplicate helper code from `index.ts`
 - [x] Align runtime UI with Pi overlay/widget APIs
 - [ ] Verify context panel auto-opens and toggles correctly in live Pi
-- [x] Ensure subagent toggle flow matches the command-center plan
-- [x] Preserve multiple concurrent subagents instead of overwriting a single panel state
+- [x] Replace multi-owner subagent state with a single shared controller
+- [ ] Ensure subagent toggle flow matches the command-stack plan
+- [x] Preserve multiple concurrent subagents with focus, lineage, and bottom-stack rendering
 - [x] Pass `pnpm exec tsc --noEmit`
 
 ## Implementation Update
 
 - Footer installation now uses a dedicated `TakomiFooterComponent` and is still installed only once.
-- `Alt+T` now cycles compact -> expanded -> fullscreen -> compact.
-- Fullscreen subagent overlays request rerenders while open so elapsed time and live output can refresh.
-- Fullscreen commands and shortcuts now rebind against the current live Pi UI context, so `Alt+T` and `/takomi-subagent-fullscreen` can mount the overlay immediately instead of only flipping an internal mode flag.
-- Subagent UI state is now keyed by conversation/thread id, so concurrent or sequential delegated runs no longer overwrite one another in-memory.
-- Compact mode now shows a deeper log tail for the focused agent and includes peer agent summaries when more than one subagent is active.
-- The runtime now exposes explicit next/previous subagent cycling commands and shortcuts: `/takomi-subagent-next`, `/takomi-subagent-prev`, `Alt+N`, and `Alt+P`.
-- The context panel now keeps a real overlay handle, can close reliably, refreshes while visible, and shows runtime metadata alongside tool/file activity.
-- The context panel now auto-opens on session start to match the intended command-center layout instead of staying hidden until manually toggled.
+- The next repair pass moves subagent ownership out of `ui.ts` and into a single shared controller consumed by both runtime-board and `takomi_subagent`.
+- The bottom-of-screen call stack becomes the canonical subagent surface, with the right-side context panel kept secondary.
+- `Alt+T`, fullscreen, and focus cycling should resolve against exactly one controller instead of fanning out across several UI instances.
+- Hybrid hierarchy will use true parent/child lineage where `parentTaskId` exists and fall back to activity order for direct/tool runs.
 - The repo-level Genesis documents expected by legacy Takomi prompts are still missing from `docs/`; the runtime continues to fail soft and treat Genesis as incomplete.

@@ -29,14 +29,11 @@ import {
 } from "../../../src/pi-takomi-core";
 import { discoverProjectAgents, type TakomiAgentConfig } from "../takomi-subagents/agents";
 import {
-  cycleTakomiSubagentViewMode,
-  cycleTakomiSubagentFocus,
   renderRuntimeStatus,
   renderRuntimeWidget,
-  setTakomiSubagentViewMode,
   TakomiFooterComponent,
-  TakomiSubagentUi,
 } from "./ui";
+import { getTakomiSubagentController } from "./subagent-controller";
 import {
   visibleWidth,
   truncateToWidth,
@@ -394,7 +391,7 @@ async function refreshUi(ctx: ExtensionContext, state: TakomiState) {
 
 export default function takomiRuntime(pi: ExtensionAPI) {
   let state = cloneState(DEFAULT_STATE);
-  const subagentUi = new TakomiSubagentUi("takomi-runtime-subagent");
+  const subagentController = getTakomiSubagentController();
   const contextPanel = new TakomiContextPanel();
 
   // Wire context panel events and commands (Alt+C, /takomi-context)
@@ -544,7 +541,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-expand", {
     description: "Expand the live Takomi subagent surface",
     handler: async (_args, ctx) => {
-      setTakomiSubagentViewMode("expanded", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      subagentController.setViewMode("expanded", ctx);
       ctx.ui.notify("Takomi subagent view expanded", "info");
     },
   });
@@ -552,7 +553,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-collapse", {
     description: "Collapse the live Takomi subagent surface",
     handler: async (_args, ctx) => {
-      setTakomiSubagentViewMode("compact", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      subagentController.setViewMode("compact", ctx);
       ctx.ui.notify("Takomi subagent view collapsed", "info");
     },
   });
@@ -560,7 +565,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-toggle", {
     description: "Cycle the live Takomi subagent surface: compact → expanded → fullscreen",
     handler: async (_args, ctx) => {
-      const mode = cycleTakomiSubagentViewMode(ctx);
+      const mode = subagentController.cycleViewMode(ctx);
+      if (!mode) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
       ctx.ui.notify(`Takomi subagent view ${mode}`, "info");
     },
   });
@@ -568,7 +577,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-fullscreen", {
     description: "Show the Takomi subagent in fullscreen overlay",
     handler: async (_args, ctx) => {
-      setTakomiSubagentViewMode("fullscreen", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      subagentController.setViewMode("fullscreen", ctx);
       ctx.ui.notify("Takomi subagent view fullscreen", "info");
     },
   });
@@ -576,7 +589,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-next", {
     description: "Switch focus to the next tracked Takomi subagent",
     handler: async (_args, ctx) => {
-      const changed = cycleTakomiSubagentFocus("next", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      const changed = subagentController.cycleFocus("next", ctx);
       ctx.ui.notify(changed ? "Takomi subagent focus advanced" : "No additional Takomi subagents to cycle", changed ? "info" : "warning");
     },
   });
@@ -584,7 +601,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerCommand("takomi-subagent-prev", {
     description: "Switch focus to the previous tracked Takomi subagent",
     handler: async (_args, ctx) => {
-      const changed = cycleTakomiSubagentFocus("prev", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      const changed = subagentController.cycleFocus("prev", ctx);
       ctx.ui.notify(changed ? "Takomi subagent focus moved back" : "No additional Takomi subagents to cycle", changed ? "info" : "warning");
     },
   });
@@ -592,7 +613,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerShortcut("alt+t", {
     description: "Cycle Takomi subagent detail (compact -> expanded -> fullscreen)",
     handler: async (ctx) => {
-      const mode = cycleTakomiSubagentViewMode(ctx);
+      const mode = subagentController.cycleViewMode(ctx);
+      if (!mode) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
       ctx.ui.notify(`Takomi subagent view ${mode}`, "info");
     },
   });
@@ -600,7 +625,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerShortcut("alt+shift+t", {
     description: "Open Takomi subagent fullscreen overlay",
     handler: async (ctx) => {
-      setTakomiSubagentViewMode("fullscreen", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      subagentController.setViewMode("fullscreen", ctx);
       ctx.ui.notify("Takomi subagent view fullscreen", "info");
     },
   });
@@ -608,7 +637,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerShortcut("alt+n", {
     description: "Switch to the next Takomi subagent",
     handler: async (ctx) => {
-      const changed = cycleTakomiSubagentFocus("next", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      const changed = subagentController.cycleFocus("next", ctx);
       if (!changed) ctx.ui.notify("No additional Takomi subagents to cycle", "warning");
     },
   });
@@ -616,7 +649,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   pi.registerShortcut("alt+p", {
     description: "Switch to the previous Takomi subagent",
     handler: async (ctx) => {
-      const changed = cycleTakomiSubagentFocus("prev", ctx);
+      if (!subagentController.hasRuns()) {
+        ctx.ui.notify("No active Takomi subagent", "warning");
+        return;
+      }
+      const changed = subagentController.cycleFocus("prev", ctx);
       if (!changed) ctx.ui.notify("No additional Takomi subagents to cycle", "warning");
     },
   });
@@ -626,8 +663,10 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       await updateState(ctx, () => {
         state = cloneState(DEFAULT_STATE);
-        setTakomiSubagentViewMode("compact", ctx);
       }, "Takomi runtime state reset");
+      subagentController.reset(ctx);
+      contextPanel.resetSession();
+      contextPanel.show(ctx);
     },
   });
 
@@ -798,19 +837,30 @@ ${stateJson}` }],
           },
         );
         const paths = await syncTaskArtifacts(ctx.cwd, nextState);
-        const runKey = task.conversationId ?? task.id;
+        const conversationId = task.conversationId ?? task.id;
+        task.conversationId = conversationId;
+        const runKey = conversationId;
+        const parentRunKey = task.parentTaskId
+          ? (() => {
+              const parentTask = sessionState.tasks.find((item) => item.id === task.parentTaskId);
+              if (parentTask) return parentTask.conversationId ?? parentTask.id;
+              return subagentController.getKnownParentRunKey(task.parentTaskId);
+            })()
+          : undefined;
 
-        await subagentUi.start(ctx, {
-          title: "Takomi Active Subagent",
+        await subagentController.start(ctx, {
           agent: agentName,
-          taskLabel: `${task.id} — ${task.title}`,
+          taskLabel: `${task.id} - ${task.title}`,
           stage: task.stage,
           workflow: task.workflow,
-          conversationId: task.conversationId,
+          conversationId,
+          parentTaskId: task.parentTaskId,
+          parentRunKey,
           checklist: task.checklist,
           summary: params.action === "review_and_redispatch"
             ? "Review feedback accepted. Relaunching the same specialist thread."
             : "Redispatching task to the preferred specialist.",
+          source: "runtime-board",
         }, runKey);
 
         const promptPath = await writeTempPrompt(config.name, [
@@ -818,18 +868,18 @@ ${stateJson}` }],
           task.workflow ? `\nUse the ${task.workflow} workflow for this task.` : "",
           task.skills?.length ? `\nUse these skills when relevant: ${task.skills.join(", ")}.` : "",
         ].filter(Boolean).join("\n"));
-        const sessionPath = path.join(ctx.cwd, ".pi", "takomi", "subagents", `${task.conversationId}.jsonl`);
+        const sessionPath = path.join(ctx.cwd, ".pi", "takomi", "subagents", `${conversationId}.jsonl`);
         await mkdir(path.dirname(sessionPath), { recursive: true });
         const preflight = await runModelPreflight(ctx, ctx.cwd, task.preferredModel, config.model, _signal);
         task.notes = appendTaskNote(task.notes, "Model preflight", preflight.report);
         if (preflight.model) {
           task.preferredModel = preflight.model;
-          await subagentUi.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, runKey);
+          await subagentController.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, runKey);
         }
         if (preflight.warning) {
           task.notes = appendTaskNote(task.notes, "Model fallback", preflight.warning);
           if (ctx.hasUI) ctx.ui.notify(preflight.warning, "warning");
-          await subagentUi.update(ctx, { summary: preflight.warning }, runKey);
+          await subagentController.update(ctx, { summary: preflight.warning }, runKey);
         }
         if (!preflight.model) {
           task.status = "blocked";
@@ -844,7 +894,7 @@ ${stateJson}` }],
             },
           );
           await syncTaskArtifacts(ctx.cwd, nextState);
-          await subagentUi.block(ctx, {
+          await subagentController.block(ctx, {
             model: task.preferredModel,
             summary: "Redispatch blocked before launch.",
             logs: [...(task.notes ? [task.notes] : []), preflight.report],
@@ -860,10 +910,10 @@ ${stateJson}` }],
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
         const result = await runPiAgentJson(ctx.cwd, args, _signal, {
           onEventText: (line) => {
-            void subagentUi.appendLog(ctx, line, runKey);
+            void subagentController.appendLog(ctx, line, runKey);
           },
           onStderr: (chunk) => {
-            void subagentUi.appendLog(ctx, chunk, runKey);
+            void subagentController.appendLog(ctx, chunk, runKey);
           },
         });
 
@@ -881,7 +931,7 @@ ${stateJson}` }],
             },
           );
           await syncTaskArtifacts(ctx.cwd, nextState);
-          await subagentUi.block(ctx, {
+          await subagentController.block(ctx, {
             model: task.preferredModel,
             summary: `Redispatch failed for ${task.id}.`,
             logs: [result.stderr || result.stdout || "No output"],
@@ -894,7 +944,7 @@ ${stateJson}` }],
         }
 
         task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
-        await subagentUi.complete(ctx, {
+        await subagentController.complete(ctx, {
           model: task.preferredModel,
           summary: result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.`,
           logs: result.stdout.trim() ? [result.stdout.trim()] : [],
@@ -1069,7 +1119,8 @@ ${stateJson}` }],
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    subagentUi.reset(ctx);
+    subagentController.reset(ctx);
+    contextPanel.resetSession();
     const entries = ctx.sessionManager.getEntries();
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i] as { type: string; customType?: string; data?: TakomiState };
