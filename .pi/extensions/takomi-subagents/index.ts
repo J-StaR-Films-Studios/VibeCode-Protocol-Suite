@@ -73,6 +73,17 @@ type JsonRunHooks = {
   onStderr?: (chunk: string) => void;
 };
 
+const JSON_OUTPUT_TAIL_LIMIT = 64_000;
+
+function appendCappedTail(current: string, next: string, limit = JSON_OUTPUT_TAIL_LIMIT): string {
+  if (!next) return current;
+  const boundedNext = next.length > limit ? next.slice(-limit) : next;
+  const remaining = limit - boundedNext.length;
+  if (remaining <= 0) return boundedNext;
+  if (current.length <= remaining) return current + boundedNext;
+  return current.slice(-remaining) + boundedNext;
+}
+
 function extractAssistantText(message: unknown): string {
   if (!message || typeof message !== "object") return "";
   const content = (message as { content?: unknown }).content;
@@ -159,15 +170,15 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
   return new Promise((resolve) => {
     const invocation = getPiInvocation(args);
     const proc = spawn(invocation.command, invocation.args, { cwd, stdio: ["ignore", "pipe", "pipe"], shell: false });
-    let stdout = "";
-    let stderr = "";
+    let stdoutTail = "";
+    let stderrTail = "";
     let lineBuffer = "";
     let finalAssistantText = "";
 
     const consumeLine = (line: string) => {
       const trimmed = line.trim();
       if (!trimmed) return;
-      stdout += `${line}\n`;
+      stdoutTail = appendCappedTail(stdoutTail, `${line}\n`);
       try {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
         const messageText = summarizeJsonEvent(event);
@@ -210,14 +221,14 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
     });
     proc.stderr.on("data", (d) => {
       const chunk = d.toString();
-      stderr += chunk;
+      stderrTail = appendCappedTail(stderrTail, chunk);
       hooks?.onStderr?.(chunk);
     });
     proc.on("close", (code) => {
       if (lineBuffer.trim()) consumeLine(lineBuffer);
-      resolve({ stdout: finalAssistantText || stdout.trim(), stderr, code: code ?? 0 });
+      resolve({ stdout: finalAssistantText || stdoutTail.trim(), stderr: stderrTail, code: code ?? 0 });
     });
-    proc.on("error", () => resolve({ stdout: finalAssistantText || stdout.trim(), stderr, code: 1 }));
+    proc.on("error", () => resolve({ stdout: finalAssistantText || stdoutTail.trim(), stderr: stderrTail, code: 1 }));
     if (signal) {
       const abort = () => proc.kill("SIGTERM");
       if (signal.aborted) abort();

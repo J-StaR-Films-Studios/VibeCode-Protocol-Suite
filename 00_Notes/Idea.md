@@ -17,3 +17,9 @@ New-Item -ItemType Junction -Path "$pi\agent\extensions\takomi-subagents" -Targe
 New-Item -ItemType Junction -Path "$pi\agent\prompts\takomi-prompts" -Target "$repo\.pi\prompts"
 New-Item -ItemType Junction -Path "$pi\agent\themes\takomi-noir.json" -Target "$repo\.pi\themes\takomi-noir.json"
 New-Item -ItemType Junction -Path "$pi\src\pi-takomi-core" -Target "$repo\src\pi-takomi-core"
+
+---
+
+powershell -ExecutionPolicy Bypass -File .\scripts\sync-pi-global.ps1
+
+.\scripts\sync-pi-global.ps1
