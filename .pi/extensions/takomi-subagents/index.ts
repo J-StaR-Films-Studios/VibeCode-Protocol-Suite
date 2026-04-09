@@ -458,7 +458,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           runKey: conversationId,
           patch: {
             model: preflight.model,
-            summary: previousOutput || `Subagent ${config.name} run complete.`,
+            summary: previousOutput || `Subagent ${config.name} run finished. Checklist-validated task completion is still a board action.`,
             logs: previousOutput ? [previousOutput] : [],
           },
         });
@@ -466,7 +466,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
 
       const lastPreflight = typeof results.at(-1)?.preflight === "string" ? String(results.at(-1)?.preflight) : "";
       return {
-        content: [{ type: "text", text: [lastPreflight, previousOutput || "Subagent run complete."].filter(Boolean).join("\n\n") }],
+        content: [{ type: "text", text: [lastPreflight, previousOutput || "Subagent run finished. Board completion still requires checklist validation."].filter(Boolean).join("\n\n") }],
         details: { results },
       };
     },

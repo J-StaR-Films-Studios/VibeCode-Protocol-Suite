@@ -188,6 +188,42 @@ function applyChecklistUpdates(
   return next;
 }
 
+function normalizeChecklistInput(
+  checklist?: Array<string | { text: string; done?: boolean }>,
+): OrchestratorTask["checklist"] {
+  if (!checklist?.length) return undefined;
+  return checklist.map((item) => typeof item === "string" ? { text: item, done: false } : { text: item.text, done: item.done ?? false });
+}
+
+function resolveChecklistState(
+  current: OrchestratorTask["checklist"],
+  nextChecklist?: Array<string | { text: string; done?: boolean }>,
+  updates?: Array<{ text?: string; index?: number; done?: boolean }>,
+): OrchestratorTask["checklist"] {
+  const baseChecklist = nextChecklist ? normalizeChecklistInput(nextChecklist) : current;
+  return applyChecklistUpdates(baseChecklist, updates);
+}
+
+function getIncompleteChecklistItems(checklist?: OrchestratorTask["checklist"]): string[] {
+  return (checklist ?? [])
+    .filter((item) => !item.done)
+    .map((item) => item.text);
+}
+
+function getCompletionGateError(task: Pick<OrchestratorTask, "id" | "title" | "checklist">): string | undefined {
+  if (!task.checklist?.length) {
+    return `Task ${task.id} cannot be marked completed until it has a checklist.`;
+  }
+  const incompleteItems = getIncompleteChecklistItems(task.checklist);
+  if (incompleteItems.length === 0) return undefined;
+  return [
+    `Task ${task.id} cannot be marked completed until every checklist item is done.`,
+    "",
+    "Incomplete checklist items:",
+    ...incompleteItems.map((item) => `- ${item}`),
+  ].join("\n");
+}
+
 function getTaskFolder(paths: ReturnType<typeof getSessionPaths>, status: OrchestratorTask["status"]) {
   switch (status) {
     case "in-progress":
@@ -758,6 +794,10 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       status: Type.Optional(StringEnum(["pending", "in-progress", "completed", "blocked"] as const)),
       notes: Type.Optional(Type.String()),
       rerunInstructions: Type.Optional(Type.String()),
+      checklist: Type.Optional(Type.Array(Type.Union([
+        Type.String(),
+        Type.Object({ text: Type.String(), done: Type.Optional(Type.Boolean()) }),
+      ]))),
       checklistUpdates: Type.Optional(Type.Array(Type.Object({
         text: Type.Optional(Type.String()),
         index: Type.Optional(Type.Number()),
@@ -823,12 +863,29 @@ ${stateJson}` }],
           return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
         }
         const current = sessionState.tasks[idx];
-        sessionState.tasks[idx] = {
+        const checklist = resolveChecklistState(current.checklist, params.checklist, params.checklistUpdates);
+        const nextTask = {
           ...current,
           status: (params.status ?? current.status) as OrchestratorTaskStatus,
           notes: params.notes ?? current.notes,
-          checklist: applyChecklistUpdates(current.checklist, params.checklistUpdates),
+          checklist,
         };
+        if (params.status === "completed") {
+          const completionGateError = getCompletionGateError(nextTask);
+          if (completionGateError) {
+            return {
+              content: [{ type: "text", text: completionGateError }],
+              details: {
+                sessionId: params.sessionId,
+                taskId: current.id,
+                incompleteChecklistItems: getIncompleteChecklistItems(nextTask.checklist),
+                checklist: nextTask.checklist,
+              },
+              isError: true,
+            };
+          }
+        }
+        sessionState.tasks[idx] = nextTask;
         const nextState = buildSessionState(
           sessionState.sessionId,
           sessionState.title,
@@ -863,7 +920,7 @@ ${stateJson}` }],
         }
 
         task.status = "in-progress";
-        task.checklist = applyChecklistUpdates(task.checklist, params.checklistUpdates);
+        task.checklist = resolveChecklistState(task.checklist, params.checklist, params.checklistUpdates);
         if (params.action === "review_and_redispatch") {
           task.notes = appendTaskNote(task.notes, "Review feedback", params.notes);
         } else if (params.notes) {
@@ -989,7 +1046,7 @@ ${stateJson}` }],
         task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
         await subagentController.complete(ctx, {
           model: task.preferredModel,
-          summary: result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.`,
+          summary: result.stdout.trim() || `Subagent run finished for task ${task.id}. Board completion still requires checklist validation.`,
           logs: result.stdout.trim() ? [result.stdout.trim()] : [],
         }, runKey);
         nextState = buildSessionState(

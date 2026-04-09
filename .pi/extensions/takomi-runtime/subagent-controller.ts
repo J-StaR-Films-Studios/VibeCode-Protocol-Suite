@@ -237,10 +237,9 @@ class TakomiSharedSubagentController implements TakomiSubagentController {
       {
         overlay: true,
         overlayOptions: {
-          width: "78%",
-          maxHeight: "78%",
-          anchor: "left-center",
-          margin: { left: 1, top: 2, bottom: 3 },
+          width: "85%",
+          maxHeight: "85%",
+          anchor: "center",
         },
       },
     ).then(() => {
