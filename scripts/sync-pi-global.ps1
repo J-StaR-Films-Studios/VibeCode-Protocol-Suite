@@ -16,6 +16,7 @@ else {
 $repoPiRoot = Join-Path $RepoRoot '.pi'
 $globalPiRoot = Join-Path $HOME '.pi'
 $globalAgentRoot = Join-Path $globalPiRoot 'agent'
+$globalAgentAgents = Join-Path $globalAgentRoot 'agents'
 $globalAgentExtensions = Join-Path $globalAgentRoot 'extensions'
 $globalAgentPrompts = Join-Path $globalAgentRoot 'prompts'
 $globalAgentThemes = Join-Path $globalAgentRoot 'themes'
@@ -81,6 +82,7 @@ function Sync-ManagedFile {
 foreach ($path in @(
     $globalPiRoot,
     $globalAgentRoot,
+    $globalAgentAgents,
     $globalAgentExtensions,
     $globalAgentPrompts,
     $globalAgentThemes,
@@ -90,6 +92,11 @@ foreach ($path in @(
 }
 
 $directoryLinks = @(
+    @{
+        Label = 'takomi-agents'
+        Destination = $globalAgentAgents
+        Source = Join-Path $repoPiRoot 'agents'
+    },
     @{
         Label = 'takomi-runtime'
         Destination = Join-Path $globalAgentExtensions 'takomi-runtime'

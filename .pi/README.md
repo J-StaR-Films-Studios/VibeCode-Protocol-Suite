@@ -50,6 +50,7 @@ Inside Pi, use:
 - Build is treated as a workflow/stage, not as a separate specialist agent.
 - A fresh orchestration session starts with a Genesis foundation task, then expands Design and Build only when the scope justifies it.
 - The main execution roles remain things like `orchestrator`, `coder`, `designer`, `architect`, and `reviewer`.
+- Agent discovery prefers `project/.pi/agents/` and falls back to `~/.pi/agent/agents/` so new projects can reuse the global Takomi agent pack without manual copying.
 - Orchestrator sessions run in hybrid mode:
   - human-readable docs live under `docs/tasks/orchestrator-sessions/<sessionId>/`
   - machine state lives under `.pi/takomi/orchestrator/<sessionId>.json`

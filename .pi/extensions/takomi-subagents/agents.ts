@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 
@@ -11,8 +12,7 @@ export type TakomiAgentConfig = {
   filePath: string;
 };
 
-export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
-  const agentsDir = path.join(cwd, ".pi", "agents");
+function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
   if (!fs.existsSync(agentsDir)) return [];
 
   const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
@@ -41,4 +41,19 @@ export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
   }
 
   return agents;
+}
+
+export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
+  const localAgents = loadAgentsFromDirectory(path.join(cwd, ".pi", "agents"));
+  const globalAgents = loadAgentsFromDirectory(path.join(os.homedir(), ".pi", "agent", "agents"));
+  const merged = new Map<string, TakomiAgentConfig>();
+
+  for (const agent of globalAgents) {
+    merged.set(agent.name, agent);
+  }
+  for (const agent of localAgents) {
+    merged.set(agent.name, agent);
+  }
+
+  return [...merged.values()];
 }
