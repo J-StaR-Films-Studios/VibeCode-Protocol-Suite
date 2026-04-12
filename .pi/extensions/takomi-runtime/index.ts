@@ -36,6 +36,7 @@ import {
 import { getTakomiSubagentController } from "./subagent-controller";
 import {
   TAKOMI_SUBAGENT_EVENT_CHANNEL,
+  type TakomiSubagentRunPatch,
   type TakomiSubagentRuntimeEvent,
 } from "./subagent-types";
 import {
@@ -500,6 +501,21 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     if (resolvedMessage) ctx.ui.notify(resolvedMessage, "info");
   }
 
+  async function syncBoardTaskRunState(
+    ctx: ExtensionContext,
+    task: Pick<OrchestratorTask, "conversationId" | "status" | "checklist">,
+    summary?: string,
+  ): Promise<void> {
+    if (!task.conversationId) return;
+    const patch: TakomiSubagentRunPatch = {
+      conversationId: task.conversationId,
+      boardTaskStatus: task.status,
+      checklist: task.checklist,
+    };
+    if (summary) patch.summary = summary;
+    await subagentController.update(ctx, patch, task.conversationId);
+  }
+
   pi.registerCommand("takomi", {
     description: "Enable Takomi runtime guidance for this session",
     handler: async (_args, ctx) => {
@@ -897,6 +913,15 @@ ${stateJson}` }],
           },
         );
         const paths = await syncTaskArtifacts(ctx.cwd, nextState);
+        await syncBoardTaskRunState(
+          ctx,
+          nextState.tasks[idx],
+          nextTask.status === "completed"
+            ? "Board task completed."
+            : nextTask.status === "blocked"
+              ? "Board task blocked."
+              : undefined,
+        );
         return {
           content: [{ type: "text", text: `Updated task ${params.taskId} in session ${params.sessionId}.\nStatus: ${nextState.tasks[idx].status}` }],
           details: { sessionId: params.sessionId, task: nextState.tasks[idx], paths, lifecycle: nextState.lifecycle },
@@ -957,6 +982,7 @@ ${stateJson}` }],
           parentTaskId: task.parentTaskId,
           parentRunKey,
           checklist: task.checklist,
+          boardTaskStatus: task.status,
           summary: params.action === "review_and_redispatch"
             ? "Review feedback accepted. Relaunching the same specialist thread."
             : "Redispatching task to the preferred specialist.",
@@ -974,12 +1000,12 @@ ${stateJson}` }],
         task.notes = appendTaskNote(task.notes, "Model preflight", preflight.report);
         if (preflight.model) {
           task.preferredModel = preflight.model;
-          await subagentController.update(ctx, { model: preflight.model, summary: `Model ready: ${preflight.model}` }, runKey);
+          await subagentController.update(ctx, { model: preflight.model, boardTaskStatus: task.status, checklist: task.checklist, summary: `Model ready: ${preflight.model}` }, runKey);
         }
         if (preflight.warning) {
           task.notes = appendTaskNote(task.notes, "Model fallback", preflight.warning);
           if (ctx.hasUI) ctx.ui.notify(preflight.warning, "warning");
-          await subagentController.update(ctx, { summary: preflight.warning }, runKey);
+          await subagentController.update(ctx, { boardTaskStatus: task.status, checklist: task.checklist, summary: preflight.warning }, runKey);
         }
         if (!preflight.model) {
           task.status = "blocked";
@@ -996,6 +1022,8 @@ ${stateJson}` }],
           await syncTaskArtifacts(ctx.cwd, nextState);
           await subagentController.block(ctx, {
             model: task.preferredModel,
+            boardTaskStatus: task.status,
+            checklist: task.checklist,
             summary: "Redispatch blocked before launch.",
             logs: [...(task.notes ? [task.notes] : []), preflight.report],
           }, runKey);
@@ -1009,6 +1037,9 @@ ${stateJson}` }],
         args.unshift("--model", preflight.model);
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
         const result = await runPiAgentJson(ctx.cwd, args, _signal, {
+          onAssistantText: (text) => {
+            void subagentController.update(ctx, { outputText: text, boardTaskStatus: task.status, checklist: task.checklist }, runKey);
+          },
           onEventText: (line) => {
             void subagentController.appendLog(ctx, line, runKey);
           },
@@ -1033,7 +1064,10 @@ ${stateJson}` }],
           await syncTaskArtifacts(ctx.cwd, nextState);
           await subagentController.block(ctx, {
             model: task.preferredModel,
+            boardTaskStatus: task.status,
+            checklist: task.checklist,
             summary: `Redispatch failed for ${task.id}.`,
+            outputText: result.stdout.trim() || undefined,
             logs: [result.stderr || result.stdout || "No output"],
           }, runKey);
           return {
@@ -1046,8 +1080,10 @@ ${stateJson}` }],
         task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
         await subagentController.complete(ctx, {
           model: task.preferredModel,
+          boardTaskStatus: task.status,
+          checklist: task.checklist,
           summary: result.stdout.trim() || `Subagent run finished for task ${task.id}. Board completion still requires checklist validation.`,
-          logs: result.stdout.trim() ? [result.stdout.trim()] : [],
+          outputText: result.stdout.trim() || undefined,
         }, runKey);
         nextState = buildSessionState(
           sessionState.sessionId,

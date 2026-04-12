@@ -55,6 +55,52 @@ export function sanitizeLogChunk(chunk: string): string[] {
     .slice(-8);
 }
 
+const STREAMED_LOG_PUNCTUATION = /^[,.;:!?%)\]}]+$/;
+const STRUCTURED_LOG_PREFIX = /^(Tool (start|complete|failed):|Checklist\b|Model preflight\b|Requested:\b|Selected model:\b|Warning:\b|Subagent\b|Redispatch\b|Waiting for first live event)/i;
+
+function normalizeLogLine(value: string): string {
+  return stripAnsi(value).replace(/\s+/g, " ").trim();
+}
+
+function shouldMergeStreamedLog(previous: string, next: string): boolean {
+  const prior = normalizeLogLine(previous);
+  const incoming = normalizeLogLine(next);
+  if (!prior || !incoming) return false;
+  if (prior.length >= 280) return false;
+  if (STRUCTURED_LOG_PREFIX.test(prior) || STRUCTURED_LOG_PREFIX.test(incoming)) return false;
+  if (STREAMED_LOG_PUNCTUATION.test(incoming)) return true;
+  if (incoming.includes(":")) return false;
+  return /^[a-z0-9("'`\[]/.test(incoming) && incoming.length <= 40;
+}
+
+function joinStreamedLog(previous: string, next: string): string {
+  const prior = normalizeLogLine(previous);
+  const incoming = normalizeLogLine(next);
+  if (!prior) return incoming;
+  if (!incoming) return prior;
+  if (STREAMED_LOG_PUNCTUATION.test(incoming) || /^[,.;:!?%)\]}]/.test(incoming)) return `${prior}${incoming}`;
+  if (/^['’]/.test(incoming)) return `${prior}${incoming}`;
+  if (/[([{]$/.test(prior)) return `${prior}${incoming}`;
+  return `${prior} ${incoming}`;
+}
+
+export function appendLiveLogChunk(existing: string[], chunk: string, limit = 60): string[] {
+  const lines = sanitizeLogChunk(chunk);
+  if (!lines.length) return existing;
+
+  const nextLogs = [...existing];
+  for (const line of lines) {
+    const previous = nextLogs.at(-1);
+    if (previous && shouldMergeStreamedLog(previous, line)) {
+      nextLogs[nextLogs.length - 1] = joinStreamedLog(previous, line);
+      continue;
+    }
+    nextLogs.push(line);
+  }
+
+  return nextLogs.slice(-limit);
+}
+
 export function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -146,6 +192,7 @@ export type RunHooks = {
 };
 
 export type JsonRunHooks = {
+  onAssistantText?: (text: string) => void;
   onEventText?: (line: string) => void;
   onStderr?: (chunk: string) => void;
 };
@@ -173,6 +220,53 @@ export function extractAssistantText(message: unknown): string {
     .trim();
 }
 
+function normalizeAssistantOutputText(value: string): string {
+  return stripAnsi(value)
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function extractAssistantSnapshot(event: Record<string, unknown>, currentText: string): string | undefined {
+  const type = typeof event.type === "string" ? event.type : "";
+
+  if (type === "message_update") {
+    const assistantEvent = event.assistantMessageEvent;
+    if (assistantEvent && typeof assistantEvent === "object") {
+      const delta = (assistantEvent as { delta?: unknown }).delta;
+      if (typeof delta === "string" && delta) {
+        const next = normalizeAssistantOutputText(`${currentText}${delta}`);
+        return next && next !== currentText ? next : undefined;
+      }
+    }
+
+    const messageText = normalizeAssistantOutputText(extractAssistantText(event.message));
+    return messageText && messageText !== currentText ? messageText : undefined;
+  }
+
+  if (type === "message_end") {
+    const message = event.message;
+    if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+      const messageText = normalizeAssistantOutputText(extractAssistantText(message));
+      return messageText && messageText !== currentText ? messageText : undefined;
+    }
+  }
+
+  if (type === "agent_end") {
+    const messages = (event.messages as unknown[] | undefined) ?? [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+        const messageText = normalizeAssistantOutputText(extractAssistantText(message));
+        return messageText && messageText !== currentText ? messageText : undefined;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 export function summarizeJsonEvent(event: Record<string, unknown>): string | undefined {
   const type = typeof event.type === "string" ? event.type : "";
   if (type === "tool_execution_start") {
@@ -197,22 +291,6 @@ export function summarizeJsonEvent(event: Record<string, unknown>): string | und
     const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
     const isError = event.isError === true;
     return isError ? `Tool failed: ${toolName}` : `Tool complete: ${toolName}`;
-  }
-  if (type === "message_update") {
-    const assistantEvent = event.assistantMessageEvent;
-    if (assistantEvent && typeof assistantEvent === "object") {
-      const delta = (assistantEvent as { delta?: unknown }).delta;
-      if (typeof delta === "string" && delta.trim()) return delta.trim();
-    }
-    const messageText = extractAssistantText(event.message);
-    if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
-  }
-  if (type === "message_end") {
-    const message = event.message;
-    if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
-      const messageText = extractAssistantText(message);
-      if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
-    }
   }
   return undefined;
 }
@@ -251,6 +329,7 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
     let stderrTail = "";
     let lineBuffer = "";
     let finalAssistantText = "";
+    let assistantOutputText = "";
 
     const consumeLine = (line: string) => {
       const trimmed = line.trim();
@@ -258,6 +337,12 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
       stdoutTail = appendCappedTail(stdoutTail, `${line}\n`);
       try {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
+        const assistantText = extractAssistantSnapshot(event, assistantOutputText);
+        if (assistantText !== undefined) {
+          assistantOutputText = assistantText;
+          hooks?.onAssistantText?.(assistantText);
+        }
+
         const messageText = summarizeJsonEvent(event);
         if (messageText) hooks?.onEventText?.(messageText);
 
@@ -265,7 +350,7 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
           const message = event.message;
           if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
             const text = extractAssistantText(message);
-            if (text) finalAssistantText = text;
+            if (text) finalAssistantText = normalizeAssistantOutputText(text);
           }
         }
         if (event.type === "agent_end") {
@@ -275,7 +360,7 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
             if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
               const text = extractAssistantText(message);
               if (text) {
-                finalAssistantText = text;
+                finalAssistantText = normalizeAssistantOutputText(text);
                 break;
               }
             }
@@ -303,9 +388,9 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
     });
     proc.on("close", (code) => {
       if (lineBuffer.trim()) consumeLine(lineBuffer);
-      resolve({ stdout: finalAssistantText || stdoutTail.trim(), stderr: stderrTail, code: code ?? 0 });
+      resolve({ stdout: finalAssistantText || assistantOutputText || stdoutTail.trim(), stderr: stderrTail, code: code ?? 0 });
     });
-    proc.on("error", () => resolve({ stdout: finalAssistantText || stdoutTail.trim(), stderr: stderrTail, code: 1 }));
+    proc.on("error", () => resolve({ stdout: finalAssistantText || assistantOutputText || stdoutTail.trim(), stderr: stderrTail, code: 1 }));
     if (signal) {
       const abort = () => proc.kill("SIGTERM");
       if (signal.aborted) abort();

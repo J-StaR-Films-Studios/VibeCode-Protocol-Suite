@@ -3,6 +3,7 @@ import type { ChecklistInput } from "./shared";
 export type SubagentViewMode = "compact" | "expanded" | "fullscreen";
 export type SubagentFocusDirection = "next" | "prev";
 export type TakomiSubagentStatus = "running" | "completed" | "blocked";
+export type TakomiBoardTaskStatus = "pending" | "in-progress" | "completed" | "blocked";
 export type TakomiSubagentSource = "runtime-board" | "takomi-tool";
 export const TAKOMI_SUBAGENT_EVENT_CHANNEL = "takomi:subagent-runtime";
 
@@ -18,7 +19,9 @@ export type TakomiSubagentRun = {
   workflow?: string;
   model?: string;
   checklist?: ChecklistInput;
+  boardTaskStatus?: TakomiBoardTaskStatus;
   summary?: string;
+  outputText?: string;
   logs: string[];
   startedAt: number;
   updatedAt: number;

@@ -69,6 +69,7 @@ type RunHooks = {
 };
 
 type JsonRunHooks = {
+  onAssistantText?: (text: string) => void;
   onEventText?: (line: string) => void;
   onStderr?: (chunk: string) => void;
 };
@@ -96,6 +97,55 @@ function extractAssistantText(message: unknown): string {
     .trim();
 }
 
+function normalizeAssistantOutputText(value: string): string {
+  return value
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function extractAssistantSnapshot(event: Record<string, unknown>, currentText: string): string | undefined {
+  const type = typeof event.type === "string" ? event.type : "";
+
+  if (type === "message_update") {
+    const assistantEvent = event.assistantMessageEvent;
+    if (assistantEvent && typeof assistantEvent === "object") {
+      const delta = (assistantEvent as { delta?: unknown }).delta;
+      if (typeof delta === "string" && delta) {
+        const next = normalizeAssistantOutputText(`${currentText}${delta}`);
+        return next && next !== currentText ? next : undefined;
+      }
+    }
+
+    const messageText = normalizeAssistantOutputText(extractAssistantText(event.message));
+    return messageText && messageText !== currentText ? messageText : undefined;
+  }
+
+  if (type === "message_end") {
+    const message = event.message;
+    if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+      const messageText = normalizeAssistantOutputText(extractAssistantText(message));
+      return messageText && messageText !== currentText ? messageText : undefined;
+    }
+  }
+
+  if (type === "agent_end") {
+    const messages = (event.messages as unknown[] | undefined) ?? [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
+        const messageText = normalizeAssistantOutputText(extractAssistantText(message));
+        return messageText && messageText !== currentText ? messageText : undefined;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 function summarizeJsonEvent(event: Record<string, unknown>): string | undefined {
   const type = typeof event.type === "string" ? event.type : "";
   if (type === "tool_execution_start") {
@@ -120,22 +170,6 @@ function summarizeJsonEvent(event: Record<string, unknown>): string | undefined 
     const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
     const isError = event.isError === true;
     return isError ? `Tool failed: ${toolName}` : `Tool complete: ${toolName}`;
-  }
-  if (type === "message_update") {
-    const assistantEvent = event.assistantMessageEvent;
-    if (assistantEvent && typeof assistantEvent === "object") {
-      const delta = (assistantEvent as { delta?: unknown }).delta;
-      if (typeof delta === "string" && delta.trim()) return delta.trim();
-    }
-    const messageText = extractAssistantText(event.message);
-    if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
-  }
-  if (type === "message_end") {
-    const message = event.message;
-    if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
-      const messageText = extractAssistantText(message);
-      if (messageText) return messageText.split(/\r?\n/).find(Boolean)?.trim();
-    }
   }
   return undefined;
 }
@@ -174,6 +208,7 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
     let stderrTail = "";
     let lineBuffer = "";
     let finalAssistantText = "";
+    let assistantOutputText = "";
 
     const consumeLine = (line: string) => {
       const trimmed = line.trim();
@@ -181,6 +216,12 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
       stdoutTail = appendCappedTail(stdoutTail, `${line}\n`);
       try {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
+        const assistantText = extractAssistantSnapshot(event, assistantOutputText);
+        if (assistantText !== undefined) {
+          assistantOutputText = assistantText;
+          hooks?.onAssistantText?.(assistantText);
+        }
+
         const messageText = summarizeJsonEvent(event);
         if (messageText) hooks?.onEventText?.(messageText);
 
@@ -188,7 +229,7 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
           const message = event.message;
           if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
             const text = extractAssistantText(message);
-            if (text) finalAssistantText = text;
+            if (text) finalAssistantText = normalizeAssistantOutputText(text);
           }
         }
         if (event.type === "agent_end") {
@@ -198,7 +239,7 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
             if (message && typeof message === "object" && (message as { role?: string }).role === "assistant") {
               const text = extractAssistantText(message);
               if (text) {
-                finalAssistantText = text;
+                finalAssistantText = normalizeAssistantOutputText(text);
                 break;
               }
             }
@@ -226,9 +267,9 @@ async function runAgentJson(cwd: string, args: string[], signal?: AbortSignal, h
     });
     proc.on("close", (code) => {
       if (lineBuffer.trim()) consumeLine(lineBuffer);
-      resolve({ stdout: finalAssistantText || stdoutTail.trim(), stderr: stderrTail, code: code ?? 0 });
+      resolve({ stdout: finalAssistantText || assistantOutputText || stdoutTail.trim(), stderr: stderrTail, code: code ?? 0 });
     });
-    proc.on("error", () => resolve({ stdout: finalAssistantText || stdoutTail.trim(), stderr: stderrTail, code: 1 }));
+    proc.on("error", () => resolve({ stdout: finalAssistantText || assistantOutputText || stdoutTail.trim(), stderr: stderrTail, code: 1 }));
     if (signal) {
       const abort = () => proc.kill("SIGTERM");
       if (signal.aborted) abort();
@@ -427,6 +468,9 @@ export default function takomiSubagents(pi: ExtensionAPI) {
         if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
 
         const result = await runAgentJson(subagentCwd, args, signal, {
+          onAssistantText: (text) => {
+            emitRuntimeSubagentEvent(pi, { type: "update", runKey: conversationId, patch: { outputText: text } });
+          },
           onEventText: (line) => {
             emitRuntimeSubagentEvent(pi, { type: "appendLog", runKey: conversationId, chunk: line });
           },
@@ -454,6 +498,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
             patch: {
               model: preflight.model,
               summary: `Subagent ${config.name} failed.`,
+              outputText: result.stdout.trim() || undefined,
               logs: [result.stderr || result.stdout || "No output"],
             },
           });
@@ -470,7 +515,7 @@ export default function takomiSubagents(pi: ExtensionAPI) {
           patch: {
             model: preflight.model,
             summary: previousOutput || `Subagent ${config.name} run finished. Checklist-validated task completion is still a board action.`,
-            logs: previousOutput ? [previousOutput] : [],
+            outputText: previousOutput || undefined,
           },
         });
       }

@@ -78,6 +78,8 @@ Behavior:
 - successful child completion folds back into the parent context and then into compact summary history
 - blocked/failed cards remain visible for intervention
 - on narrow terminals, the stack compresses to a minimal summary widget
+- the below-editor expanded state must remain intentionally short and glanceable rather than acting like a full transcript dump
+- detailed reading and manual scrolling belong to fullscreen, not to the anchored widget
 
 ### Layer C - Secondary Context Panel
 **Placement:** right-side non-capturing overlay
@@ -152,6 +154,8 @@ Avoid:
 - the controller should own view mode, focus, and fullscreen lifecycle for every run
 - raw output should stay trimmed to a short recent tail
 - the deepest active card should always be visually dominant
+- expanded widget mode should show a short stack snapshot plus live tail, never a giant scroll-less wall
+- fullscreen should auto-follow new output until the user scrolls away, then stop fighting manual inspection
 
 ### Transcript collapse rules
 - success state: green/jade emphasis when a task settles into history
@@ -210,6 +214,8 @@ Avoid:
 - the active card includes agent, task, workflow, conversation id, and live/recent output context
 - successful completion folds back into the parent and then into visible compact summary state
 - failures remain visible instead of auto-minimizing
+- expanded mode remains small enough to avoid Pi widget truncation in normal terminal sizes
+- fullscreen provides keyboard scrolling and a clear live-tail return path
 
 ### Practicality
 - the UI remains usable in normal terminal widths

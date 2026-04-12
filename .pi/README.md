@@ -58,7 +58,9 @@ Inside Pi, use:
 - The subagent tool supports `conversationId`, so reviewed work can be sent back to the same agent for continuation instead of restarting from scratch.
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, and `checklist` overrides.
 - Active subagent work now stays anchored below the editor so it remains visible near the input/footer while transcript history scrolls independently.
-- Use `/takomi-subagent-toggle` or `Alt+T` to expand or collapse the live Takomi subagent surface.
+- `Alt+T` cycles the live Takomi surface through compact stack, bounded expanded stack, and fullscreen detail.
+- The expanded below-editor widget is intentionally short so Pi does not truncate it into an unusable wall of text.
+- Fullscreen is the detailed reading mode and supports `Up`/`Down`, `PgUp`/`PgDn`, `Home`, `End`, `j`, and `k` for scrolling.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default
   - expand a lifecycle stage into additional tasks

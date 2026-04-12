@@ -4,7 +4,7 @@ import {
   renderSubagentStatus,
   renderSubagentWidget,
 } from "./subagent-render";
-import { sanitizeLogChunk } from "./shared";
+import { appendLiveLogChunk } from "./shared";
 import type {
   SubagentFocusDirection,
   SubagentViewMode,
@@ -70,12 +70,11 @@ class TakomiSharedSubagentController implements TakomiSubagentController {
     if (!resolvedRunKey) return;
     const current = this.runs.get(resolvedRunKey);
     if (!current) return;
-    const lines = sanitizeLogChunk(chunk);
-    if (!lines.length) return;
+    const logs = appendLiveLogChunk(current.logs, chunk);
+    if (logs.length === current.logs.length && logs.at(-1) === current.logs.at(-1)) return;
     this.runs.set(resolvedRunKey, {
       ...current,
-      logs: [...current.logs, ...lines].slice(-60),
-      summary: lines.at(-1) ?? current.summary,
+      logs,
       updatedAt: Date.now(),
     });
     this.lastCtx = ctx;
@@ -237,8 +236,8 @@ class TakomiSharedSubagentController implements TakomiSubagentController {
       {
         overlay: true,
         overlayOptions: {
-          width: "85%",
-          maxHeight: "85%",
+          width: "88%",
+          maxHeight: 20,
           anchor: "center",
         },
       },
@@ -260,7 +259,7 @@ class TakomiSharedSubagentController implements TakomiSubagentController {
 
   private resolveRunKey(runKey?: string, patch?: TakomiSubagentRunPatch): string | undefined {
     const explicit = runKey ?? patch?.conversationId;
-    if (explicit && this.runs.has(explicit)) return explicit;
+    if (explicit) return this.runs.has(explicit) ? explicit : undefined;
     if (this.focusedRunKey && this.runs.has(this.focusedRunKey)) return this.focusedRunKey;
     return this.getOrderedRuns()[0]?.runKey;
   }
