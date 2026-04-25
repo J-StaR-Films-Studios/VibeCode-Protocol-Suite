@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import { discoverProjectAgents, type TakomiAgentConfig } from "./agents";
 import {
   TAKOMI_SUBAGENT_EVENT_CHANNEL,

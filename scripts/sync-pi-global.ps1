@@ -108,6 +108,11 @@ $directoryLinks = @(
         Source = Join-Path $repoPiRoot 'extensions\takomi-subagents'
     },
     @{
+        Label = 'oauth-router'
+        Destination = Join-Path $globalAgentExtensions 'oauth-router'
+        Source = Join-Path $repoPiRoot 'extensions\oauth-router'
+    },
+    @{
         Label = 'takomi-prompts'
         Destination = Join-Path $globalAgentPrompts 'takomi-prompts'
         Source = Join-Path $repoPiRoot 'prompts'
