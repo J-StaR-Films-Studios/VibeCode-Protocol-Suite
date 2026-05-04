@@ -410,8 +410,13 @@ export async function getAvailableModelKeys(ctx: ExtensionContext): Promise<stri
   }
 }
 
-export async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, fallback?: string): Promise<{ model?: string; warning?: string }> {
-  const candidates = [requested, fallback].filter(Boolean) as string[];
+function modelCandidates(requested?: string, fallback?: string | string[]): string[] {
+  const fallbackList = Array.isArray(fallback) ? fallback : fallback ? [fallback] : [];
+  return [requested, ...fallbackList].filter(Boolean) as string[];
+}
+
+export async function resolvePreferredModel(ctx: ExtensionContext, requested?: string, fallback?: string | string[]): Promise<{ model?: string; warning?: string }> {
+  const candidates = modelCandidates(requested, fallback);
   if (candidates.length === 0) return {};
   const keys = await getAvailableModelKeys(ctx);
   const exact = candidates.find((candidate) => keys.includes(candidate));
@@ -450,10 +455,10 @@ export async function listModelsViaPi(cwd: string, signal?: AbortSignal): Promis
   return { ok: result.code === 0 && Boolean(output), output: output || "No model list output returned." };
 }
 
-export async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?: string, fallback?: string, signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
+export async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?: string, fallback?: string | string[], signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
   const cli = await listModelsViaPi(cwd, signal);
   const resolved = await resolvePreferredModel(ctx, requested, fallback);
-  const requestedSummary = [requested, fallback].filter(Boolean).join(" -> ") || "auto";
+  const requestedSummary = modelCandidates(requested, fallback).join(" -> ") || "auto";
   const status = resolved.model
     ? `Selected model: ${resolved.model}`
     : `No confirmed model matched request: ${requestedSummary}`;

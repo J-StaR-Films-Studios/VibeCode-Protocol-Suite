@@ -4,6 +4,33 @@ export type TakomiWorkflowId = "vibe-genesis" | "vibe-design" | "vibe-build";
 
 export type VibeLifecycleStage = "genesis" | "design" | "build";
 
+export type TakomiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export type TakomiDispatchPolicy = "direct" | "subagent" | "review-first";
+
+export type TakomiDispatchDefaults = {
+  agent?: string;
+  model?: string;
+  fallbackModels?: string[];
+  thinking?: TakomiThinkingLevel;
+  dispatchPolicy?: TakomiDispatchPolicy;
+};
+
+export type TakomiReviewProfile = {
+  enabled: boolean;
+  agent?: string;
+  maxIterations?: number;
+  sameConversation: boolean;
+};
+
+export type TakomiProfile = {
+  version: 1;
+  autoOrchestrate: boolean;
+  roles?: Partial<Record<TakomiRole, TakomiDispatchDefaults>>;
+  stages?: Partial<Record<VibeLifecycleStage, TakomiDispatchDefaults>>;
+  review?: TakomiReviewProfile;
+};
+
 export type WorkflowDefinition = {
   id: TakomiWorkflowId;
   stage: VibeLifecycleStage;
@@ -42,6 +69,9 @@ export type OrchestratorTask = {
   preferredAgent?: string;
   preferredModelHint?: string;
   preferredModel?: string;
+  preferredThinking?: TakomiThinkingLevel;
+  fallbackModels?: string[];
+  dispatchPolicy?: TakomiDispatchPolicy;
   skills?: string[];
   checklist?: TaskChecklistItem[];
   objective?: string;

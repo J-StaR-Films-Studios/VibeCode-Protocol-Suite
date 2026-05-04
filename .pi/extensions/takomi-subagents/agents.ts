@@ -2,15 +2,40 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 
 export type TakomiAgentConfig = {
   name: string;
   description: string;
   tools?: string[];
   model?: string;
+  fallbackModels?: string[];
+  thinking?: TakomiThinkingLevel;
   systemPrompt: string;
   filePath: string;
 };
+
+function splitList(value?: string): string[] | undefined {
+  const parts = value
+    ?.split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts?.length ? parts : undefined;
+}
+
+function normalizeThinking(value?: string): TakomiThinkingLevel | undefined {
+  if (
+    value === "off"
+    || value === "minimal"
+    || value === "low"
+    || value === "medium"
+    || value === "high"
+    || value === "xhigh"
+  ) {
+    return value;
+  }
+  return undefined;
+}
 
 function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
   if (!fs.existsSync(agentsDir)) return [];
@@ -25,16 +50,13 @@ function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
     const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
     if (!frontmatter.name || !frontmatter.description) continue;
 
-    const tools = frontmatter.tools
-      ?.split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
-
     agents.push({
       name: frontmatter.name,
       description: frontmatter.description,
-      tools,
+      tools: splitList(frontmatter.tools),
       model: frontmatter.model,
+      fallbackModels: splitList(frontmatter.fallbackModels ?? frontmatter.fallback_models),
+      thinking: normalizeThinking(frontmatter.thinking),
       systemPrompt: body,
       filePath,
     });

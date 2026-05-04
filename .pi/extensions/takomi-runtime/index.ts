@@ -23,11 +23,15 @@ import {
   type OrchestratorTask,
   type OrchestratorSessionState,
   type OrchestratorTaskStatus,
+  type TakomiDispatchPolicy,
+  type TakomiProfile,
   type TakomiRole,
+  type TakomiThinkingLevel,
   type TakomiWorkflowId,
   type VibeLifecycleStage,
 } from "../../../src/pi-takomi-core";
 import { discoverProjectAgents, type TakomiAgentConfig } from "../takomi-subagents/agents";
+import { dispatchTakomiSubagent } from "../takomi-subagents/dispatch";
 import {
   renderRuntimeStatus,
   renderRuntimeWidget,
@@ -43,13 +47,15 @@ import {
   visibleWidth,
   truncateToWidth,
   formatFooterNumber,
-  writeTempPrompt,
   buildTaskPrompt,
-  runPiAgentJson,
   resolvePreferredModel,
-  runModelPreflight,
 } from "./shared";
 import { TakomiContextPanel, wireContextPanel } from "./context-panel";
+import {
+  DEFAULT_TAKOMI_PROFILE,
+  getProfileDefaults,
+  loadTakomiProfile,
+} from "./profile";
 
 type TakomiState = {
   enabled: boolean;
@@ -63,12 +69,24 @@ type TakomiState = {
 
 const DEFAULT_STATE: TakomiState = {
   enabled: true,
-  autoOrch: false,
+  autoOrch: true,
   planMode: false,
   role: "general",
 };
 
 const STATE_ENTRY = "takomi-runtime-state";
+
+let activeProfile: TakomiProfile = DEFAULT_TAKOMI_PROFILE;
+let activeSubagentLabel: string | undefined;
+
+const ThinkingSchema = Type.Union([
+  Type.Literal("off"),
+  Type.Literal("minimal"),
+  Type.Literal("low"),
+  Type.Literal("medium"),
+  Type.Literal("high"),
+  Type.Literal("xhigh"),
+]);
 
 function cloneState(state: TakomiState): TakomiState {
   return { ...state };
@@ -160,7 +178,7 @@ function shouldAutoRoute(text: string): boolean {
 }
 
 function buildTaskRows(tasks: OrchestratorTask[]): string {
-  return tasks.map((task) => `${task.id}: ${task.stage ?? "-"} | ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
+  return tasks.map((task) => `${task.id}: ${task.stage ?? "-"} | ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.preferredThinking ? ` | thinking=${task.preferredThinking}` : ""}${task.dispatchPolicy ? ` | dispatch=${task.dispatchPolicy}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
 }
 
 function resolveTaskAgent(task: OrchestratorTask): string {
@@ -327,6 +345,9 @@ type IncomingTask = {
   preferredAgent?: string;
   preferredModel?: string;
   preferredModelHint?: string;
+  preferredThinking?: TakomiThinkingLevel;
+  fallbackModels?: string[];
+  dispatchPolicy?: TakomiDispatchPolicy;
   skills?: string[];
   checklist?: Array<string | { text: string; done?: boolean }>;
   objective?: string;
@@ -348,15 +369,25 @@ async function materializeTasksFromInput(
   const nextTasks = [...currentTasks];
 
   for (const task of incoming) {
-    const resolvedModel = await resolvePreferredModel(ctx, task.preferredModel);
+    const stage = task.stage ?? stageOverride;
+    const defaults = getProfileDefaults(activeProfile, task.role, stage);
+    const fallbackModels = [
+      ...(task.fallbackModels ?? []),
+      ...(defaults.fallbackModels ?? []),
+    ];
+    const requestedModel = task.preferredModel ?? defaults.model;
+    const resolvedModel = await resolvePreferredModel(ctx, requestedModel, fallbackModels);
     const id = task.id ?? getNextTaskId(nextTasks);
     nextTasks.push(createTask(id, task.title, task.role, {
-      stage: task.stage ?? stageOverride,
+      stage,
       workflow: task.workflow,
       parentTaskId: task.parentTaskId,
-      preferredAgent: task.preferredAgent,
+      preferredAgent: task.preferredAgent ?? defaults.agent,
       preferredModel: resolvedModel.model,
       preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
+      preferredThinking: task.preferredThinking ?? defaults.thinking,
+      fallbackModels: fallbackModels.length ? fallbackModels : undefined,
+      dispatchPolicy: task.dispatchPolicy ?? defaults.dispatchPolicy,
       skills: task.skills,
       checklist: (task.checklist ?? []).map((item) => typeof item === "string" ? { text: item } : item),
       objective: task.objective,
@@ -370,6 +401,29 @@ async function materializeTasksFromInput(
     }));
   }
 
+  return nextTasks;
+}
+
+async function applyProfileDefaultsToTasks(ctx: ExtensionContext, tasks: OrchestratorTask[]): Promise<OrchestratorTask[]> {
+  const nextTasks: OrchestratorTask[] = [];
+  for (const task of tasks) {
+    const defaults = getProfileDefaults(activeProfile, task.role, task.stage);
+    const fallbackModels = [
+      ...(task.fallbackModels ?? []),
+      ...(defaults.fallbackModels ?? []),
+    ];
+    const requestedModel = task.preferredModel ?? defaults.model;
+    const resolvedModel = await resolvePreferredModel(ctx, requestedModel, fallbackModels);
+    nextTasks.push({
+      ...task,
+      preferredAgent: task.preferredAgent ?? defaults.agent,
+      preferredModel: resolvedModel.model,
+      preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
+      preferredThinking: task.preferredThinking ?? defaults.thinking,
+      fallbackModels: fallbackModels.length ? fallbackModels : undefined,
+      dispatchPolicy: task.dispatchPolicy ?? defaults.dispatchPolicy,
+    });
+  }
   return nextTasks;
 }
 
@@ -461,10 +515,21 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       activeSessionId: state.activeSessionId,
       autoOrch: state.autoOrch,
       planMode: state.planMode,
+      activeSubagent: activeSubagentLabel,
     });
   }
 
   async function applySubagentRuntimeEvent(event: TakomiSubagentRuntimeEvent, ctx: ExtensionContext): Promise<void> {
+    if (event.type === "start") {
+      activeSubagentLabel = `${event.state.agent}: ${event.state.taskLabel}`;
+      syncContextPanelState();
+    } else if ((event.type === "update" || event.type === "complete" || event.type === "block") && event.patch) {
+      const model = event.patch.model ? ` @ ${event.patch.model}` : "";
+      const thinking = event.patch.thinking ? ` (${event.patch.thinking})` : "";
+      const label = event.patch.summary?.split(/\r?\n/).find(Boolean);
+      if (label) activeSubagentLabel = `${label}${model}${thinking}`;
+      syncContextPanelState();
+    }
     switch (event.type) {
       case "start":
         await subagentController.start(ctx, event.state, event.runKey);
@@ -601,7 +666,14 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     description: "Create a default Genesis → Design → Build orchestrator session",
     handler: async (args, ctx) => {
       const title = args.trim() || "Takomi Project";
-      const session = createLifecycleStarterSession(title);
+      const starter = createLifecycleStarterSession(title);
+      const session = buildSessionState(
+        starter.sessionId,
+        starter.title,
+        await applyProfileDefaultsToTasks(ctx, starter.tasks),
+        new Date(),
+        { sessionIntent: starter.sessionIntent, lifecycle: starter.lifecycle },
+      );
       const paths = await writeOrchestratorSession(ctx.cwd, session);
       await updateState(ctx, () => {
         state.activeSessionId = session.sessionId;
@@ -758,6 +830,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       await updateState(ctx, () => {
         state = cloneState(DEFAULT_STATE);
+        activeSubagentLabel = undefined;
       }, "Takomi runtime state reset");
       subagentController.reset(ctx);
       contextPanel.resetSession();
@@ -829,6 +902,9 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         preferredAgent: Type.Optional(Type.String()),
         preferredModel: Type.Optional(Type.String()),
         preferredModelHint: Type.Optional(Type.String()),
+        preferredThinking: Type.Optional(ThinkingSchema),
+        fallbackModels: Type.Optional(Type.Array(Type.String())),
+        dispatchPolicy: Type.Optional(StringEnum(["direct", "subagent", "review-first"] as const)),
         skills: Type.Optional(Type.Array(Type.String())),
         checklist: Type.Optional(Type.Array(Type.Union([
           Type.String(),
@@ -973,84 +1049,41 @@ ${stateJson}` }],
             })()
           : undefined;
 
-        await subagentController.start(ctx, {
-          agent: agentName,
-          taskLabel: `${task.id} - ${task.title}`,
-          stage: task.stage,
+        const result = await dispatchTakomiSubagent(ctx, {
+          agent: config,
+          task: task.notes || task.title,
+          rootCwd: ctx.cwd,
           workflow: task.workflow,
+          skills: task.skills,
+          model: task.preferredModel,
+          fallbackModels: task.fallbackModels,
+          thinking: task.preferredThinking,
           conversationId,
+          checklist: task.checklist,
+          stage: task.stage,
+          taskLabel: `${task.id} - ${task.title}`,
           parentTaskId: task.parentTaskId,
           parentRunKey,
-          checklist: task.checklist,
           boardTaskStatus: task.status,
-          summary: params.action === "review_and_redispatch"
-            ? "Review feedback accepted. Relaunching the same specialist thread."
-            : "Redispatching task to the preferred specialist.",
           source: "runtime-board",
-        }, runKey);
-
-        const promptPath = await writeTempPrompt(config.name, [
-          config.systemPrompt,
-          task.workflow ? `\nUse the ${task.workflow} workflow for this task.` : "",
-          task.skills?.length ? `\nUse these skills when relevant: ${task.skills.join(", ")}.` : "",
-        ].filter(Boolean).join("\n"));
-        const sessionPath = path.join(ctx.cwd, ".pi", "takomi", "subagents", `${conversationId}.jsonl`);
-        await mkdir(path.dirname(sessionPath), { recursive: true });
-        const preflight = await runModelPreflight(ctx, ctx.cwd, task.preferredModel, config.model, _signal);
-        task.notes = appendTaskNote(task.notes, "Model preflight", preflight.report);
-        if (preflight.model) {
-          task.preferredModel = preflight.model;
-          await subagentController.update(ctx, { model: preflight.model, boardTaskStatus: task.status, checklist: task.checklist, summary: `Model ready: ${preflight.model}` }, runKey);
-        }
-        if (preflight.warning) {
-          task.notes = appendTaskNote(task.notes, "Model fallback", preflight.warning);
-          if (ctx.hasUI) ctx.ui.notify(preflight.warning, "warning");
-          await subagentController.update(ctx, { boardTaskStatus: task.status, checklist: task.checklist, summary: preflight.warning }, runKey);
-        }
-        if (!preflight.model) {
-          task.status = "blocked";
-          nextState = buildSessionState(
-            sessionState.sessionId,
-            sessionState.title,
-            sessionState.tasks,
-            new Date(),
-            {
-              sessionIntent: sessionState.sessionIntent,
-              lifecycle: sessionState.lifecycle,
-            },
-          );
-          await syncTaskArtifacts(ctx.cwd, nextState);
-          await subagentController.block(ctx, {
-            model: task.preferredModel,
-            boardTaskStatus: task.status,
-            checklist: task.checklist,
-            summary: "Redispatch blocked before launch.",
-            logs: [...(task.notes ? [task.notes] : []), preflight.report],
-          }, runKey);
-          return {
-            content: [{ type: "text", text: `Redispatch blocked before launch.\n\n${preflight.report}` }],
-            details: { sessionId: params.sessionId, task, paths, preflight },
-            isError: true,
-          };
-        }
-        const args = ["--mode", "json", "--append-system-prompt", promptPath, "--session", sessionPath, buildSubagentTaskPrompt(task, params.rerunInstructions)];
-        args.unshift("--model", preflight.model);
-        if (config.tools?.length) args.unshift("--tools", config.tools.join(","));
-        const result = await runPiAgentJson(ctx.cwd, args, _signal, {
-          onAssistantText: (text) => {
-            void subagentController.update(ctx, { outputText: text, boardTaskStatus: task.status, checklist: task.checklist }, runKey);
-          },
-          onEventText: (line) => {
-            void subagentController.appendLog(ctx, line, runKey);
-          },
-          onStderr: (chunk) => {
-            void subagentController.appendLog(ctx, chunk, runKey);
+          rerunInstructions: params.rerunInstructions,
+        }, _signal, {
+          emit: (event) => {
+            void applySubagentRuntimeEvent(event, ctx);
           },
         });
 
+        task.notes = appendTaskNote(task.notes, "Model preflight", result.preflight);
+        if (result.model) task.preferredModel = result.model;
+        if (result.warning) {
+          task.notes = appendTaskNote(task.notes, "Model fallback", result.warning);
+          if (ctx.hasUI) ctx.ui.notify(result.warning, "warning");
+        }
+        if (result.thinking) task.preferredThinking = result.thinking;
+
         if (result.code !== 0) {
           task.status = "blocked";
-          task.notes = appendTaskNote(task.notes, "Redispatch failure", result.stderr.trim() || result.stdout.trim());
+          task.notes = appendTaskNote(task.notes, "Redispatch failure", result.stderr || result.output);
           nextState = buildSessionState(
             sessionState.sessionId,
             sessionState.title,
@@ -1062,29 +1095,14 @@ ${stateJson}` }],
             },
           );
           await syncTaskArtifacts(ctx.cwd, nextState);
-          await subagentController.block(ctx, {
-            model: task.preferredModel,
-            boardTaskStatus: task.status,
-            checklist: task.checklist,
-            summary: `Redispatch failed for ${task.id}.`,
-            outputText: result.stdout.trim() || undefined,
-            logs: [result.stderr || result.stdout || "No output"],
-          }, runKey);
           return {
-            content: [{ type: "text", text: `Redispatch failed for task ${task.id}.\n\n${result.stderr || result.stdout || "No output"}` }],
-            details: { sessionId: params.sessionId, task, paths },
+            content: [{ type: "text", text: `Redispatch failed for task ${task.id}.\n\n${result.stderr || result.output || "No output"}` }],
+            details: { sessionId: params.sessionId, task, paths, result },
             isError: true,
           };
         }
 
-        task.notes = appendTaskNote(task.notes, "Last redispatch output", result.stdout.trim());
-        await subagentController.complete(ctx, {
-          model: task.preferredModel,
-          boardTaskStatus: task.status,
-          checklist: task.checklist,
-          summary: result.stdout.trim() || `Subagent run finished for task ${task.id}. Board completion still requires checklist validation.`,
-          outputText: result.stdout.trim() || undefined,
-        }, runKey);
+        task.notes = appendTaskNote(task.notes, "Last redispatch output", result.output);
         nextState = buildSessionState(
           sessionState.sessionId,
           sessionState.title,
@@ -1097,8 +1115,8 @@ ${stateJson}` }],
         );
         await syncTaskArtifacts(ctx.cwd, nextState);
         return {
-          content: [{ type: "text", text: `${preflight.report}\n\n${result.stdout.trim() || `Redispatched task ${task.id} to ${agentName}.`}` }],
-          details: { sessionId: params.sessionId, task, paths, lifecycle: nextState.lifecycle, agent: agentName, conversationId: task.conversationId, action: params.action, preflight },
+          content: [{ type: "text", text: `${result.preflight}\n\n${result.output || `Redispatched task ${task.id} to ${agentName}.`}` }],
+          details: { sessionId: params.sessionId, task, paths, lifecycle: nextState.lifecycle, agent: agentName, conversationId: task.conversationId, action: params.action, result },
         };
       }
 
@@ -1138,7 +1156,7 @@ ${stateJson}` }],
         : createLifecycleStarterSession(title, { sessionId });
       const tasks = params.tasks?.length
         ? await materializeTasksFromInput(ctx, baseState.tasks, params.tasks as IncomingTask[], params.stage)
-        : baseState.tasks;
+        : await applyProfileDefaultsToTasks(ctx, baseState.tasks);
       const nextState = buildSessionState(
         baseState.sessionId,
         baseState.title,
@@ -1256,6 +1274,8 @@ ${stateJson}` }],
 
   pi.on("session_start", async (_event, ctx) => {
     runtimeCtx = ctx;
+    activeProfile = await loadTakomiProfile(ctx.cwd);
+    activeSubagentLabel = undefined;
     subagentController.reset(ctx);
     contextPanel.resetSession();
     const entries = ctx.sessionManager.getEntries();
@@ -1265,6 +1285,12 @@ ${stateJson}` }],
         state = { ...DEFAULT_STATE, ...entry.data };
         break;
       }
+    }
+    if (!entries.some((entry) => {
+      const item = entry as { type: string; customType?: string };
+      return item.type === "custom" && item.customType === STATE_ENTRY;
+    })) {
+      state.autoOrch = activeProfile.autoOrchestrate;
     }
 
     syncContextPanelState();

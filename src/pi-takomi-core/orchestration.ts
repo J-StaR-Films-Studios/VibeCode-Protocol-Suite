@@ -137,6 +137,9 @@ export function createTask(id: string, title: string, role: TakomiRole, extras?:
     conversationId: extras?.conversationId ?? createConversationId(preferredAgent, id),
     preferredModel: extras?.preferredModel,
     preferredModelHint: extras?.preferredModelHint,
+    preferredThinking: extras?.preferredThinking,
+    fallbackModels: extras?.fallbackModels,
+    dispatchPolicy: extras?.dispatchPolicy,
     skills: extras?.skills,
     checklist: normalizeChecklist(extras?.checklist),
   };
@@ -186,7 +189,7 @@ export function renderMasterPlan(sessionOrId: OrchestratorSessionState | string,
     : normalizeSessionState(sessionOrId);
 
   const rows = state.tasks
-    .map((task) => `| ${task.id} | ${task.stage ?? "-"} | ${task.title} | ${task.status} | ${task.role} | ${task.preferredAgent ?? "-"} | ${task.workflow ?? "-"} | ${task.preferredModel ?? task.preferredModelHint ?? "-"} | ${task.skills?.join(", ") ?? "-"} |`)
+    .map((task) => `| ${task.id} | ${task.stage ?? "-"} | ${task.title} | ${task.status} | ${task.role} | ${task.preferredAgent ?? "-"} | ${task.workflow ?? "-"} | ${task.preferredModel ?? task.preferredModelHint ?? "-"} | ${task.preferredThinking ?? "-"} | ${task.dispatchPolicy ?? "-"} | ${task.skills?.join(", ") ?? "-"} |`)
     .join("\n");
 
   return [
@@ -201,9 +204,9 @@ export function renderMasterPlan(sessionOrId: OrchestratorSessionState | string,
     ...renderLifecycleSummary(state),
     "## Tasks",
     "",
-    "| ID | Stage | Title | Status | Role | Preferred Agent | Workflow | Model | Skills |",
-    "|---|---|---|---|---|---|---|---|---|",
-    rows || "| - | - | No tasks yet | - | - | - | - | - | - |",
+    "| ID | Stage | Title | Status | Role | Preferred Agent | Workflow | Model | Thinking | Dispatch | Skills |",
+    "|---|---|---|---|---|---|---|---|---|---|---|",
+    rows || "| - | - | No tasks yet | - | - | - | - | - | - | - | - |",
     "",
     "## Notes",
     "",
@@ -228,6 +231,9 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     `**Workflow:** ${task.workflow ?? "-"}`,
     task.preferredModel ? `**Model Override:** ${task.preferredModel}` : "",
     task.preferredModelHint ? `**Model Hint:** ${task.preferredModelHint}` : "",
+    task.fallbackModels?.length ? `**Fallback Models:** ${task.fallbackModels.join(", ")}` : "",
+    task.preferredThinking ? `**Thinking Level:** ${task.preferredThinking}` : "",
+    task.dispatchPolicy ? `**Dispatch Policy:** ${task.dispatchPolicy}` : "",
     task.skills?.length ? `**Required Skills:** ${task.skills.join(", ")}` : "",
     "",
     "## Context",

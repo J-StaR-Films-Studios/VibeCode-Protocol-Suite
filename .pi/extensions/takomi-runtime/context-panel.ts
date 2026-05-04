@@ -37,6 +37,7 @@ export type ContextRuntimeState = {
   activeSessionId?: string;
   autoOrch?: boolean;
   planMode?: boolean;
+  activeSubagent?: string;
 };
 
 export type ContextPanelState = {
@@ -109,6 +110,9 @@ class ContextPanelComponent implements Component {
 
       if (ctx.model) {
         lines.push(`${pad}${theme.fg("dim", "Model:")}   ${theme.fg("muted", ellipsizeMiddle(ctx.model.id, innerWidth - 10))}`);
+      }
+      if (state.runtime.activeSubagent) {
+        lines.push(`${pad}${theme.fg("dim", "Agent:")}   ${theme.fg("muted", truncateToWidth(state.runtime.activeSubagent, innerWidth - 10))}`);
       }
 
       const modeFlags = [

@@ -65,6 +65,8 @@ function metadata(run: TakomiSubagentRun, includeThread: boolean): string[] {
   if (run.stage) lines.push(`stage:${run.stage}`);
   if (run.workflow) lines.push(`flow:${run.workflow}`);
   if (run.model) lines.push(`model:${ellipsizeMiddle(run.model, 28)}`);
+  if (run.thinking) lines.push(`think:${run.thinking}`);
+  if (run.fallbackModels?.length) lines.push(`fallbacks:${run.fallbackModels.length}`);
   if (includeThread && run.conversationId) lines.push(`thread:${ellipsizeMiddle(run.conversationId, 20)}`);
   if (isBoardBackedRun(run)) {
     const taskState = boardStatusLabel(run.boardTaskStatus);
@@ -174,6 +176,7 @@ function renderCompactCard(theme: Theme, entry: TakomiSubagentRenderEntry, width
   const metaParts = [
     ...metadata(run, false),
     checklistText(run) ? `tasks:${checklistText(run)}` : "",
+    run.logs.length ? `activity:${run.logs.length}` : "",
     formatDuration(Date.now() - run.startedAt),
   ].filter(Boolean);
   
@@ -368,6 +371,8 @@ export function renderSubagentStatus(theme: Theme, state: TakomiSubagentRenderSt
   const parts = [
     theme.fg(tone, displayIcon(run)),
     theme.fg("dim", `${run.agent} ${displayLabel(run).toLowerCase()} ${ellipsizeMiddle(run.taskLabel, 36)}`),
+    run.model ? theme.fg("dim", ellipsizeMiddle(run.model, 24)) : "",
+    run.thinking ? theme.fg("dim", `think:${run.thinking}`) : "",
     state.activeCount > 1 ? theme.fg("dim", `+${state.activeCount - 1} more`) : "",
   ].filter(Boolean);
   return parts.join(" ");
