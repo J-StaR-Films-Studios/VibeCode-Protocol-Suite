@@ -29,6 +29,7 @@ export function createTakomiLiveUpdateBridge(
 ) {
   const results: TakomiDispatchResult[] = tasks.map((task, index) => ({
     agent: task.agent,
+    task: task.task,
     workflow: task.workflow,
     model: task.model,
     thinking: task.thinking,

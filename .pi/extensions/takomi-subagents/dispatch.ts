@@ -43,6 +43,7 @@ export type TakomiDispatchInput = {
 
 export type TakomiDispatchResult = {
   agent: string;
+  task: string;
   workflow?: string;
   model?: string;
   warning?: string;
@@ -112,6 +113,7 @@ export async function dispatchTakomiSubagent(
   if (!preflight.model) {
     const result = {
       agent: input.agent.name,
+      task: input.task,
       workflow: input.workflow,
       model: "",
       warning: preflight.warning,
@@ -165,6 +167,7 @@ export async function dispatchTakomiSubagent(
   const output = result.stdout.trim();
   const dispatchResult: TakomiDispatchResult = {
     agent: input.agent.name,
+    task: input.task,
     workflow: input.workflow,
     model: preflight.model,
     warning: preflight.warning,
