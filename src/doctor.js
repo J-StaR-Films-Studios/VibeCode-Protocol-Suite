@@ -22,6 +22,15 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
   console.log(status(report.bundled.packageIncluded, 'Package includes .pi assets', report.bundled.packageIncluded ? 'yes' : 'no'));
   console.log(status(report.installed.runtimeInstalled, 'Installed takomi-runtime', report.installed.targets.extensions));
   console.log(status(report.installed.subagentsInstalled, 'Installed takomi-subagents', report.installed.targets.extensions));
+  console.log(status(report.installed.agentsInstalled, 'Installed agents dir', report.installed.targets.agents));
+  console.log(status(report.installed.themesInstalled, 'Installed themes dir', report.installed.targets.themes));
+  console.log(status(report.piSubagents.declaredVersion !== null, 'pi-subagents dependency declared', report.piSubagents.declaredVersion || 'missing'));
+  console.log(status(report.piSubagents.localInstalled || report.piSubagents.globalInstalled, 'pi-subagents package available', report.piSubagents.localInstalled
+    ? `${report.piSubagents.localPackageJson}${report.piSubagents.localVersion ? ` (${report.piSubagents.localVersion})` : ''}`
+    : report.piSubagents.globalInstalled
+      ? `${report.piSubagents.globalPackageJson}${report.piSubagents.globalVersion ? ` (${report.piSubagents.globalVersion})` : ''}`
+      : 'missing'));
+  console.log(status(report.piSubagents.binaryInstalled, 'pi-subagents installer binary', report.piSubagents.binaryPath || 'missing'));
   console.log(status(report.installed.routingPolicyPresent || report.project.routingPolicyPresent, 'Routing policy', report.project.routingPolicyPresent ? report.project.targets.routingPolicy : report.installed.targets.routingPolicy));
   console.log(status(storeReady, 'Global Takomi store', storeReady ? `${storeSkills.length} skills` : 'missing'));
 
@@ -37,6 +46,14 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
 
   if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled) {
     console.log(pc.white('  - Run takomi install pi after the package-safe Pi asset layout is finalized.'));
+  }
+
+  if (!report.piSubagents.declaredVersion) {
+    console.log(pc.white('  - Add pi-subagents to takomi package dependencies so subagent support is bundled intentionally.'));
+  }
+
+  if (!report.piSubagents.localInstalled && !report.piSubagents.globalInstalled) {
+    console.log(pc.white('  - Install pi-subagents: npm install -g pi-subagents'));
   }
 
   if (!report.project.routingPolicyPresent && !report.installed.routingPolicyPresent) {

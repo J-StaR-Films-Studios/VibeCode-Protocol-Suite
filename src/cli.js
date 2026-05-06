@@ -41,6 +41,8 @@ import {
   isStoreInitialized,
 } from './store.js';
 import { runDoctor } from './doctor.js';
+import { ensurePiSubagentsInstalled, printPiSubagentsInstallResult } from './pi-harness.js';
+import { installPiHarnessAssets, printPiInstallSummary, validatePiHarnessInstall } from './pi-installer.js';
 
 const program = new Command();
 
@@ -215,9 +217,29 @@ async function init() {
 
 async function installPiTarget() {
   console.log(pc.magenta('🧭 Pi Harness Preflight\n'));
-  await runDoctor({ version: program.version() });
-  console.log(pc.yellow('Pi harness install is not enabled yet because package Pi assets are not finalized.'));
-  console.log(pc.dim('Next step: package assets under assets/pi or packages/pi and add an install-safe manifest.\n'));
+  const report = await runDoctor({ version: program.version() });
+
+  if (!report.piSubagents.localInstalled && !report.piSubagents.globalInstalled) {
+    console.log(pc.cyan('\n📦 Installing pi-subagents...\n'));
+    const installResult = await ensurePiSubagentsInstalled();
+    printPiSubagentsInstallResult(installResult);
+    if (!installResult.ok) {
+      console.log(pc.yellow('\nPi harness install stopped because pi-subagents could not be installed.'));
+      console.log(pc.dim('Retry manually with: npm install -g pi-subagents\n'));
+      return;
+    }
+  }
+
+  console.log(pc.cyan('\n📦 Installing Takomi Pi harness assets...\n'));
+  try {
+    const result = await installPiHarnessAssets(program.version());
+    const validation = await validatePiHarnessInstall();
+    printPiInstallSummary(result, validation);
+    console.log(pc.dim('\nNext: cd <project> && takomi\n'));
+  } catch (error) {
+    console.log(pc.red('\nPi harness asset install failed.'));
+    console.log(pc.dim(String(error?.message || error)));
+  }
 }
 
 function printUnsupportedInstallTarget(target) {

@@ -2,8 +2,11 @@ import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
+import pc from 'picocolors';
 import { PATHS } from './utils.js';
 import { STORE_PATH, MANIFEST_PATH } from './store.js';
+
+const TAKOMI_PACKAGE_DIR = PATHS.root;
 
 const HOME = os.homedir();
 
@@ -78,13 +81,62 @@ export function getBundledPiAssetTargets() {
   };
 }
 
-async function getPackageFileEntries() {
+async function getPackageJson() {
   try {
-    const pkg = await fs.readJson(PATHS.packageJson);
-    return Array.isArray(pkg.files) ? pkg.files : [];
+    return await fs.readJson(PATHS.packageJson);
   } catch {
-    return [];
+    return {};
   }
+}
+
+async function getPackageFileEntries() {
+  const pkg = await getPackageJson();
+  return Array.isArray(pkg.files) ? pkg.files : [];
+}
+
+function getGlobalNodeModulesRoot(home = HOME) {
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'npm', 'node_modules');
+  }
+  return path.join(home, '.npm-global', 'lib', 'node_modules');
+}
+
+export async function inspectPiSubagentsDependency(home = HOME) {
+  const pkg = await getPackageJson();
+  const declaredVersion = pkg?.dependencies?.['pi-subagents'] || null;
+  const localPackageJson = path.join(TAKOMI_PACKAGE_DIR, 'node_modules', 'pi-subagents', 'package.json');
+  const globalPackageJson = path.join(getGlobalNodeModulesRoot(home), 'pi-subagents', 'package.json');
+
+  let localVersion = null;
+  let globalVersion = null;
+
+  try {
+    if (await fs.pathExists(localPackageJson)) {
+      const localPkg = await fs.readJson(localPackageJson);
+      localVersion = localPkg.version || null;
+    }
+  } catch {}
+
+  try {
+    if (await fs.pathExists(globalPackageJson)) {
+      const globalPkg = await fs.readJson(globalPackageJson);
+      globalVersion = globalPkg.version || null;
+    }
+  } catch {}
+
+  const bin = commandExists('pi-subagents');
+
+  return {
+    declaredVersion,
+    localInstalled: Boolean(localVersion),
+    localVersion,
+    localPackageJson,
+    globalInstalled: Boolean(globalVersion),
+    globalVersion,
+    globalPackageJson,
+    binaryInstalled: bin.found,
+    binaryPath: bin.path,
+  };
 }
 
 export async function detectPiCommand() {
@@ -149,16 +201,64 @@ export async function inspectInstalledTakomiPiHarness(home = HOME) {
   };
 }
 
+function runCommand(command, args) {
+  return spawnSync(command, args, { stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' });
+}
+
+export async function ensurePiSubagentsInstalled() {
+  const before = await inspectPiSubagentsDependency();
+  if (before.localInstalled || before.globalInstalled) {
+    return { ok: true, changed: false, report: 'pi-subagents already available.' };
+  }
+
+  const attempts = [
+    { command: 'npm', args: ['install', '-g', 'pi-subagents'] },
+    { command: 'npm.cmd', args: ['install', '-g', 'pi-subagents'] },
+  ];
+
+  let lastError = 'Unknown install failure.';
+  for (const attempt of attempts) {
+    const result = runCommand(attempt.command, attempt.args);
+    if (result.status === 0) {
+      const after = await inspectPiSubagentsDependency();
+      if (after.localInstalled || after.globalInstalled) {
+        return {
+          ok: true,
+          changed: true,
+          report: (result.stdout || result.stderr || 'Installed pi-subagents.').trim(),
+        };
+      }
+      lastError = 'npm install reported success, but pi-subagents was still not detected.';
+      continue;
+    }
+    lastError = [result.stdout, result.stderr].filter(Boolean).join('\n').trim() || lastError;
+  }
+
+  return { ok: false, changed: false, report: lastError };
+}
+
+export function printPiSubagentsInstallResult(result) {
+  if (result.ok) {
+    console.log(pc.green(`✔ ${result.changed ? 'Installed' : 'Validated'} pi-subagents`));
+    if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-4).join('\n')));
+    return;
+  }
+  console.log(pc.red('✗ Failed to install pi-subagents'));
+  if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
+}
+
 export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
   const pi = await detectPiCommand();
   const bundled = await inspectBundledPiAssets();
   const installed = await inspectInstalledTakomiPiHarness();
+  const piSubagents = await inspectPiSubagentsDependency();
   const project = getProjectPiTargets(cwd);
 
   return {
     pi,
     bundled,
     installed,
+    piSubagents,
     project: {
       targets: project,
       settingsPresent: await fs.pathExists(project.settings),
