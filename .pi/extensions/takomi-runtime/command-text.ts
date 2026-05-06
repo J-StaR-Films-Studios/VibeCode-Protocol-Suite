@@ -32,6 +32,9 @@ const SUBCOMMAND_COMPLETIONS: Record<string, TakomiCompletion[]> = {
     { value: "status", label: "status", description: "Show active subagents" },
     { value: "on", label: "on", description: "Allow subagent delegation" },
     { value: "off", label: "off", description: "Disable subagent delegation" },
+    { value: "expand", label: "expand", description: "Expand native tool results" },
+    { value: "collapse", label: "collapse", description: "Collapse native tool results" },
+    { value: "toggle", label: "toggle", description: "Toggle native tool result expansion" },
   ],
 };
 
@@ -66,7 +69,7 @@ export function commandHelp(): string {
     "/takomi plan [title]",
     "/takomi mode <direct|orchestrate|review>",
     "/takomi gate <auto|review>",
-    "/takomi subagents <on|off|status>",
+    "/takomi subagents <on|off|status|expand|collapse|toggle>",
     "/takomi-status",
     "/takomi-reset",
   ].join("\n");

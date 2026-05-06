@@ -142,7 +142,7 @@ Implemented command mapping:
 - `/takomi plan [title]` replaces `/takomi-lifecycle`, `/takomi-kickoff`, `/takomi-plan`, and `/autoorch` as the plan/session entrypoint.
 - `/takomi mode <direct|orchestrate|review>` replaces `/orch`, `/architect`, `/code`, and `/review` as separate mode commands.
 - `/takomi gate <auto|review>` replaces `/takomi-launch-mode` with user-facing review-gate semantics.
-- `/takomi subagents <on|off|status>` controls delegation and status. Native Pi result expansion owns the visible subagent detail UI.
+- `/takomi subagents <on|off|status|expand|collapse|toggle>` controls delegation, status, and Pi's native tool-result expansion state for Takomi output.
 
 Commands to collapse or de-emphasize:
 
@@ -170,8 +170,8 @@ Commands to collapse or de-emphasize:
 
 Shortcuts can stay for power use:
 
-- Native Pi result controls, such as `Ctrl+O`, expand subagent details.
-- Legacy Takomi subagent shortcuts now show migration hints instead of opening custom UI.
+- Native Pi result controls, `Alt+T`, and `/takomi subagents expand` expand subagent details.
+- Legacy Takomi subagent shortcuts now toggle or explain the native result UI instead of opening custom UI.
 
 ## Data Flow
 
@@ -284,6 +284,8 @@ type TakomiSubagentRunGroup = {
 - [x] Add Pi-style `renderCall` and `renderResult` handlers to the subagent tool.
 - [x] Keep Pi's default `subagent` tool name unclaimed by Takomi to avoid extension conflicts.
 - [x] Register `takomi_subagent` as the Takomi lifecycle-aware wrapper and brand its renderer as Takomi.
+- [x] Bridge Takomi runtime events into tool partial updates so live subagent progress remains visible without the legacy panel.
+- [x] Map Takomi expand/collapse/toggle controls to Pi's native tool-result expansion state.
 - [x] Keep internal run tracking for `/takomi subagents status`, review continuity, and board state sync.
 - [x] Map simple `general` agent requests to `orchestrator` when no literal `general` agent exists.
 
@@ -302,6 +304,8 @@ type TakomiSubagentRunGroup = {
 - Deprecated Takomi's visible legacy subagent stack and fullscreen overlay; subagent output now renders through the native-style tool result UI.
 - Removed Takomi's project-local `subagent` registration so it no longer conflicts with the default/user-level Pi subagent extension.
 - Registered `takomi_subagent` as the Takomi lifecycle-aware wrapper and branded its native-style renderer as Takomi.
+- Added live partial updates for `takomi_subagent` so model readiness, running output, logs, blocked state, and completion appear in the native-style result card.
+- Rewired `Alt+T`, `Alt+Shift+T`, and `/takomi subagents expand|collapse|toggle` to Pi's native tool-result expansion state.
 - Added a safe agent alias fallback so `general` resolves to `orchestrator` when the project does not define a `general` agent.
 - Targeted verification passed for the changed Takomi runtime, subagent, and shared-core files.
 - Full repo verification still fails in the unrelated OAuth router extension because several imports end with `.ts` without `allowImportingTsExtensions`, and `state.ts` has two `number | undefined` assignments.
@@ -321,7 +325,7 @@ type TakomiSubagentRunGroup = {
 - Genesis -> Design -> Build remains the canonical lifecycle.
 - Plan finalization happens before execution for unapproved broad work.
 - Active subagent run tracking remains centralized, while visible output is owned by Pi's native-style subagent result UI.
-- Active Takomi subagent output uses Pi's native-style result UI rather than Takomi's legacy below-editor stack.
+- Active Takomi subagent output streams live through Pi's native-style result UI rather than Takomi's legacy below-editor stack.
 - Runtime files are kept modular, with new or changed files staying near the 200-line guideline where practical.
 - TypeScript verification passes.
 

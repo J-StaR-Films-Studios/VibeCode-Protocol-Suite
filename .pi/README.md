@@ -72,8 +72,8 @@ Inside Pi, use:
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, `fallbackModels`, `thinking`, and `checklist` overrides.
 - Board redispatch and direct `takomi_subagent` calls now share one launch path, so model preflight, thinking, fallback behavior, default prompts, and persisted session files stay aligned.
 - Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` for lifecycle-aware dispatch and renders it with the native Pi-style result surface.
-- Active Takomi subagent work now renders through the native Pi-style result UI instead of Takomi's older below-editor stack.
-- Use Pi's native result expansion, such as `Ctrl+O`, to inspect detailed subagent output.
+- Active Takomi subagent work now streams through the native Pi-style result UI instead of Takomi's older below-editor stack.
+- Use Pi's native result expansion, `Alt+T`, or `/takomi subagents expand` to inspect detailed subagent output.
 - Takomi still tracks active runs internally for status, review continuity, and board synchronization, but it no longer opens a custom subagent fullscreen overlay.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default

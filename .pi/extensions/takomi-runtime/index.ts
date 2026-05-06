@@ -631,16 +631,19 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   });
 
   pi.registerShortcut("alt+t", {
-    description: "Show native subagent UI hint",
+    description: "Toggle native tool result expansion",
     handler: async (ctx) => {
-      ctx.ui.notify("Takomi uses Pi's native subagent result UI now. Use Ctrl+O on a subagent result to expand it.", "info");
+      const expanded = !ctx.ui.getToolsExpanded();
+      ctx.ui.setToolsExpanded(expanded);
+      ctx.ui.notify(`${expanded ? "Expanded" : "Collapsed"} native tool results.`, "info");
     },
   });
 
   pi.registerShortcut("alt+shift+t", {
-    description: "Show native subagent expansion hint",
+    description: "Expand native tool results",
     handler: async (ctx) => {
-      ctx.ui.notify("Takomi no longer opens a custom subagent fullscreen overlay. Expand the native subagent result with Ctrl+O.", "info");
+      ctx.ui.setToolsExpanded(true);
+      ctx.ui.notify("Expanded native tool results for Takomi subagent output.", "info");
     },
   });
 

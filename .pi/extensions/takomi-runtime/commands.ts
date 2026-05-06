@@ -82,7 +82,6 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
 
   async function handleSubagents(ctx: ExtensionCommandContext, action?: string): Promise<void> {
     const controller = options.subagentController;
-    const nativeViewActions = new Set(["expand", "collapse", "fullscreen", "next", "prev", "toggle"]);
     if (action === "on" || action === "off") {
       await options.updateState(ctx, () => {
         options.getState().subagentsEnabled = action === "on";
@@ -93,11 +92,27 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
       ctx.ui.notify(statusText(options.getState(), controller), controller.hasRuns() ? "info" : "warning");
       return;
     }
-    if (action && nativeViewActions.has(action)) {
-      ctx.ui.notify("Takomi now uses Pi's native subagent result UI. Use Ctrl+O on a subagent result to expand it.", "info");
+    if (action === "expand" || action === "fullscreen") {
+      ctx.ui.setToolsExpanded(true);
+      ctx.ui.notify("Expanded native tool results for Takomi subagent output.", "info");
       return;
     }
-    ctx.ui.notify("Usage: /takomi subagents <on|off|status>", "warning");
+    if (action === "collapse") {
+      ctx.ui.setToolsExpanded(false);
+      ctx.ui.notify("Collapsed native tool results.", "info");
+      return;
+    }
+    if (action === "toggle") {
+      const expanded = !ctx.ui.getToolsExpanded();
+      ctx.ui.setToolsExpanded(expanded);
+      ctx.ui.notify(`${expanded ? "Expanded" : "Collapsed"} native tool results.`, "info");
+      return;
+    }
+    if (action === "next" || action === "prev") {
+      ctx.ui.notify("Takomi now uses Pi's native inline result UI. Subagent navigation is handled by the transcript/tool results.", "info");
+      return;
+    }
+    ctx.ui.notify("Usage: /takomi subagents <on|off|status|expand|collapse|toggle>", "warning");
   }
 
   pi.registerCommand("takomi", {

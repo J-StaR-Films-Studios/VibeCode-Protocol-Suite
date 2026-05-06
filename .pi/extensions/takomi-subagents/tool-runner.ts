@@ -10,6 +10,7 @@ import { resolveAgentName } from "./agent-aliases";
 import { discoverTakomiAgents, type TakomiAgentConfig, type TakomiAgentScope } from "./agents";
 import { createTakomiDelegationPlan, renderTakomiDelegationPlan } from "./delegation-plan";
 import { dispatchTakomiSubagent, type TakomiDispatchResult } from "./dispatch";
+import { createTakomiLiveUpdateBridge } from "./live-updates";
 
 type ChecklistItem = string | { text: string; done?: boolean };
 
@@ -156,10 +157,11 @@ export async function executeTakomiSubagentTool(
   if (params.previewOnly || (plan.launchMode === "manual" && !params.confirmLaunch)) {
     return textResult(renderTakomiDelegationPlan(plan), { plan, availableAgents: agents.map((agent) => agent.name), agentScope, mode });
   }
-  const runOne = async (item: TakomiSubagentToolTask, previousOutput = "") => {
+  const live = createTakomiLiveUpdateBridge(tasks, mode, agentScope, onUpdate);
+  const runOne = async (item: TakomiSubagentToolTask, index: number, previousOutput = "") => {
     const config = byName.get(item.agent);
     if (!config) throw new Error(`Unknown subagent '${item.agent}'. Available: ${agents.map((agent) => `${agent.name} (${agent.source})`).join(", ") || "none"}`);
-    return dispatchTakomiSubagent(ctx, {
+    const result = await dispatchTakomiSubagent(ctx, {
       agent: config,
       task: item.task.replaceAll("{previous}", previousOutput),
       rootCwd,
@@ -172,27 +174,31 @@ export async function executeTakomiSubagentTool(
       conversationId: item.conversationId,
       checklist: item.checklist,
       source: "takomi-tool",
-    }, signal, { emit: (event) => emitRuntimeSubagentEvent(pi, event) });
+    }, signal, {
+      emit: (event) => {
+        emitRuntimeSubagentEvent(pi, event);
+        live.event(index, event);
+      },
+    });
+    live.finish(index, result);
+    return result;
   };
   const results: TakomiDispatchResult[] = [];
   try {
     if (mode === "chain") {
       let previousOutput = "";
-      for (const item of tasks) {
-        const result = await runOne(item, previousOutput);
+      for (const [index, item] of tasks.entries()) {
+        const result = await runOne(item, index, previousOutput);
         previousOutput = result.output;
         results.push(result);
-        onUpdate?.({ content: [{ type: "text", text: `Takomi chain: ${results.length}/${tasks.length} complete` }], details: { results, mode, agentScope } });
         if (result.code !== 0) return textResult(resultText(result), { results, mode, agentScope }, true);
       }
     } else if (mode === "parallel") {
       results.push(...await mapWithConcurrencyLimit(tasks, MAX_CONCURRENCY, async (item, index) => {
-        const result = await runOne(item);
-        onUpdate?.({ content: [{ type: "text", text: `Takomi parallel: task ${index + 1}/${tasks.length} finished` }], details: { results: [...results, result], mode, agentScope } });
-        return result;
+        return runOne(item, index);
       }));
     } else {
-      results.push(await runOne(tasks[0]));
+      results.push(await runOne(tasks[0], 0));
     }
   } catch (error) {
     return textResult(error instanceof Error ? error.message : String(error), { results, mode, agentScope }, true);

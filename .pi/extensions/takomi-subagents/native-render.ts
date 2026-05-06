@@ -45,8 +45,9 @@ export function renderTakomiSubagentCall(params: TakomiSubagentToolParams, theme
 }
 
 function resultHeader(result: TakomiDispatchResult, theme: Theme): string {
-  const failed = result.code !== 0;
-  const status = failed ? theme.fg("error", "[failed]") : theme.fg("success", "[done]");
+  const running = result.code === -1;
+  const failed = result.code !== 0 && !running;
+  const status = running ? theme.fg("warning", "[running]") : failed ? theme.fg("error", "[failed]") : theme.fg("success", "[done]");
   const model = result.model ? theme.fg("muted", ` ${result.model}`) : "";
   const thinking = result.thinking ? theme.fg("muted", ` think:${result.thinking}`) : "";
   return `${status} ${theme.fg("toolTitle", theme.bold(result.agent))}${model}${thinking}`;
@@ -55,7 +56,8 @@ function resultHeader(result: TakomiDispatchResult, theme: Theme): string {
 function renderSingle(result: TakomiDispatchResult, expanded: boolean, theme: Theme) {
   const output = result.output || result.stderr || "No output returned.";
   if (!expanded) {
-    return new Text(`${resultHeader(result, theme)}\n${theme.fg(result.code === 0 ? "toolOutput" : "error", firstLines(output, 5))}`, 0, 0);
+    const color = result.code === -1 || result.code === 0 ? "toolOutput" : "error";
+    return new Text(`${resultHeader(result, theme)}\n${theme.fg(color, firstLines(output, 8))}\n${theme.fg("muted", "(Ctrl+O to expand live output)")}`, 0, 0);
   }
 
   const container = new Container();
@@ -71,7 +73,7 @@ function renderSingle(result: TakomiDispatchResult, expanded: boolean, theme: Th
   return container;
 }
 
-export function renderTakomiSubagentResult(result: ToolResult, options: { expanded?: boolean }, theme: Theme) {
+export function renderTakomiSubagentResult(result: ToolResult, options: { expanded?: boolean; isPartial?: boolean }, theme: Theme) {
   const details = result.details;
   const results = details?.results ?? [];
   if (results.length === 0) {
@@ -84,9 +86,11 @@ export function renderTakomiSubagentResult(result: ToolResult, options: { expand
   }
 
   const completed = results.filter((item) => item.code === 0).length;
-  const failed = results.filter((item) => item.code !== 0).length;
+  const running = results.filter((item) => item.code === -1).length;
+  const failed = results.filter((item) => item.code !== 0 && item.code !== -1).length;
   const mode = details?.mode ?? "parallel";
-  const header = `${theme.fg(failed ? "warning" : "success", failed ? "[mixed]" : "[done]")} ${theme.fg("toolTitle", theme.bold(`Takomi ${mode}`))} ${theme.fg("accent", `${completed}/${results.length}`)}`;
+  const state = running ? `[running ${running}]` : failed ? "[mixed]" : "[done]";
+  const header = `${theme.fg(failed || running ? "warning" : "success", state)} ${theme.fg("toolTitle", theme.bold(`Takomi ${mode}`))} ${theme.fg("accent", `${completed}/${results.length}`)}`;
 
   if (options.expanded) {
     const container = new Container();
@@ -101,7 +105,10 @@ export function renderTakomiSubagentResult(result: ToolResult, options: { expand
 
   const text = [
     header,
-    ...results.map((item) => `${resultHeader(item, theme)}\n${theme.fg(item.code === 0 ? "toolOutput" : "error", firstLines(item.output || item.stderr || "No output returned.", 3))}`),
+    ...results.map((item) => {
+      const color = item.code === -1 || item.code === 0 ? "toolOutput" : "error";
+      return `${resultHeader(item, theme)}\n${theme.fg(color, firstLines(item.output || item.stderr || "No output returned.", 5))}`;
+    }),
     theme.fg("muted", "(Ctrl+O to expand)"),
   ].join("\n\n");
   return new Text(text, 0, 0);
