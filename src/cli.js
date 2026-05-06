@@ -45,6 +45,7 @@ import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, pri
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
 
+const packageJson = await fs.readJson(PATHS.packageJson);
 const program = new Command();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -675,7 +676,7 @@ async function harnesses() {
 program
   .name('takomi')
   .description('Your AI team. Activated. 🎯')
-  .version('2.0.7');
+  .version(packageJson.version);
 
 // Per-project setup (backward compatible)
 program
