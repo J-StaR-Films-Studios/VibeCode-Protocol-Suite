@@ -8,7 +8,7 @@ import { getPiGlobalTargets } from './pi-harness.js';
 
 const HOME = os.homedir();
 const TAKOMI_HOME = path.join(HOME, '.takomi');
-const PI_MANIFEST_PATH = path.join(TAKOMI_HOME, 'pi-manifest.json');
+export const PI_MANIFEST_PATH = path.join(TAKOMI_HOME, 'pi-manifest.json');
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -139,6 +139,10 @@ export async function installPiHarnessAssets(version = 'unknown') {
 
   await writePiInstallManifest(manifest);
   return { targets, manifest };
+}
+
+export async function syncPiHarnessAssets(version = 'unknown') {
+  return installPiHarnessAssets(version);
 }
 
 export async function validatePiHarnessInstall() {

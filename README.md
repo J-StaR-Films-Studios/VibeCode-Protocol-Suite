@@ -16,6 +16,32 @@
 
 ## 🚀 Quick Start (Recommended)
 
+### Takomi Pi Harness
+
+```bash
+npm install -g takomi
+takomi install pi
+cd my-project
+takomi
+```
+
+Optional global skills:
+
+```bash
+takomi install skills
+```
+
+Useful management commands:
+
+```bash
+takomi doctor
+takomi sync pi
+takomi sync skills
+takomi install all
+takomi init
+```
+
+
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 
 Install once. Use everywhere. Your skills follow you across every AI harness(Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI):

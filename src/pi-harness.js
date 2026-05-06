@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import pc from 'picocolors';
 import { PATHS } from './utils.js';
 import { STORE_PATH, MANIFEST_PATH } from './store.js';
@@ -205,6 +205,48 @@ function runCommand(command, args) {
   return spawnSync(command, args, { stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' });
 }
 
+export async function ensurePiInstalled() {
+  const before = await detectPiCommand();
+  if (before.installed) {
+    return { ok: true, changed: false, report: 'Pi already available.' };
+  }
+
+  const attempts = [
+    { command: 'npm', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
+    { command: 'npm.cmd', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
+  ];
+
+  let lastError = 'Unknown install failure.';
+  for (const attempt of attempts) {
+    const result = runCommand(attempt.command, attempt.args);
+    if (result.status === 0) {
+      const after = await detectPiCommand();
+      if (after.installed) {
+        return {
+          ok: true,
+          changed: true,
+          report: (result.stdout || result.stderr || 'Installed Pi.').trim(),
+        };
+      }
+      lastError = 'npm install reported success, but pi was still not detected.';
+      continue;
+    }
+    lastError = [result.stdout, result.stderr].filter(Boolean).join('\n').trim() || lastError;
+  }
+
+  return { ok: false, changed: false, report: lastError };
+}
+
+export function printPiInstallResult(result) {
+  if (result.ok) {
+    console.log(pc.green(`✔ ${result.changed ? 'Installed' : 'Validated'} Pi`));
+    if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-4).join('\n')));
+    return;
+  }
+  console.log(pc.red('✗ Failed to install Pi'));
+  if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
+}
+
 export async function ensurePiSubagentsInstalled() {
   const before = await inspectPiSubagentsDependency();
   if (before.localInstalled || before.globalInstalled) {
@@ -266,4 +308,44 @@ export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
       profilePresent: await fs.pathExists(project.takomiProfile),
     },
   };
+}
+
+export async function launchTakomiHarness(cwd = process.cwd()) {
+  const report = await inspectPiHarnessEnvironment(cwd);
+
+  if (!report.pi.installed) {
+    console.log(pc.red('Pi is not installed.'));
+    console.log(pc.dim('Run: takomi install pi'));
+    return 1;
+  }
+
+  if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled) {
+    console.log(pc.red('Takomi Pi harness is not fully installed.'));
+    console.log(pc.dim('Run: takomi install pi'));
+    return 1;
+  }
+
+  const env = {
+    ...process.env,
+    TAKOMI_HARNESS: '1',
+  };
+
+  return await new Promise((resolve) => {
+    const child = process.platform === 'win32'
+      ? spawn('cmd.exe', ['/d', '/s', '/c', 'pi'], {
+          cwd,
+          stdio: 'inherit',
+          env,
+          shell: false,
+        })
+      : spawn(report.pi.path || 'pi', [], {
+          cwd,
+          stdio: 'inherit',
+          env,
+          shell: false,
+        });
+
+    child.on('close', (code) => resolve(code ?? 0));
+    child.on('error', () => resolve(1));
+  });
 }
