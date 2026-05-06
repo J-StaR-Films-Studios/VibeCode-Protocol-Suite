@@ -1,6 +1,10 @@
 {
   "version": 1,
   "autoOrchestrate": true,
+  "launchMode": "auto",
+  "foreground": true,
+  "background": true,
+  "reviewAfterImplementation": true,
   "roles": {
     "orchestrator": {
       "agent": "orchestrator",

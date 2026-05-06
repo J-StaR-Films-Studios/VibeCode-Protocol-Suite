@@ -25,6 +25,8 @@ export type RuntimeHudState = {
   stage?: string;
   workflow?: string;
   activeSessionId?: string;
+  launchMode?: string;
+  subagentsEnabled?: boolean;
 };
 
 type Tone = "accent" | "warning" | "success" | "error" | "muted" | "dim" | "thinkingMinimal";
@@ -50,8 +52,10 @@ export function renderRuntimeStatus(theme: Theme, state: RuntimeHudState): strin
   const primary = state.stage ?? state.role;
   const stageBadge = badge(theme, primary, stageTone(state.stage));
   const auto = state.autoOrch ? theme.fg("accent", "auto") : theme.fg("dim", "manual");
+  const gate = state.launchMode === "manual" ? theme.fg("warning", "review-gate") : theme.fg("accent", "auto-gate");
   const plan = state.planMode ? theme.fg("warning", "plan") : theme.fg("dim", "direct");
-  return [theme.fg("accent", "Takomi"), stageBadge, theme.fg("dim", `role:${state.role}`), auto, plan].join(" ");
+  const subagents = state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : theme.fg("dim", "subagents:on");
+  return [theme.fg("accent", "Takomi"), stageBadge, theme.fg("dim", `role:${state.role}`), auto, gate, plan, subagents].join(" ");
 }
 
 export function renderRuntimeWidget(theme: Theme, state: RuntimeHudState): string[] {
@@ -62,7 +66,9 @@ export function renderRuntimeWidget(theme: Theme, state: RuntimeHudState): strin
     badge(theme, primary, stageTone(state.stage)),
     theme.fg("dim", `role:${state.role}`),
     state.autoOrch ? theme.fg("accent", "auto") : theme.fg("dim", "manual"),
+    state.launchMode === "manual" ? theme.fg("warning", "review-gate") : theme.fg("accent", "auto-gate"),
     state.planMode ? theme.fg("warning", "plan") : theme.fg("dim", "direct"),
+    state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : theme.fg("dim", "subagents:on"),
     state.workflow ? theme.fg("dim", `wf:${state.workflow}`) : "",
     state.activeSessionId ? theme.fg("dim", `session:${ellipsizeMiddle(state.activeSessionId, 12)}`) : "",
   ].filter(Boolean);

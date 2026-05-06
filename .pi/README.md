@@ -27,14 +27,20 @@ Later, this can become:
 
 Inside Pi, use:
 - `/reload` after edits
-- `/takomi` to enable Takomi mode guidance
-- `/takomi-genesis`, `/takomi-design`, `/takomi-build` for lifecycle stages
-- `/takomi-kickoff <title>` to create a Genesis-first orchestration session that can expand through Design and Build
-- `takomi_board` actions now include stage expansion, task updates, and redispatch support for review loops
-- `/orch` to bias toward orchestrator behavior
-- `/architect`, `/code`, `/review` for focused roles
-- `/autoorch` to toggle lightweight automatic orchestration routing, which is enabled by default for broad or multi-step work
-- `/takomi-plan` to toggle planning bias
+- `/takomi` to show the Takomi command guide and enable Takomi mode guidance
+- `/takomi genesis [prompt]` to run the Genesis planning stage from existing markdown/project context
+- `/takomi design [prompt]` to run UI/UX design against the agreed project direction
+- `/takomi build [prompt]` to implement while cross-checking against approved UI/design artifacts
+- `/takomi plan [title]` to create a Genesis-first orchestration session that can expand through Design and Build
+- `/takomi mode direct`, `/takomi mode orchestrate`, or `/takomi mode review` to choose the session operating mode
+- `/takomi gate auto` to continue approved plans automatically
+- `/takomi gate review` to return to the user after each task with results and verification guidance
+- `/takomi subagents on` or `/takomi subagents off` to allow or disable delegated subagents
+- `/takomi subagents status|expand|collapse|fullscreen|next|prev|toggle` to inspect or reshape the active subagent stack
+- `/takomi-status` to show lifecycle, gate, session, and active subagent state
+- `/takomi-reset` to reset session-local Takomi runtime state
+- `takomi_board` actions now include stage expansion, task updates, multi-task dispatch, and redispatch support for review loops
+- The old standalone commands (`/takomi-genesis`, `/takomi-design`, `/takomi-build`, `/takomi-kickoff`, `/autoorch`, `/orch`, `/architect`, `/code`, `/review`, and the `/takomi-subagent*` variants) are folded into `/takomi` subcommands so slash autocomplete stays small.
 - prompt shortcuts are suffixed with `-prompt` to avoid collisions with runtime commands, e.g. `/orch-prompt`, `/build-prompt`, `/design-prompt`, `/genesis-prompt`, `/takomi-prompt`, `/prime-prompt`
 - a project-local theme is available at `.pi/themes/takomi-noir.json`; select `takomi-noir` in `/settings` to use the Takomi UI palette
 - additional workflow prompts are available as direct slash commands:
@@ -49,6 +55,7 @@ Inside Pi, use:
 - Project defaults live in `.pi/takomi-profile.json`; optional user overrides can be read from `~/.pi/agent/takomi/profile.json`.
 - The runtime reads user profile overrides only. It does not write profile files outside the project.
 - Profile defaults can assign agents, model preferences, fallback model lists, thinking levels, and dispatch policies by role or lifecycle stage.
+- Profile defaults also include `launchMode`, `foreground`, `background`, and `reviewAfterImplementation`.
 - Design stage includes a Gemini-oriented hint for model selection.
 - Build is treated as a workflow/stage, not as a separate specialist agent.
 - A fresh orchestration session starts with a Genesis foundation task, then expands Design and Build only when the scope justifies it.
@@ -58,19 +65,22 @@ Inside Pi, use:
   - human-readable docs live under `docs/tasks/orchestrator-sessions/<sessionId>/`
   - machine state lives under `.pi/takomi/orchestrator/<sessionId>.json`
 - Task packets can carry `workflow`, `skills`, `preferredModel`, `fallbackModels`, `preferredThinking`, `dispatchPolicy`, `conversationId`, and `checklist` metadata.
+- Board redispatch and direct subagent calls now build a `TakomiDelegationPlan` before launch. In auto mode the plan launches immediately; in manual mode the plan is returned for review until `confirmLaunch=true` is supplied.
 - The subagent tool supports `conversationId`, so reviewed work can be sent back to the same agent for continuation instead of restarting from scratch.
+- The subagent tool supports Pi-style single, parallel `tasks`, and sequential `chain` modes.
+- The subagent tool supports `agentScope` values of `user`, `project`, and `both`; project-local agents require confirmation by default.
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, `fallbackModels`, `thinking`, and `checklist` overrides.
 - Board redispatch and direct `takomi_subagent` calls now share one launch path, so model preflight, thinking, fallback behavior, default prompts, and persisted session files stay aligned.
-- Active subagent work now stays anchored below the editor so it remains visible near the input/footer while transcript history scrolls independently.
-- The active subagent stack shows agent identity, model, thinking level, duration, checklist progress, and a meaningful summary line while keeping raw tool activity secondary outside fullscreen.
-- `Alt+T` cycles the live Takomi surface through compact stack, bounded expanded stack, and fullscreen detail.
-- The expanded below-editor widget is intentionally short so Pi does not truncate it into an unusable wall of text.
-- Fullscreen is the detailed reading mode and supports `Up`/`Down`, `PgUp`/`PgDn`, `Home`, `End`, `j`, and `k` for scrolling.
+- Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` for lifecycle-aware dispatch and renders it with the native Pi-style result surface.
+- Active Takomi subagent work now renders through the native Pi-style result UI instead of Takomi's older below-editor stack.
+- Use Pi's native result expansion, such as `Ctrl+O`, to inspect detailed subagent output.
+- Takomi still tracks active runs internally for status, review continuity, and board synchronization, but it no longer opens a custom subagent fullscreen overlay.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default
   - expand a lifecycle stage into additional tasks
   - update task status and notes
   - update checklist progress
+  - dispatch approved tasks as single, parallel, or chain subagent run groups
   - rewrite JSON machine state
   - regenerate task docs into `pending/`, `in-progress/`, `completed/`, and `blocked/`
   - redispatch a task to the same agent with the same `conversationId`

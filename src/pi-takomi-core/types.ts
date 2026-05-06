@@ -8,6 +8,14 @@ export type TakomiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" 
 
 export type TakomiDispatchPolicy = "direct" | "subagent" | "review-first";
 
+export type TakomiLaunchMode = "auto" | "manual";
+
+export type TakomiRunPlacement = "foreground" | "background";
+
+export type TakomiAgentScope = "user" | "project" | "both";
+
+export type TakomiSubagentMode = "single" | "parallel" | "chain";
+
 export type TakomiDispatchDefaults = {
   agent?: string;
   model?: string;
@@ -26,9 +34,66 @@ export type TakomiReviewProfile = {
 export type TakomiProfile = {
   version: 1;
   autoOrchestrate: boolean;
+  launchMode?: TakomiLaunchMode;
+  foreground?: boolean;
+  background?: boolean;
+  reviewAfterImplementation?: boolean;
   roles?: Partial<Record<TakomiRole, TakomiDispatchDefaults>>;
   stages?: Partial<Record<VibeLifecycleStage, TakomiDispatchDefaults>>;
   review?: TakomiReviewProfile;
+};
+
+export type TakomiDelegationPlanTaskStatus = "planned" | "running" | "completed" | "blocked" | "cancelled";
+
+export type TakomiDelegationPlanTask = {
+  id: string;
+  title: string;
+  agent: string;
+  task: string;
+  role?: TakomiRole;
+  stage?: VibeLifecycleStage;
+  workflow?: TakomiWorkflowId | string;
+  model?: string;
+  fallbackModels?: string[];
+  thinking?: TakomiThinkingLevel;
+  conversationId?: string;
+  checklist?: TaskChecklistItem[];
+  dispatchPolicy?: TakomiDispatchPolicy;
+  review: boolean;
+  status: TakomiDelegationPlanTaskStatus;
+};
+
+export type TakomiDelegationPlan = {
+  planId: string;
+  source: "runtime-board" | "takomi-tool";
+  launchMode: TakomiLaunchMode;
+  placement: TakomiRunPlacement;
+  reviewAfterImplementation: boolean;
+  createdAt: string;
+  sessionId?: string;
+  tasks: TakomiDelegationPlanTask[];
+};
+
+export type TakomiSubagentTask = {
+  agent: string;
+  task: string;
+  cwd?: string;
+  workflow?: string;
+  skills?: string[];
+  model?: string;
+  fallbackModels?: string[];
+  thinking?: TakomiThinkingLevel;
+  conversationId?: string;
+  checklist?: TaskChecklistItem[];
+};
+
+export type TakomiSubagentRunGroup = {
+  mode: TakomiSubagentMode;
+  agentScope: TakomiAgentScope;
+  tasks: TakomiSubagentTask[];
+  confirmProjectAgents: boolean;
+  launchMode: TakomiLaunchMode;
+  sessionId?: string;
 };
 
 export type WorkflowDefinition = {

@@ -4,6 +4,8 @@ import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 
+export type TakomiAgentScope = "user" | "project" | "both";
+
 export type TakomiAgentConfig = {
   name: string;
   description: string;
@@ -13,6 +15,7 @@ export type TakomiAgentConfig = {
   thinking?: TakomiThinkingLevel;
   systemPrompt: string;
   filePath: string;
+  source: "user" | "project";
 };
 
 function splitList(value?: string): string[] | undefined {
@@ -37,7 +40,7 @@ function normalizeThinking(value?: string): TakomiThinkingLevel | undefined {
   return undefined;
 }
 
-function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
+function loadAgentsFromDirectory(agentsDir: string, source: "user" | "project"): TakomiAgentConfig[] {
   if (!fs.existsSync(agentsDir)) return [];
 
   const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
@@ -59,15 +62,36 @@ function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
       thinking: normalizeThinking(frontmatter.thinking),
       systemPrompt: body,
       filePath,
+      source,
     });
   }
 
   return agents;
 }
 
-export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
-  const localAgents = loadAgentsFromDirectory(path.join(cwd, ".pi", "agents"));
-  const globalAgents = loadAgentsFromDirectory(path.join(os.homedir(), ".pi", "agent", "agents"));
+function isDirectory(target: string): boolean {
+  try {
+    return fs.statSync(target).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function findNearestProjectAgentsDir(cwd: string): string | undefined {
+  let current = cwd;
+  while (true) {
+    const candidate = path.join(current, ".pi", "agents");
+    if (isDirectory(candidate)) return candidate;
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+export function discoverTakomiAgents(cwd: string, scope: TakomiAgentScope = "both"): TakomiAgentConfig[] {
+  const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+  const localAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDirectory(projectAgentsDir, "project");
+  const globalAgents = scope === "project" ? [] : loadAgentsFromDirectory(path.join(os.homedir(), ".pi", "agent", "agents"), "user");
   const merged = new Map<string, TakomiAgentConfig>();
 
   for (const agent of globalAgents) {
@@ -78,4 +102,8 @@ export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
   }
 
   return [...merged.values()];
+}
+
+export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
+  return discoverTakomiAgents(cwd, "both");
 }

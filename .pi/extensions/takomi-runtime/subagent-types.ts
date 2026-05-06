@@ -58,6 +58,7 @@ export type TakomiSubagentRenderState = {
 
 export interface TakomiSubagentController {
   hasRuns(): boolean;
+  getStatusSummary(): string;
   getViewMode(): SubagentViewMode;
   start(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, state: TakomiSubagentRunInit, runKey?: string): Promise<void>;
   update(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, patch: TakomiSubagentRunPatch, runKey?: string): Promise<void>;

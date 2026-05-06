@@ -146,8 +146,8 @@ function renderWrappedTail(
 
 function viewHint(theme: Theme, mode: SubagentViewMode): string {
   const hints = {
-    compact: "Alt+T: stack | Alt+Shift+T: detail | Alt+N/P: focus",
-    expanded: "Alt+T: detail | Alt+Shift+T: detail | Alt+N/P: focus",
+    compact: "Alt+T: expand | Alt+Shift+T: fullscreen | Alt+N/P: focus",
+    expanded: "Alt+T: fullscreen | Alt+Shift+T: fullscreen | Alt+N/P: focus",
     fullscreen: "Esc: back | Up/Down/PgUp/PgDn: scroll | End: live",
   };
   return theme.fg("muted", hints[mode]);

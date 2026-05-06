@@ -11,6 +11,10 @@ import type {
 export const DEFAULT_TAKOMI_PROFILE: TakomiProfile = {
   version: 1,
   autoOrchestrate: true,
+  launchMode: "auto",
+  foreground: true,
+  background: true,
+  reviewAfterImplementation: true,
   roles: {
     orchestrator: { agent: "orchestrator", dispatchPolicy: "subagent" },
     architect: { agent: "architect", dispatchPolicy: "subagent" },
@@ -67,6 +71,10 @@ function mergeProfile(base: TakomiProfile, next?: Partial<TakomiProfile>): Takom
     ...next,
     version: 1,
     autoOrchestrate: next.autoOrchestrate ?? base.autoOrchestrate,
+    launchMode: next.launchMode ?? base.launchMode ?? "auto",
+    foreground: next.foreground ?? base.foreground ?? true,
+    background: next.background ?? base.background ?? true,
+    reviewAfterImplementation: next.reviewAfterImplementation ?? base.reviewAfterImplementation ?? true,
     roles,
     stages,
     review: {
