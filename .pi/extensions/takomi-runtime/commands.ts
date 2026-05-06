@@ -7,6 +7,7 @@ import type {
 } from "../../../src/pi-takomi-core";
 import { commandHelp, completions, statusText, workflowPrompt } from "./command-text";
 import type { TakomiSubagentController } from "./subagent-types";
+import { installTakomiRoutingPolicy } from "./routing-policy";
 
 export type TakomiRuntimeCommandState = {
   enabled: boolean;
@@ -80,6 +81,20 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
     }, () => `Takomi execution gate set to ${gate}`);
   }
 
+  async function handleRouting(ctx: ExtensionCommandContext, body?: string): Promise<void> {
+    if (!body?.trim()) {
+      ctx.ui.notify("Usage: /takomi routing <policy text>\nTip: paste the policy after the command, or say: Update Takomi routing logic: \"\"\"...\"\"\"", "warning");
+      return;
+    }
+    try {
+      const result = await installTakomiRoutingPolicy(ctx.cwd, body);
+      const detected = result.detectedDefaults.length ? `\n\nDetected defaults:\n- ${result.detectedDefaults.join("\n- ")}` : "\n\nNo model names were auto-detected; saved policy only.";
+      ctx.ui.notify(`Takomi routing policy updated.\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}`, "info");
+    } catch (error) {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+    }
+  }
+
   async function handleSubagents(ctx: ExtensionCommandContext, action?: string): Promise<void> {
     const controller = options.subagentController;
     if (action === "on" || action === "off") {
@@ -137,6 +152,7 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
       }
       if (subcommand === "mode") return handleMode(ctx, rest[0]);
       if (subcommand === "gate") return handleGate(ctx, rest[0]);
+      if (subcommand === "routing" || subcommand === "route" || subcommand === "models") return handleRouting(ctx, tail);
       if (subcommand === "subagents" || subcommand === "subagent") return handleSubagents(ctx, rest[0]);
       if (subcommand === "status") {
         ctx.ui.notify(statusText(options.getState(), options.subagentController), "info");

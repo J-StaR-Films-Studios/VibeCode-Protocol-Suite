@@ -455,22 +455,21 @@ export async function listModelsViaPi(cwd: string, signal?: AbortSignal): Promis
   return { ok: result.code === 0 && Boolean(output), output: output || "No model list output returned." };
 }
 
-export async function runModelPreflight(ctx: ExtensionContext, cwd: string, requested?: string, fallback?: string | string[], signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
-  const cli = await listModelsViaPi(cwd, signal);
+export async function runModelPreflight(ctx: ExtensionContext, _cwd: string, requested?: string, fallback?: string[], _signal?: AbortSignal): Promise<{ model?: string; warning?: string; report: string; cliOk: boolean }> {
   const resolved = await resolvePreferredModel(ctx, requested, fallback);
+  const keys = await getAvailableModelKeys(ctx);
   const requestedSummary = modelCandidates(requested, fallback).join(" -> ") || "auto";
   const status = resolved.model
     ? `Selected model: ${resolved.model}`
     : `No confirmed model matched request: ${requestedSummary}`;
   const report = [
-    "Model preflight (`pi --list-models`)",
-    cli.ok ? cli.output : `Preflight command failed or was empty.\n${cli.output}`,
-    "",
+    "Model preflight (Pi model registry)",
+    `Available providers/models: ${keys.filter((key) => key.includes("/")).slice(0, 40).join(", ") || "none reported"}`,
     `Requested: ${requestedSummary}`,
     status,
     resolved.warning ? `Warning: ${resolved.warning}` : "",
   ].filter(Boolean).join("\n");
-  return { ...resolved, report, cliOk: cli.ok };
+  return { ...resolved, report, cliOk: keys.length > 0 };
 }
 
 // ─── Task Prompt Building ───────────────────────────────────────────

@@ -60,6 +60,7 @@ import {
   getProfileDefaults,
   loadTakomiProfile,
 } from "./profile";
+import { installTakomiRoutingPolicy, loadTakomiRoutingPolicy } from "./routing-policy";
 
 type TakomiState = {
   enabled: boolean;
@@ -1141,6 +1142,19 @@ ${stateJson}` }],
     const text = event.text.trim();
     const lowered = text.toLowerCase();
 
+    const routingUpdateMatch = text.match(/^update\s+(?:takomi\s+|our\s+)?(?:model\s+)?routing\s+(?:logic|policy|philosophy)\s*:?\s*([\s\S]*)$/i)
+      ?? text.match(/^set\s+(?:takomi\s+|our\s+)?(?:model\s+)?routing\s+(?:logic|policy|philosophy)\s*:?\s*([\s\S]*)$/i);
+    if (routingUpdateMatch) {
+      state.enabled = true;
+      try {
+        const result = await installTakomiRoutingPolicy(runtimeCtx?.cwd ?? process.cwd(), text);
+        const detected = result.detectedDefaults.length ? `\n\nDetected defaults:\n- ${result.detectedDefaults.join("\n- ")}` : "\n\nNo model names were auto-detected; saved policy only.";
+        return { action: "transform", text: `Takomi routing policy has been updated.\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}\n\nAcknowledge the update briefly and explain that future Takomi turns will load this policy.` };
+      } catch (error) {
+        return { action: "transform", text: `Takomi routing policy update failed: ${error instanceof Error ? error.message : String(error)}` };
+      }
+    }
+
     if (lowered === "use takomi") {
       state.enabled = true;
       return { action: "transform", text: "Use the Takomi runtime, identify the correct lifecycle stage, and proceed accordingly." };
@@ -1201,12 +1215,27 @@ ${stateJson}` }],
       routingNote = "Blank project detected; orchestrator remains in control and must honor Genesis → Design → Build.";
     }
 
+    const routingPolicy = await loadTakomiRoutingPolicy(runtimeCwd);
+    const modelPreflightContext = (() => {
+      try {
+        const available = typeof (runtimeCtx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } } | undefined)?.modelRegistry?.getAvailable === "function"
+          ? (runtimeCtx as { modelRegistry: { getAvailable: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry.getAvailable()
+          : [];
+        if (!available.length) return "";
+        return `Available model context from Pi registry: ${available.map((m) => `${m.provider ? `${m.provider}/` : ""}${m.id ?? m.name ?? "unknown"}`).slice(0, 80).join(", ")}`;
+      } catch {
+        return "";
+      }
+    })();
+
     const parts = [
       "Takomi runtime is active for this turn.",
       rolePrompt(effectiveState.role),
       effectiveState.planMode ? planPrompt() : "",
       getInjectedPlaybook(effectiveState),
       `Routing note: ${routingNote}`,
+      routingPolicy ? `Project Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy}` : "No project Takomi model routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
+      modelPreflightContext,
       `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       `Takomi execution gate: ${effectiveState.launchMode === "manual" ? "review" : "auto"}. In review gate mode, show the delegation plan before launching and return to the user after each task with results, verification guidance, and the recommended next step.`,
       !effectiveState.subagentsEnabled ? "Takomi subagents are disabled for this session. Do not call takomi_subagent, subagent, or redispatch board tasks until the user enables subagents." : "",
@@ -1215,7 +1244,7 @@ ${stateJson}` }],
       "Task fan-out is flexible. Do not force exactly three tasks; decompose Genesis, Design, and Build work to fit the actual scope.",
       "A new orchestration session should usually begin with one Genesis foundation task that creates or updates the required markdown artifacts, then expand later stages only when the scope justifies it.",
       "If a follow-up request is small, one-shot it. If it is multi-part or large, create or expand an orchestration session instead of pretending it is a single task.",
-      "Before any Takomi subagent dispatch or model override, run and surface a visible `pi --list-models` preflight. Never fail silently on model availability.",
+      "Before any Takomi subagent dispatch or model override, use the injected Pi model-registry context and project routing policy. Prefer provider-qualified model IDs. Do not run `pi --list-models` unless the registry context is missing or the user asks for a visible diagnostic.",
       "When useful, state the current Takomi stage and the recommended next stage.",
       effectiveState.stage === "build"
         ? "For build orchestration, it is valid to dispatch tasks to specialist subagents, review them, and send fixes back to the same agent by reusing its conversation id."
