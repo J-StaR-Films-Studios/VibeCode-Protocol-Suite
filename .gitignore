@@ -6,6 +6,8 @@ coverage
 .idea
 .vscode
 *.log
+**/__pycache__/
+**/*.pyc
 .pi/settings.json
 .pi/takomi-profile.json
 .pi/takomi/model-routing.md

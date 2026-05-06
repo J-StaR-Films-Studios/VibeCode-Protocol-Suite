@@ -1,2 +1,5 @@
 .pi/takomi/subagents/
 takomi-pack.json
+packcheck.json
+**/__pycache__/
+**/*.pyc
