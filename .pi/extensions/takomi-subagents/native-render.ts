@@ -10,6 +10,7 @@ type ToolResult = {
     results?: TakomiDispatchResult[];
     mode?: "single" | "parallel" | "chain";
     agentScope?: string;
+    plan?: unknown;
   };
   isError?: boolean;
 };
@@ -19,8 +20,8 @@ function shorten(text: string | undefined, max = 72): string {
   return value.length > max ? `${value.slice(0, max - 3)}...` : value;
 }
 
-function firstLines(text: string, limit: number): string {
-  return text.split(/\r?\n/).map((line) => line.trimEnd()).filter(Boolean).slice(0, limit).join("\n");
+function firstLine(text: string | undefined): string {
+  return text?.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || "";
 }
 
 function taskList(params: TakomiSubagentToolParams): Array<{ agent: string; task: string }> {
@@ -30,42 +31,53 @@ function taskList(params: TakomiSubagentToolParams): Array<{ agent: string; task
   return [];
 }
 
-export function renderTakomiSubagentCall(params: TakomiSubagentToolParams, theme: Theme) {
-  const tasks = taskList(params);
-  const mode = params.chain?.length ? "chain" : params.tasks?.length ? "parallel" : "single";
-  const scope = params.agentScope ?? "both";
-  let text = theme.fg("toolTitle", theme.bold("Takomi ")) + theme.fg("accent", mode) + theme.fg("muted", ` [${scope}]`);
-
-  for (const [index, task] of tasks.slice(0, 3).entries()) {
-    const prefix = mode === "chain" ? `${index + 1}. ` : "";
-    text += `\n  ${theme.fg("accent", `${prefix}${task.agent}`)}${theme.fg("dim", ` ${shorten(task.task, 54)}`)}`;
-  }
-  if (tasks.length > 3) text += `\n  ${theme.fg("muted", `... +${tasks.length - 3} more`)}`;
-  return new Text(text, 0, 0);
+function resultGlyph(result: TakomiDispatchResult, theme: Theme): string {
+  if (result.code === -1) return theme.fg("accent", "⠧");
+  if (result.code === 0) return theme.fg("success", "✓");
+  return theme.fg("error", "✗");
 }
 
-function resultHeader(result: TakomiDispatchResult, theme: Theme): string {
-  const running = result.code === -1;
-  const failed = result.code !== 0 && !running;
-  const status = running ? theme.fg("warning", "[running]") : failed ? theme.fg("error", "[failed]") : theme.fg("success", "[done]");
-  const model = result.model ? theme.fg("muted", ` ${result.model}`) : "";
-  const thinking = result.thinking ? theme.fg("muted", ` think:${result.thinking}`) : "";
-  return `${status} ${theme.fg("toolTitle", theme.bold(result.agent))}${model}${thinking}`;
+function resultStatus(result: TakomiDispatchResult): string {
+  if (result.code === -1) return "running";
+  if (result.code === 0) return "done";
+  return "failed";
 }
 
-function renderSingle(result: TakomiDispatchResult, expanded: boolean, theme: Theme) {
+function resultStats(result: TakomiDispatchResult, theme: Theme): string {
+  const parts = [
+    result.model || "",
+    result.thinking ? `think:${result.thinking}` : "",
+  ].filter(Boolean);
+  return parts.length ? theme.fg("dim", parts.join(" · ")) : "";
+}
+
+function compactSingle(result: TakomiDispatchResult, theme: Theme): Text {
+  const output = firstLine(result.output || result.stderr || "No output returned.");
+  const stats = resultStats(result, theme);
+  const header = `${resultGlyph(result, theme)} ${theme.fg("toolTitle", theme.bold(result.agent))}${stats ? ` ${theme.fg("dim", "·")} ${stats}` : ""}`;
+  const status = theme.fg(result.code === 0 ? "dim" : result.code === -1 ? "accent" : "error", `  ⎿  ${resultStatus(result)}`);
+  const preview = output ? `\n${theme.fg("dim", `     ${shorten(output, 92)}`)}` : "";
+  const hint = result.code === -1 ? `\n${theme.fg("accent", "  Press Ctrl+O for live detail")}` : "";
+  return new Text(`${header}\n${status}${preview}${hint}`, 0, 0);
+}
+
+function expandedSingle(result: TakomiDispatchResult, theme: Theme): Container {
   const output = result.output || result.stderr || "No output returned.";
-  if (!expanded) {
-    const color = result.code === -1 || result.code === 0 ? "toolOutput" : "error";
-    return new Text(`${resultHeader(result, theme)}\n${theme.fg(color, firstLines(output, 8))}\n${theme.fg("muted", "(Ctrl+O to expand live output)")}`, 0, 0);
-  }
-
   const container = new Container();
-  container.addChild(new Text(resultHeader(result, theme), 0, 0));
+  const header = `${resultGlyph(result, theme)} ${theme.fg("toolTitle", theme.bold(result.agent))}`;
+  const meta = [
+    `status: ${resultStatus(result)}`,
+    result.model ? `model: ${result.model}` : "",
+    result.thinking ? `thinking: ${result.thinking}` : "",
+    result.workflow ? `workflow: ${result.workflow}` : "",
+    result.conversationId ? `thread: ${result.conversationId}` : "",
+  ].filter(Boolean).join(" · ");
+
+  container.addChild(new Text(header, 0, 0));
+  if (meta) container.addChild(new Text(theme.fg("dim", meta), 0, 0));
   if (result.warning) container.addChild(new Text(theme.fg("warning", result.warning), 0, 0));
   if (result.preflight) {
     container.addChild(new Spacer(1));
-    container.addChild(new Text(theme.fg("muted", "Model preflight"), 0, 0));
     container.addChild(new Text(theme.fg("dim", result.preflight), 0, 0));
   }
   container.addChild(new Spacer(1));
@@ -73,43 +85,68 @@ function renderSingle(result: TakomiDispatchResult, expanded: boolean, theme: Th
   return container;
 }
 
+export function renderTakomiSubagentCall(params: TakomiSubagentToolParams, theme: Theme) {
+  const tasks = taskList(params);
+  const mode = params.chain?.length ? "chain" : params.tasks?.length ? "parallel" : "single";
+  if (tasks.length === 1) {
+    return new Text(
+      `${theme.fg("toolTitle", theme.bold("takomi_subagent "))}${theme.fg("accent", tasks[0]?.agent || "?")}`,
+      0,
+      0,
+    );
+  }
+  return new Text(
+    `${theme.fg("toolTitle", theme.bold("takomi_subagent "))}${mode} (${tasks.length})`,
+    0,
+    0,
+  );
+}
+
 export function renderTakomiSubagentResult(result: ToolResult, options: { expanded?: boolean; isPartial?: boolean }, theme: Theme) {
   const details = result.details;
   const results = details?.results ?? [];
+
   if (results.length === 0) {
     const text = result.content?.find((item) => item.type === "text")?.text ?? "(no output)";
     return new Text(text, 0, 0);
   }
 
   if (results.length === 1 && details?.mode !== "parallel" && details?.mode !== "chain") {
-    return renderSingle(results[0], Boolean(options.expanded), theme);
+    return options.expanded ? expandedSingle(results[0]!, theme) : compactSingle(results[0]!, theme);
   }
 
-  const completed = results.filter((item) => item.code === 0).length;
   const running = results.filter((item) => item.code === -1).length;
+  const done = results.filter((item) => item.code === 0).length;
   const failed = results.filter((item) => item.code !== 0 && item.code !== -1).length;
   const mode = details?.mode ?? "parallel";
-  const state = running ? `[running ${running}]` : failed ? "[mixed]" : "[done]";
-  const header = `${theme.fg(failed || running ? "warning" : "success", state)} ${theme.fg("toolTitle", theme.bold(`Takomi ${mode}`))} ${theme.fg("accent", `${completed}/${results.length}`)}`;
+  const glyph = running ? theme.fg("accent", "⠧") : failed ? theme.fg("error", "✗") : theme.fg("success", "✓");
+  const header = `${glyph} ${theme.fg("toolTitle", theme.bold(mode))} ${theme.fg("dim", `· ${done}/${results.length} done`)}`;
 
-  if (options.expanded) {
-    const container = new Container();
-    container.addChild(new Text(header, 0, 0));
-    for (const item of results) {
-      container.addChild(new Spacer(1));
-      container.addChild(new Text(resultHeader(item, theme), 0, 0));
-      container.addChild(new Markdown((item.output || item.stderr || "No output returned.").trim(), 0, 0, getMarkdownTheme()));
+  if (!options.expanded) {
+    const lines = [header];
+    for (const [index, item] of results.entries()) {
+      const preview = firstLine(item.output || item.stderr || "No output returned.");
+      lines.push(`  ${resultGlyph(item, theme)} Agent ${index + 1}/${results.length}: ${theme.bold(item.agent)}`);
+      if (preview) lines.push(theme.fg("dim", `    ⎿  ${shorten(preview, 88)}`));
     }
-    return container;
+    if (running) lines.push(theme.fg("accent", "  Press Ctrl+O for live detail"));
+    return new Text(lines.join("\n"), 0, 0);
   }
 
-  const text = [
-    header,
-    ...results.map((item) => {
-      const color = item.code === -1 || item.code === 0 ? "toolOutput" : "error";
-      return `${resultHeader(item, theme)}\n${theme.fg(color, firstLines(item.output || item.stderr || "No output returned.", 5))}`;
-    }),
-    theme.fg("muted", "(Ctrl+O to expand)"),
-  ].join("\n\n");
-  return new Text(text, 0, 0);
+  const container = new Container();
+  container.addChild(new Text(header, 0, 0));
+  for (const [index, item] of results.entries()) {
+    container.addChild(new Spacer(1));
+    const meta = [
+      `Agent ${index + 1}/${results.length}`,
+      item.model || "",
+      item.thinking ? `think:${item.thinking}` : "",
+      item.workflow ? `workflow:${item.workflow}` : "",
+    ].filter(Boolean).join(" · ");
+    container.addChild(new Text(`${resultGlyph(item, theme)} ${theme.fg("toolTitle", theme.bold(item.agent))}`, 0, 0));
+    if (meta) container.addChild(new Text(theme.fg("dim", meta), 0, 0));
+    if (item.warning) container.addChild(new Text(theme.fg("warning", item.warning), 0, 0));
+    container.addChild(new Markdown((item.output || item.stderr || "No output returned.").trim(), 0, 0, getMarkdownTheme()));
+  }
+  return container;
 }

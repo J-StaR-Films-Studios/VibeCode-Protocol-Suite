@@ -1,0 +1,3201 @@
+[
+  {
+    "id": "takomi@2.0.7",
+    "name": "takomi",
+    "version": "2.0.7",
+    "size": 1478965,
+    "unpackedSize": 7780601,
+    "shasum": "dbefc2875be9e17474934bd0fcc42bed2c56cb5e",
+    "integrity": "sha512-eaxRM3n1nP8eMaz18JCwQUMjhrskWwZBvq+xazPOezTtbH7AhY/DvAbULJTJFwgWH1ZtsEspbbaiboaz6RGNyw==",
+    "filename": "takomi-2.0.7.tgz",
+    "files": [
+      {
+        "path": ".pi/agents/architect.md",
+        "size": 381,
+        "mode": 420
+      },
+      {
+        "path": ".pi/agents/coder.md",
+        "size": 393,
+        "mode": 420
+      },
+      {
+        "path": ".pi/agents/designer.md",
+        "size": 568,
+        "mode": 420
+      },
+      {
+        "path": ".pi/agents/orchestrator.md",
+        "size": 1031,
+        "mode": 420
+      },
+      {
+        "path": ".pi/agents/reviewer.md",
+        "size": 378,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/commands.ts",
+        "size": 14241,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/config.ts",
+        "size": 6219,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/index.ts",
+        "size": 1449,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/oauth-flow.ts",
+        "size": 4403,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/oauth-store.ts",
+        "size": 3679,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/package.json",
+        "size": 300,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/policies.ts",
+        "size": 1076,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/provider.ts",
+        "size": 16193,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/README.md",
+        "size": 3632,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/scripts/vibe-verify.py",
+        "size": 2716,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/state.ts",
+        "size": 6095,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/oauth-router/types.ts",
+        "size": 3499,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/command-text.ts",
+        "size": 5589,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/commands.ts",
+        "size": 7641,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/context-panel.ts",
+        "size": 8493,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/index.ts",
+        "size": 57111,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/profile.ts",
+        "size": 3882,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/routing-policy.ts",
+        "size": 4457,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/shared.ts",
+        "size": 19532,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/subagent-controller.ts",
+        "size": 12959,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/subagent-render.ts",
+        "size": 17558,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/subagent-types.ts",
+        "size": 3727,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-runtime/ui.ts",
+        "size": 4948,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/agent-aliases.ts",
+        "size": 676,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/agents.ts",
+        "size": 3346,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/delegation-plan.ts",
+        "size": 3508,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/dispatch-helpers.ts",
+        "size": 1030,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/dispatch.ts",
+        "size": 6423,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/index.ts",
+        "size": 3944,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/live-updates.ts",
+        "size": 3000,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/native-render.ts",
+        "size": 6729,
+        "mode": 420
+      },
+      {
+        "path": ".pi/extensions/takomi-subagents/tool-runner.ts",
+        "size": 8433,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/build-prompt.md",
+        "size": 5257,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/design-prompt.md",
+        "size": 4343,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/genesis-prompt.md",
+        "size": 4212,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/orch-prompt.md",
+        "size": 4264,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/prime-prompt.md",
+        "size": 2042,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/takomi-prompt.md",
+        "size": 3678,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/vibe-primeAgent.md",
+        "size": 2252,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/vibe-spawnTask.md",
+        "size": 3116,
+        "mode": 420
+      },
+      {
+        "path": ".pi/prompts/vibe-syncDocs.md",
+        "size": 2582,
+        "mode": 420
+      },
+      {
+        "path": ".pi/README.md",
+        "size": 7125,
+        "mode": 420
+      },
+      {
+        "path": ".pi/themes/takomi-noir.json",
+        "size": 2189,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 21732,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/21st-handoff.md",
+        "size": 2058,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/references/categories.md",
+        "size": 5009,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/references/manual-handoff-template.md",
+        "size": 1593,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/references/section-detection-rubric.md",
+        "size": 2315,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/scripts/_shared.mjs",
+        "size": 10928,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/scripts/build-manual-handoff-template.mjs",
+        "size": 2511,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/scripts/fetch-21st-source.mjs",
+        "size": 1736,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/scripts/resolve-21st-component.mjs",
+        "size": 4391,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/21st-dev-components/SKILL.md",
+        "size": 7042,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/agent-recovery/SKILL.md",
+        "size": 3437,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-avatar-video/SKILL.md",
+        "size": 4599,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-marketing-videos/SKILL.md",
+        "size": 8610,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-podcast-creation/SKILL.md",
+        "size": 8021,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-product-photography/SKILL.md",
+        "size": 7810,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-sdk/references/ai-gateway.md",
+        "size": 2257,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-sdk/references/common-errors.md",
+        "size": 11477,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-sdk/references/type-safe-agents.md",
+        "size": 5527,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-sdk/SKILL.md",
+        "size": 4661,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-social-media-content/SKILL.md",
+        "size": 7344,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ai-voice-cloning/SKILL.md",
+        "size": 7382,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/algorithmic-art/LICENSE.txt",
+        "size": 11558,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/algorithmic-art/SKILL.md",
+        "size": 20173,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/algorithmic-art/templates/generator_template.js",
+        "size": 8048,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/algorithmic-art/templates/viewer.html",
+        "size": 21442,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/audit-website/agents/openai.yaml",
+        "size": 235,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/audit-website/assets/icon-large.png",
+        "size": 2763,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/audit-website/assets/icon-small.svg",
+        "size": 1762,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/audit-website/references/OUTPUT-FORMAT.md",
+        "size": 7956,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/audit-website/SKILL.md",
+        "size": 22300,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/avoid-feature-creep/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/avoid-feature-creep/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/avoid-feature-creep/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/avoid-feature-creep/SKILL.md",
+        "size": 11242,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/animations.md",
+        "size": 4967,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/controls.md",
+        "size": 5325,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/form-sheet.md",
+        "size": 5800,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/gradients.md",
+        "size": 2823,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/icons.md",
+        "size": 4984,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/media.md",
+        "size": 6394,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/route-structure.md",
+        "size": 5335,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/search.md",
+        "size": 5441,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/storage.md",
+        "size": 3056,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/tabs.md",
+        "size": 8349,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/toolbar-and-headers.md",
+        "size": 8345,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/visual-effects.md",
+        "size": 4532,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/webgpu-three.md",
+        "size": 15071,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/references/zoom-transitions.md",
+        "size": 5006,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/building-native-ui/SKILL.md",
+        "size": 10627,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/code-review/SKILL.md",
+        "size": 1095,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/component-analysis/SKILL.md",
+        "size": 2800,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/context7/SKILL.md",
+        "size": 3251,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-agents/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-agents/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-agents/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-agents/SKILL.md",
+        "size": 14206,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-best-practices/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-best-practices/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-best-practices/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-best-practices/SKILL.md",
+        "size": 10048,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-component-authoring/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-component-authoring/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-component-authoring/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-component-authoring/SKILL.md",
+        "size": 11001,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-cron-jobs/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-cron-jobs/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-cron-jobs/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-cron-jobs/SKILL.md",
+        "size": 14540,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-file-storage/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-file-storage/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-file-storage/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-file-storage/SKILL.md",
+        "size": 12141,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-functions/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-functions/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-functions/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-functions/SKILL.md",
+        "size": 12466,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-http-actions/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-http-actions/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-http-actions/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-http-actions/SKILL.md",
+        "size": 19248,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-migrations/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-migrations/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-migrations/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-migrations/SKILL.md",
+        "size": 19035,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-realtime/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-realtime/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-realtime/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-realtime/SKILL.md",
+        "size": 12375,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-schema-validator/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-schema-validator/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-schema-validator/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-schema-validator/SKILL.md",
+        "size": 10530,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-audit/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-audit/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-audit/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-audit/SKILL.md",
+        "size": 15413,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-check/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-check/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-check/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex-security-check/SKILL.md",
+        "size": 10200,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex/agents/openai.yaml",
+        "size": 94,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex/assets/large-logo.png",
+        "size": 3231,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex/assets/small-logo.svg",
+        "size": 1226,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/convex/SKILL.md",
+        "size": 2092,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/copywriting/references/copy-frameworks.md",
+        "size": 7766,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/copywriting/references/natural-transitions.md",
+        "size": 5431,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/copywriting/SKILL.md",
+        "size": 7378,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/references/art-of-readme.md",
+        "size": 24976,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/references/make-a-readme.md",
+        "size": 6798,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/references/standard-readme-example-maximal.md",
+        "size": 1654,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/references/standard-readme-example-minimal.md",
+        "size": 190,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/references/standard-readme-spec.md",
+        "size": 10106,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/section-checklist.md",
+        "size": 697,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/SKILL.md",
+        "size": 2754,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/style-guide.md",
+        "size": 447,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/templates/internal.md",
+        "size": 2058,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/templates/oss.md",
+        "size": 1744,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/templates/personal.md",
+        "size": 1129,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/templates/xdg-config.md",
+        "size": 1549,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/crafting-effective-readmes/using-references.md",
+        "size": 1360,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/LICENSE.txt",
+        "size": 1497,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/accept_changes.py",
+        "size": 4186,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/comment.py",
+        "size": 11012,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/helpers/merge_runs.py",
+        "size": 5766,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/helpers/simplify_redlines.py",
+        "size": 5951,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/pack.py",
+        "size": 5150,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd",
+        "size": 2005,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd",
+        "size": 2565,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd",
+        "size": 2905,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd",
+        "size": 1377,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd",
+        "size": 76483,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd",
+        "size": 7102,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd",
+        "size": 52387,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd",
+        "size": 635,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd",
+        "size": 155120,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd",
+        "size": 1254,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd",
+        "size": 9047,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd",
+        "size": 15082,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd",
+        "size": 85288,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd",
+        "size": 1297,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd",
+        "size": 7472,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd",
+        "size": 6556,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd",
+        "size": 1273,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd",
+        "size": 898,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd",
+        "size": 2667,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd",
+        "size": 3563,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd",
+        "size": 7702,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd",
+        "size": 23895,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd",
+        "size": 1392,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd",
+        "size": 246716,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd",
+        "size": 26718,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd",
+        "size": 25788,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd",
+        "size": 547,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd",
+        "size": 5820,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd",
+        "size": 4106,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd",
+        "size": 175013,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd",
+        "size": 4762,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/mce/mc.xsd",
+        "size": 3202,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-2010.xsd",
+        "size": 27109,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-2012.xsd",
+        "size": 3812,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-2018.xsd",
+        "size": 915,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-cex-2018.xsd",
+        "size": 1798,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-cid-2016.xsd",
+        "size": 1015,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd",
+        "size": 604,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/schemas/microsoft/wml-symex-2015.xsd",
+        "size": 753,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/soffice.py",
+        "size": 5484,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/unpack.py",
+        "size": 4184,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/validate.py",
+        "size": 3779,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/validators/base.py",
+        "size": 33498,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/validators/docx.py",
+        "size": 16822,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/validators/pptx.py",
+        "size": 10099,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/office/validators/redlining.py",
+        "size": 9165,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/templates/comments.xml",
+        "size": 2606,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/templates/commentsExtended.xml",
+        "size": 2614,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/templates/commentsExtensible.xml",
+        "size": 2710,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/templates/commentsIds.xml",
+        "size": 2622,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/scripts/templates/people.xml",
+        "size": 118,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/docx/SKILL.md",
+        "size": 17622,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/domain-name-brainstormer/SKILL.md",
+        "size": 5908,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/frontend-design/LICENSE.txt",
+        "size": 10351,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/frontend-design/SKILL.md",
+        "size": 4482,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/gemini/SKILL.md",
+        "size": 10066,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/git-worktree/SKILL.md",
+        "size": 1682,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/github-ops/scripts/publish_issues.ps1",
+        "size": 16038,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/github-ops/scripts/smart-ops.ps1",
+        "size": 4593,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/github-ops/scripts/smart-ops.sh",
+        "size": 3773,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/github-ops/SKILL.md",
+        "size": 6790,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/global-brand-namer/references/language-matrices.md",
+        "size": 8879,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/global-brand-namer/references/saas-modifiers.md",
+        "size": 4485,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/global-brand-namer/SKILL.md",
+        "size": 6316,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/google-trends/scripts/package.json",
+        "size": 420,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/google-trends/scripts/pnpm-lock.yaml",
+        "size": 707,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/google-trends/scripts/search.js",
+        "size": 5921,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/google-trends/SKILL.md",
+        "size": 4159,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/high-fidelity-extraction/SKILL.md",
+        "size": 3423,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/jstar-reviewer/agents/openai.yaml",
+        "size": 269,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/jstar-reviewer/SKILL.md",
+        "size": 4269,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/jules/SKILL.md",
+        "size": 5598,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/marketing-ideas/references/ideas-by-category.md",
+        "size": 15029,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/marketing-ideas/SKILL.md",
+        "size": 4971,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/monorepo-management/SKILL.md",
+        "size": 13334,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/nextjs-standards/scripts/vibe-verify.py",
+        "size": 4793,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/nextjs-standards/SKILL.md",
+        "size": 5170,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/nextjs-standards/templates/Coding_Guidelines.md",
+        "size": 7992,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/nextjs-standards/templates/Issue_Template.md",
+        "size": 4567,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/optimize-agent-context/SKILL.md",
+        "size": 4797,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/forms.md",
+        "size": 12148,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/LICENSE.txt",
+        "size": 1497,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/reference.md",
+        "size": 17303,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/check_bounding_boxes.py",
+        "size": 2839,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/check_fillable_fields.py",
+        "size": 279,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/convert_pdf_to_images.py",
+        "size": 1041,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/create_validation_image.py",
+        "size": 1295,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/extract_form_field_info.py",
+        "size": 4422,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/extract_form_structure.py",
+        "size": 4060,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/fill_fillable_fields.py",
+        "size": 3917,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/scripts/fill_pdf_form_with_annotations.py",
+        "size": 3342,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pdf/SKILL.md",
+        "size": 8386,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/editing.md",
+        "size": 7090,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/LICENSE.txt",
+        "size": 1497,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/pptxgenjs.md",
+        "size": 13239,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/add_slide.py",
+        "size": 7067,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/clean.py",
+        "size": 9869,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/helpers/merge_runs.py",
+        "size": 5766,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/helpers/simplify_redlines.py",
+        "size": 5951,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/pack.py",
+        "size": 5150,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd",
+        "size": 2005,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd",
+        "size": 2565,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd",
+        "size": 2905,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd",
+        "size": 1377,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd",
+        "size": 76483,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd",
+        "size": 7102,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd",
+        "size": 52387,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd",
+        "size": 635,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd",
+        "size": 155120,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd",
+        "size": 1254,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd",
+        "size": 9047,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd",
+        "size": 15082,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd",
+        "size": 85288,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd",
+        "size": 1297,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd",
+        "size": 7472,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd",
+        "size": 6556,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd",
+        "size": 1273,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd",
+        "size": 898,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd",
+        "size": 2667,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd",
+        "size": 3563,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd",
+        "size": 7702,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd",
+        "size": 23895,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd",
+        "size": 1392,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd",
+        "size": 246716,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd",
+        "size": 26718,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd",
+        "size": 25788,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd",
+        "size": 547,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd",
+        "size": 5820,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd",
+        "size": 4106,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd",
+        "size": 175013,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd",
+        "size": 4762,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/mce/mc.xsd",
+        "size": 3202,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-2010.xsd",
+        "size": 27109,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-2012.xsd",
+        "size": 3812,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-2018.xsd",
+        "size": 915,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-cex-2018.xsd",
+        "size": 1798,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-cid-2016.xsd",
+        "size": 1015,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd",
+        "size": 604,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/schemas/microsoft/wml-symex-2015.xsd",
+        "size": 753,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/soffice.py",
+        "size": 5484,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/unpack.py",
+        "size": 4184,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/validate.py",
+        "size": 3779,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/validators/base.py",
+        "size": 33498,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/validators/docx.py",
+        "size": 16822,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/validators/pptx.py",
+        "size": 10099,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/office/validators/redlining.py",
+        "size": 9165,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/scripts/thumbnail.py",
+        "size": 9074,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pptx/SKILL.md",
+        "size": 9414,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pr-comment-fix/SKILL.md",
+        "size": 6797,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pricing-strategy/references/research-methods.md",
+        "size": 4636,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pricing-strategy/references/tier-structure.md",
+        "size": 7023,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/pricing-strategy/SKILL.md",
+        "size": 6786,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/programmatic-seo/references/playbooks.md",
+        "size": 8341,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/programmatic-seo/SKILL.md",
+        "size": 6862,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/prompt-engineering/SKILL.md",
+        "size": 9840,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/3d.md",
+        "size": 2375,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/animations.md",
+        "size": 818,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/assets.md",
+        "size": 1668,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/assets/charts-bar-chart.tsx",
+        "size": 3602,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/assets/text-animations-typewriter.tsx",
+        "size": 2283,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/assets/text-animations-word-highlight.tsx",
+        "size": 2495,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/audio.md",
+        "size": 3994,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/calculate-metadata.md",
+        "size": 3024,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/can-decode.md",
+        "size": 1662,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/charts.md",
+        "size": 1809,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/compositions.md",
+        "size": 3849,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/display-captions.md",
+        "size": 3824,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/extract-frames.md",
+        "size": 5725,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/fonts.md",
+        "size": 3636,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/get-audio-duration.md",
+        "size": 1412,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/get-video-dimensions.md",
+        "size": 1695,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/get-video-duration.md",
+        "size": 1399,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/gifs.md",
+        "size": 4006,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/images.md",
+        "size": 2913,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/import-srt-captions.md",
+        "size": 2180,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/lottie.md",
+        "size": 1847,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/maps.md",
+        "size": 11774,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/measuring-dom-nodes.md",
+        "size": 1009,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/measuring-text.md",
+        "size": 3143,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/parameters.md",
+        "size": 2478,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/sequencing.md",
+        "size": 2862,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/tailwind.md",
+        "size": 432,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/text-animations.md",
+        "size": 720,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/timing.md",
+        "size": 4118,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/transcribe-captions.md",
+        "size": 869,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/transitions.md",
+        "size": 3852,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/trimming.md",
+        "size": 1263,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/rules/videos.md",
+        "size": 3680,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/remotion/SKILL.md",
+        "size": 3622,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/security-audit/SKILL.md",
+        "size": 8344,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/seo-ready/references/aeo-geo-patterns.md",
+        "size": 9744,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/seo-ready/references/ai-writing-detection.md",
+        "size": 6394,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/seo-ready/SKILL.md",
+        "size": 3459,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/LICENSE.txt",
+        "size": 11558,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/references/output-patterns.md",
+        "size": 1895,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/references/workflows.md",
+        "size": 845,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/scripts/__pycache__/quick_validate.cpython-311.pyc",
+        "size": 4585,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/scripts/init_skill.py",
+        "size": 11166,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/scripts/package_skill.py",
+        "size": 3398,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/scripts/quick_validate.py",
+        "size": 3617,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/skill-creator/SKILL.md",
+        "size": 18193,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/social-content/references/platforms.md",
+        "size": 4515,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/social-content/references/post-templates.md",
+        "size": 3513,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/social-content/references/reverse-engineering.md",
+        "size": 5599,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/social-content/SKILL.md",
+        "size": 8631,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/spawn-task/SKILL.md",
+        "size": 2765,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/design-md/examples/DESIGN.md",
+        "size": 10844,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/design-md/README.md",
+        "size": 1272,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/design-md/SKILL.md",
+        "size": 7654,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/enhance-prompt/README.md",
+        "size": 1187,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/enhance-prompt/references/KEYWORDS.md",
+        "size": 2685,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/enhance-prompt/SKILL.md",
+        "size": 6640,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/examples/gold-standard-card.tsx",
+        "size": 2590,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/package-lock.json",
+        "size": 7204,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/package.json",
+        "size": 355,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/README.md",
+        "size": 1368,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/resources/architecture-checklist.md",
+        "size": 613,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/resources/component-template.tsx",
+        "size": 1049,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/resources/stitch-api-reference.md",
+        "size": 1225,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/resources/style-guide.json",
+        "size": 496,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/scripts/fetch-stitch.sh",
+        "size": 1009,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/scripts/validate.js",
+        "size": 2334,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/react-components/SKILL.md",
+        "size": 2790,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/examples/screens.json",
+        "size": 1451,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/examples/WalkthroughComposition.tsx",
+        "size": 2295,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/README.md",
+        "size": 3499,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/resources/composition-checklist.md",
+        "size": 3748,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/resources/screen-slide-template.tsx",
+        "size": 2412,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/scripts/download-stitch-asset.sh",
+        "size": 1027,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/remotion/SKILL.md",
+        "size": 12954,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/examples/auth-layout.tsx",
+        "size": 5770,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/examples/data-table.tsx",
+        "size": 8903,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/examples/form-pattern.tsx",
+        "size": 4954,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/README.md",
+        "size": 6824,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/resources/component-catalog.md",
+        "size": 12254,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/resources/customization-guide.md",
+        "size": 12100,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/resources/migration-guide.md",
+        "size": 10945,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/resources/setup-guide.md",
+        "size": 9866,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/scripts/verify-setup.sh",
+        "size": 4409,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/shadcn-ui/SKILL.md",
+        "size": 9207,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/SKILL.md",
+        "size": 12956,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/stitch-loop/examples/next-prompt.md",
+        "size": 1236,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/stitch-loop/examples/SITE.md",
+        "size": 3255,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/stitch-loop/README.md",
+        "size": 1464,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/stitch-loop/resources/baton-schema.md",
+        "size": 1663,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/stitch-loop/resources/site-template.md",
+        "size": 2969,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/stitch/stitch-loop/SKILL.md",
+        "size": 7407,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/subagent-driven-development/code-quality-reviewer-prompt.md",
+        "size": 650,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/subagent-driven-development/implementer-prompt.md",
+        "size": 2273,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/subagent-driven-development/SKILL.md",
+        "size": 10218,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/subagent-driven-development/spec-reviewer-prompt.md",
+        "size": 2060,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/sync-docs/SKILL.md",
+        "size": 2034,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/references/migration-map.md",
+        "size": 1419,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/SKILL.md",
+        "size": 2359,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/agent_reset.md",
+        "size": 5561,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/escalate.md",
+        "size": 3458,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/migrate.md",
+        "size": 3632,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-architect.md",
+        "size": 9514,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-ask.md",
+        "size": 7286,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-code.md",
+        "size": 10710,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-debug.md",
+        "size": 9575,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-orchestrator.md",
+        "size": 7254,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-review.md",
+        "size": 8493,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/mode-visionary.md",
+        "size": 5549,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/optimize-agent-context.md",
+        "size": 1370,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/remotion-build.md",
+        "size": 8558,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/reverse_genesis.md",
+        "size": 3344,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/review_code.md",
+        "size": 1976,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/spawn-jstar-code-review.md",
+        "size": 2521,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/stitch.md",
+        "size": 6535,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-build.md",
+        "size": 5269,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-continueBuild.md",
+        "size": 3711,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-design.md",
+        "size": 3519,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-finalize.md",
+        "size": 3748,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-genesis.md",
+        "size": 4776,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-primeAgent.md",
+        "size": 2293,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-spawnTask.md",
+        "size": 4191,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/takomi/workflows/vibe-syncDocs.md",
+        "size": 2385,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/twitter-automation/SKILL.md",
+        "size": 4127,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/charts.csv",
+        "size": 7680,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/colors.csv",
+        "size": 13023,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/icons.csv",
+        "size": 13486,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/landing.csv",
+        "size": 14372,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/products.csv",
+        "size": 29790,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/prompts.csv",
+        "size": 17425,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/react-performance.csv",
+        "size": 14867,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/flutter.csv",
+        "size": 10469,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/html-tailwind.csv",
+        "size": 11361,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/jetpack-compose.csv",
+        "size": 8248,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/nextjs.csv",
+        "size": 12546,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/nuxt-ui.csv",
+        "size": 14061,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/nuxtjs.csv",
+        "size": 16598,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/react-native.csv",
+        "size": 10035,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/react.csv",
+        "size": 13016,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/shadcn.csv",
+        "size": 15982,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/svelte.csv",
+        "size": 11063,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/swiftui.csv",
+        "size": 10872,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/stacks/vue.csv",
+        "size": 11056,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/styles.csv",
+        "size": 40970,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/typography.csv",
+        "size": 31935,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/ui-reasoning.csv",
+        "size": 31172,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/ux-guidelines.csv",
+        "size": 18766,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/data/web-interface.csv",
+        "size": 7503,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/README.md",
+        "size": 24103,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/scripts/__pycache__/core.cpython-311.pyc",
+        "size": 13883,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/scripts/__pycache__/design_system.cpython-311.pyc",
+        "size": 68824,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/scripts/core.py",
+        "size": 10678,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/scripts/design_system.py",
+        "size": 44681,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/scripts/search.py",
+        "size": 5095,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/ui-ux-pro-max/SKILL.md",
+        "size": 11393,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/references/expo-av-to-audio.md",
+        "size": 3815,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/references/expo-av-to-video.md",
+        "size": 4422,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/references/native-tabs.md",
+        "size": 3623,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/references/new-architecture.md",
+        "size": 2256,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/references/react-19.md",
+        "size": 1954,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/references/react-compiler.md",
+        "size": 1704,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/upgrading-expo/SKILL.md",
+        "size": 5061,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/web-design-guidelines/SKILL.md",
+        "size": 1270,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/webapp-testing/examples/console_logging.py",
+        "size": 1061,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/webapp-testing/examples/element_discovery.py",
+        "size": 1502,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/webapp-testing/examples/static_html_automation.py",
+        "size": 985,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/webapp-testing/LICENSE.txt",
+        "size": 11558,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/webapp-testing/scripts/with_server.py",
+        "size": 3798,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/webapp-testing/SKILL.md",
+        "size": 4008,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/LICENSE.txt",
+        "size": 1497,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/helpers/merge_runs.py",
+        "size": 5766,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/helpers/simplify_redlines.py",
+        "size": 5951,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/pack.py",
+        "size": 5150,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd",
+        "size": 2005,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd",
+        "size": 2565,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd",
+        "size": 2905,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd",
+        "size": 1377,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd",
+        "size": 76483,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd",
+        "size": 7102,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd",
+        "size": 52387,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd",
+        "size": 635,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd",
+        "size": 155120,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd",
+        "size": 1254,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd",
+        "size": 9047,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd",
+        "size": 15082,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd",
+        "size": 85288,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd",
+        "size": 1297,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd",
+        "size": 7472,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd",
+        "size": 6556,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd",
+        "size": 1273,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd",
+        "size": 898,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd",
+        "size": 2667,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd",
+        "size": 3563,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd",
+        "size": 7702,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd",
+        "size": 23895,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd",
+        "size": 1392,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd",
+        "size": 246716,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd",
+        "size": 26718,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd",
+        "size": 25788,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd",
+        "size": 547,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd",
+        "size": 5820,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd",
+        "size": 4106,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd",
+        "size": 175013,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd",
+        "size": 4762,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/mce/mc.xsd",
+        "size": 3202,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-2010.xsd",
+        "size": 27109,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-2012.xsd",
+        "size": 3812,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-2018.xsd",
+        "size": 915,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-cex-2018.xsd",
+        "size": 1798,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-cid-2016.xsd",
+        "size": 1015,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd",
+        "size": 604,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/schemas/microsoft/wml-symex-2015.xsd",
+        "size": 753,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/soffice.py",
+        "size": 5484,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/unpack.py",
+        "size": 4184,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/validate.py",
+        "size": 3779,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/validators/base.py",
+        "size": 33498,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/validators/docx.py",
+        "size": 16822,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/validators/pptx.py",
+        "size": 10099,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/office/validators/redlining.py",
+        "size": 9165,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/scripts/recalc.py",
+        "size": 5966,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/xlsx/SKILL.md",
+        "size": 11754,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-phase1-strategy.md",
+        "size": 9883,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-phase2-packaging.md",
+        "size": 5651,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-phase3-scripting.md",
+        "size": 6120,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-phase3.5-shorts.md",
+        "size": 9370,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-phase4-production.md",
+        "size": 5145,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-phase5-repurposing.md",
+        "size": 4961,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/resources/youtube-pipeline.md",
+        "size": 6137,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/scripts/parse_yt_studio.ps1",
+        "size": 4697,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/skills/youtube-pipeline/SKILL.md",
+        "size": 7881,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/agent_reset.md",
+        "size": 5561,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/escalate.md",
+        "size": 3458,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/analyze_component.md",
+        "size": 3691,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/ANTIGRAVITY_TOOLBOX.md",
+        "size": 7274,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/build_vibecode_project_v2.md",
+        "size": 5184,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/build_vibecode_project.md",
+        "size": 4631,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/deep_code_audit.md",
+        "size": 3167,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/gemini-orchestrate.md",
+        "size": 1404,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/git_worktree.md",
+        "size": 2550,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/init_smart_ops.md",
+        "size": 2155,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/init_vibecode_genesis_v1.md",
+        "size": 5119,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/multi_agent_strategy.md",
+        "size": 3270,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/orchestrate.md",
+        "size": 9563,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/seo_ready.md",
+        "size": 6547,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/vibe-orchestrator.md",
+        "size": 10106,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-phase1-strategy.md",
+        "size": 9883,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-phase2-packaging.md",
+        "size": 5651,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-phase3-scripting.md",
+        "size": 6120,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-phase3.5-shorts.md",
+        "size": 9370,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-phase4-production.md",
+        "size": 5145,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-phase5-repurposing.md",
+        "size": 4961,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/LEGACY/youtube-pipeline.md",
+        "size": 6137,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/migrate.md",
+        "size": 3632,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-architect.md",
+        "size": 9514,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-ask.md",
+        "size": 7286,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-code.md",
+        "size": 10710,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-debug.md",
+        "size": 9575,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-orchestrator.md",
+        "size": 7254,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-review.md",
+        "size": 8493,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/mode-visionary.md",
+        "size": 5549,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/optimize-agent-context.md",
+        "size": 1370,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/README.md",
+        "size": 27217,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/remotion-build.md",
+        "size": 8558,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/reverse_genesis.md",
+        "size": 3344,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/review_code.md",
+        "size": 1976,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/spawn-jstar-code-review.md",
+        "size": 2521,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/stitch.md",
+        "size": 6535,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/Vercel Ai SDK.md",
+        "size": 1197790,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-build.md",
+        "size": 5269,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-continueBuild.md",
+        "size": 3711,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-design.md",
+        "size": 3519,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-finalize.md",
+        "size": 3748,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-genesis.md",
+        "size": 4776,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-primeAgent.md",
+        "size": 2293,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-spawnTask.md",
+        "size": 4191,
+        "mode": 420
+      },
+      {
+        "path": "assets/.agent/workflows/vibe-syncDocs.md",
+        "size": 2385,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/0 VibeCode User Manual.md",
+        "size": 15069,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/1 Project Genesis Protocol The VibeCode Workflow.md",
+        "size": 8781,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/2✨ ULTIMATE ORCHESTRATION PROMPT✨.md",
+        "size": 5893,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/3 Design System Genesis Protocol.md",
+        "size": 5526,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/3.1.1 my_design_system_rules.md",
+        "size": 9783,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/3.1.2 Material You M3 Genesis Protocol.md",
+        "size": 6303,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/4 The Ultimate GitHub Issue Meta-Prompt Template.md",
+        "size": 3575,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/5 The Escalation & Handoff Protocol.md",
+        "size": 5326,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/8 The Seamless Migration Meta-Prompt (Your Reusable Tool).md",
+        "size": 2968,
+        "mode": 420
+      },
+      {
+        "path": "assets/Legacy/9 The Reverse Genesis Protocol.md",
+        "size": 5607,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/custom_modes.yaml",
+        "size": 103058,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/kilo-code-settings.json",
+        "size": 81353,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-architect.yaml",
+        "size": 12728,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-ask.yaml",
+        "size": 11916,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-code.yaml",
+        "size": 14787,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-debug.yaml",
+        "size": 13127,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-orchestrator.yaml",
+        "size": 28424,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-review.yaml",
+        "size": 13670,
+        "mode": 420
+      },
+      {
+        "path": "assets/Takomi-Agents/vibe-visionary.yaml",
+        "size": 22181,
+        "mode": 420
+      },
+      {
+        "path": "bin/takomi.js",
+        "size": 46,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1396,
+        "mode": 420
+      },
+      {
+        "path": "src/cli.js",
+        "size": 26715,
+        "mode": 420
+      },
+      {
+        "path": "src/doctor.js",
+        "size": 2841,
+        "mode": 420
+      },
+      {
+        "path": "src/harness.js",
+        "size": 9446,
+        "mode": 420
+      },
+      {
+        "path": "src/pi-harness.js",
+        "size": 5921,
+        "mode": 420
+      },
+      {
+        "path": "src/pi-takomi-core/index.ts",
+        "size": 114,
+        "mode": 420
+      },
+      {
+        "path": "src/pi-takomi-core/orchestration.ts",
+        "size": 14478,
+        "mode": 420
+      },
+      {
+        "path": "src/pi-takomi-core/routing.ts",
+        "size": 4103,
+        "mode": 420
+      },
+      {
+        "path": "src/pi-takomi-core/types.ts",
+        "size": 4533,
+        "mode": 420
+      },
+      {
+        "path": "src/pi-takomi-core/workflows.ts",
+        "size": 9010,
+        "mode": 420
+      },
+      {
+        "path": "src/store.js",
+        "size": 8185,
+        "mode": 420
+      },
+      {
+        "path": "src/utils.js",
+        "size": 15112,
+        "mode": 420
+      }
+    ],
+    "entryCount": 637,
+    "bundled": []
+  }
+]

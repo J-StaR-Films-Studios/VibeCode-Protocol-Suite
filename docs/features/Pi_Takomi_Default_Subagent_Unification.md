@@ -305,6 +305,7 @@ type TakomiSubagentRunGroup = {
 - Removed Takomi's project-local `subagent` registration so it no longer conflicts with the default/user-level Pi subagent extension.
 - Registered `takomi_subagent` as the Takomi lifecycle-aware wrapper and branded its native-style renderer as Takomi.
 - Added live partial updates for `takomi_subagent` so model readiness, running output, logs, blocked state, and completion appear in the native-style result card.
+- Simplified `.pi/extensions/takomi-subagents/native-render.ts` so direct `takomi_subagent` output follows the default Pi subagent compact/detail pattern more closely instead of using a bespoke Takomi card layout.
 - Rewired `Alt+T`, `Alt+Shift+T`, and `/takomi subagents expand|collapse|toggle` to Pi's native tool-result expansion state.
 - Added a safe agent alias fallback so `general` resolves to `orchestrator` when the project does not define a `general` agent.
 - Targeted verification passed for the changed Takomi runtime, subagent, and shared-core files.

@@ -9,7 +9,12 @@
   "files": [
     "bin",
     "src",
-    "assets"
+    "assets",
+    ".pi/README.md",
+    ".pi/agents",
+    ".pi/extensions",
+    ".pi/prompts",
+    ".pi/themes"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

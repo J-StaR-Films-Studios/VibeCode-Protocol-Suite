@@ -6,3 +6,7 @@ coverage
 .idea
 .vscode
 *.log
+.pi/settings.json
+.pi/takomi-profile.json
+.pi/takomi/model-routing.md
+.pi/takomi/subagents/

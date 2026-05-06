@@ -15,6 +15,7 @@ import {
   copyAgentReadme,
   copyAgentYamls,
   copyLegacyManual,
+  copyBundledPiAssets,
   updateWorkflows,
   updateSkills,
   updateAgentYamls,
@@ -39,6 +40,7 @@ import {
   getStoreWorkflows,
   isStoreInitialized,
 } from './store.js';
+import { runDoctor } from './doctor.js';
 
 const program = new Command();
 
@@ -124,6 +126,10 @@ async function init() {
     // 0. Install from local assets
     console.log(pc.cyan('📦 Installing from local bundle...\n'));
 
+    if (await copyBundledPiAssets(destRoot)) {
+      console.log(pc.green('✔ Installed Pi-native Takomi runtime (.pi).'));
+    }
+
     // 1. Handle .agent Folder
     if (response.components.includes('agent')) {
       const agentDest = path.join(destRoot, '.agent');
@@ -197,7 +203,8 @@ async function init() {
     console.log(pc.white(`\nNext steps:`));
     if (response.components.includes('agent')) {
       console.log(pc.gray(`1. Your .agent folder is armed and ready.`));
-      console.log(pc.gray(`2. In Codex, say "use takomi genesis" (slash command optional).`));
+      console.log(pc.gray(`2. Your Pi-native .pi Takomi runtime is installed.`));
+      console.log(pc.gray(`3. In Codex, say "use takomi genesis" (slash command optional).`));
     }
     console.log(pc.dim(`\n💡 Pro tip: Run "takomi install" to sync this toolkit across all your IDEs.\n`));
 
@@ -206,11 +213,33 @@ async function init() {
   }
 }
 
+async function installPiTarget() {
+  console.log(pc.magenta('🧭 Pi Harness Preflight\n'));
+  await runDoctor({ version: program.version() });
+  console.log(pc.yellow('Pi harness install is not enabled yet because package Pi assets are not finalized.'));
+  console.log(pc.dim('Next step: package assets under assets/pi or packages/pi and add an install-safe manifest.\n'));
+}
+
+function printUnsupportedInstallTarget(target) {
+  console.log(pc.yellow(`Unsupported install target: ${target}`));
+  console.log(pc.dim('Supported targets right now: pi'));
+  console.log(pc.dim('Use plain "takomi install" for the existing interactive global installer.\n'));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // takomi install (NEW — Global Setup + Harness Routing)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function install() {
+async function install(target) {
+  if (target) {
+    if (target === 'pi') {
+      await installPiTarget();
+      return;
+    }
+
+    printUnsupportedInstallTarget(target);
+    return;
+  }
   console.log(pc.magenta(figlet.textSync('Takomi', { horizontalLayout: 'full' })));
   console.log(pc.cyan('   🌐 One install. Every IDE. Zero friction.\n'));
 
@@ -545,8 +574,8 @@ program
 
 // Global installer (NEW)
 program
-  .command('install')
-  .description('Build your global command center')
+  .command('install [target]')
+  .description('Build your global command center or run a target-specific installer')
   .action(install);
 
 // Re-sync (NEW)
@@ -566,6 +595,11 @@ program
   .command('harnesses')
   .description('See your toolkit status and connected IDEs')
   .action(harnesses);
+
+program
+  .command('doctor')
+  .description('Run Pi/Takomi installation diagnostics')
+  .action(() => runDoctor({ version: program.version() }));
 
 // Update from GitHub (EXISTING — enhanced)
 program

@@ -7,7 +7,7 @@ It is intentionally separate from the existing cross-harness assets under `asset
 ## Contents
 
 - `extensions/takomi-runtime/` - Pi runtime glue, embedded workflow playbooks, and orchestrator board tools
-- `extensions/takomi-subagents/` - project-local subagent execution with resumable conversation IDs
+- `extensions/takomi-subagents/` - Takomi-facing subagent wrapper over Pi-style execution semantics with resumable conversation IDs
 - `prompts/` - Pi-native prompt shortcuts
 - `agents/` - Pi-native specialist agent definitions, including a design-stage agent
 
@@ -48,6 +48,42 @@ Inside Pi, use:
   - `/vibe-spawnTask`
   - `/vibe-syncDocs`
 
+## Dependency + ownership notes
+
+This is the current ownership model other agents should assume:
+
+- `takomi_board` owns lifecycle/session/task orchestration
+- `takomi_subagent` is the preferred Takomi-facing delegation tool
+- raw Pi `subagent` may still be available in the environment, but is advanced/internal for Takomi work
+
+Important implementation note:
+
+- `takomi_subagent` currently does **not** call raw `subagent` as a tool-to-tool passthrough
+- it is implemented in `.pi/extensions/takomi-subagents/`
+- it follows Pi-style execution semantics and Pi-style result rendering more closely now
+- it is a wrapper/alignment layer, not yet a literal dependency bridge into the `subagent` tool runtime
+
+Bundled with Takomi now:
+
+- `.pi/extensions/takomi-runtime/`
+- `.pi/extensions/takomi-subagents/`
+- `.pi/prompts/`
+- `.pi/agents/`
+- `.pi/themes/`
+- `src/pi-takomi-core/`
+
+Not yet guaranteed bundled as package dependencies:
+
+- user/global Pi installation
+- user/global raw `subagent` extension
+- `pi-subagents` as a direct npm dependency of this package
+
+So when working on packaging, agents should distinguish between:
+
+- Takomi-shipped Pi-native runtime assets
+- optional user/global Pi runtime dependencies
+- optional raw `subagent` availability in the host environment
+
 ## Notable behavior
 
 - The lifecycle explicitly models `Genesis -> Design -> Build`.
@@ -60,7 +96,7 @@ Inside Pi, use:
 - Build is treated as a workflow/stage, not as a separate specialist agent.
 - A fresh orchestration session starts with a Genesis foundation task, then expands Design and Build only when the scope justifies it.
 - The main execution roles remain things like `orchestrator`, `coder`, `designer`, `architect`, and `reviewer`.
-- Agent discovery prefers `project/.pi/agents/` and falls back to `~/.pi/agent/agents/` so new projects can reuse the global Takomi agent pack without manual copying.
+- Agent discovery prefers `project/.pi/agents/`, also supports legacy `project/.agents/`, and falls back to Pi's configured user agent directory so new projects can reuse the global Takomi agent pack without hard-coding `~/.pi` assumptions.
 - Orchestrator sessions run in hybrid mode:
   - human-readable docs live under `docs/tasks/orchestrator-sessions/<sessionId>/`
   - machine state lives under `.pi/takomi/orchestrator/<sessionId>.json`
@@ -71,7 +107,8 @@ Inside Pi, use:
 - The subagent tool supports `agentScope` values of `user`, `project`, and `both`; project-local agents require confirmation by default.
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, `fallbackModels`, `thinking`, and `checklist` overrides.
 - Board redispatch and direct `takomi_subagent` calls now share one launch path, so model preflight, thinking, fallback behavior, default prompts, and persisted session files stay aligned.
-- Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` for lifecycle-aware dispatch and renders it with the native Pi-style result surface.
+- Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` as the preferred lifecycle-aware interface and renders it with the native Pi-style result surface.
+- Treat raw `subagent` usage as advanced/internal. Normal Takomi lifecycle work should go through `takomi_subagent` or `takomi_board`.
 - Active Takomi subagent work now streams through the native Pi-style result UI instead of Takomi's older below-editor stack.
 - Use Pi's native result expansion, `Alt+T`, or `/takomi subagents expand` to inspect detailed subagent output.
 - Takomi still tracks active runs internally for status, review continuity, and board synchronization, but it no longer opens a custom subagent fullscreen overlay.
