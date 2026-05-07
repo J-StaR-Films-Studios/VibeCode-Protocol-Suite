@@ -80,7 +80,7 @@ export const HARNESS_MAP = {
       return fs.existsSync(this.rootPath);
     },
     targets: {
-      skills: path.join(HOME, '.codex', 'skills'),
+      skills: path.join(HOME, '.agents', 'skills'),
       workflows: null,
       yamls: null,
     },
@@ -107,7 +107,7 @@ export const HARNESS_MAP = {
       return fs.existsSync(this.rootPath) && !fs.existsSync(path.join(HOME, '.gemini', 'antigravity'));
     },
     targets: {
-      skills: path.join(HOME, '.gemini', 'skills'),
+      skills: path.join(HOME, '.agents', 'skills'),
       workflows: null,
       yamls: null,
     },

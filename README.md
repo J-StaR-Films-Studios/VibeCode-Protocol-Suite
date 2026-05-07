@@ -156,9 +156,8 @@ Takomi v2.0 introduces the **Global Skills Router** — install skills once, and
 | **Antigravity** | `~/.gemini/antigravity/skills/` | `~/.gemini/antigravity/global_workflows/` |
 | **KiloCode** | `~/.kilocode/skills/` | `~/.kilocode/workflows/` |
 | **Windsurf** | `~/.codeium/windsurf/skills/` | `~/.codeium/windsurf/global_workflows/` |
-| **Codex** | `~/.codex/skills/` | _(skills only)_ |
+| **Global agents-compatible CLIs** _(e.g., Codex, Gemini CLI)_ | `~/.agents/skills/` | _(skills only)_ |
 | **Cursor** | `~/.cursor/skills/` | _(uses rules)_ |
-| **Gemini CLI** | `~/.agents/skills/` | _(skills only)_ |
 
 ### CLI Commands
 
