@@ -194,6 +194,13 @@ export type RunHooks = {
 export type JsonRunHooks = {
   onAssistantText?: (text: string) => void;
   onEventText?: (line: string) => void;
+  onToolEvent?: (event: {
+    type: "start" | "update" | "end";
+    toolName: string;
+    args?: string;
+    isError?: boolean;
+    summary?: string;
+  }) => void;
   onStderr?: (chunk: string) => void;
 };
 
@@ -345,6 +352,18 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
 
         const messageText = summarizeJsonEvent(event);
         if (messageText) hooks?.onEventText?.(messageText);
+
+        if (event.type === "tool_execution_start") {
+          const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+          const args = typeof event.args === "string" ? event.args : event.args ? JSON.stringify(event.args) : undefined;
+          hooks?.onToolEvent?.({ type: "start", toolName, args, summary: messageText });
+        } else if (event.type === "tool_execution_update") {
+          const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+          hooks?.onToolEvent?.({ type: "update", toolName, summary: messageText });
+        } else if (event.type === "tool_execution_end") {
+          const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+          hooks?.onToolEvent?.({ type: "end", toolName, isError: event.isError === true, summary: messageText });
+        }
 
         if (event.type === "message_end") {
           const message = event.message;

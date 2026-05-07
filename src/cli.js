@@ -44,6 +44,7 @@ import { runDoctor } from './doctor.js';
 import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
+import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
 
 const packageJson = await fs.readJson(PATHS.packageJson);
 const program = new Command();
@@ -713,6 +714,18 @@ program
   .description('Run Pi/Takomi installation diagnostics')
   .action(() => runDoctor({ version: program.version() }));
 
+program
+  .command('check-update')
+  .description('Check whether a newer Takomi package is available')
+  .action(() => printTakomiUpdateStatus(program.version()));
+
+program
+  .command('upgrade')
+  .description('Manually update the global Takomi CLI package from npm')
+  .action(() => {
+    process.exitCode = upgradeTakomiPackage();
+  });
+
 // Update from GitHub (EXISTING — enhanced)
 program
   .command('update')
@@ -783,6 +796,7 @@ program
   });
 
 if (process.argv.length <= 2) {
+  notifyIfTakomiUpdateAvailable(program.version());
   const exitCode = await launchTakomiHarness(process.cwd());
   process.exitCode = exitCode;
 } else {
