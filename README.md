@@ -16,6 +16,32 @@
 
 ## 🚀 Quick Start (Recommended)
 
+### Takomi Pi Harness
+
+```bash
+npm install -g takomi
+takomi install pi
+cd my-project
+takomi
+```
+
+Optional global skills:
+
+```bash
+takomi install skills
+```
+
+Useful management commands:
+
+```bash
+takomi doctor
+takomi sync pi
+takomi sync skills
+takomi install all
+takomi init
+```
+
+
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 
 Install once. Use everywhere. Your skills follow you across every AI harness(Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI):
@@ -80,7 +106,7 @@ Original Takomi-authored skills in this bundle include `21st-dev-components`, `t
 
 Think of skills as specialized team members you can summon on demand. From security audits to AI video generation — there's a skill for that.
 
-The published bundle currently ships **68 top-level skills**, including the original `21st-dev-components` workflow for guided 21st.dev integration.
+The published bundle currently ships **69 top-level skills**, including the original `21st-dev-components` workflow for guided 21st.dev integration. The `pr-comment-fix` skill is sourced from https://gist.github.com/GSonofNun/35c67304c35dac7d6b43308b5371f671.
 
 ### Interactive Search & Install
 ```bash
@@ -112,7 +138,7 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 ### The Full Arsenal (Free)
 Everything else — SEO, research, documentation, testing, and beyond:
 ```bash
-npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 21st-dev-components --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill global-brand-namer --skill google-trends --skill high-fidelity-extraction --skill jstar-reviewer --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
+npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 21st-dev-components --skill agent-recovery --skill algorithmic-art --skill audit-website --skill avoid-feature-creep --skill building-native-ui --skill code-review --skill component-analysis --skill context7 --skill convex --skill convex-agents --skill convex-best-practices --skill convex-component-authoring --skill convex-cron-jobs --skill convex-file-storage --skill convex-functions --skill convex-http-actions --skill convex-migrations --skill convex-realtime --skill convex-schema-validator --skill convex-security-audit --skill convex-security-check --skill copywriting --skill crafting-effective-readmes --skill docx --skill domain-name-brainstormer --skill frontend-design --skill gemini --skill git-worktree --skill github-ops --skill global-brand-namer --skill google-trends --skill high-fidelity-extraction --skill jstar-reviewer --skill jules --skill marketing-ideas --skill monorepo-management --skill nextjs-standards --skill optimize-agent-context --skill pdf --skill pptx --skill pr-comment-fix --skill pricing-strategy --skill programmatic-seo --skill prompt-engineering --skill remotion --skill security-audit --skill seo-ready --skill skill-creator --skill social-content --skill spawn-task --skill stitch --skill subagent-driven-development --skill sync-docs --skill twitter-automation --skill ui-ux-pro-max --skill upgrading-expo --skill webapp-testing --skill web-design-guidelines --skill xlsx --skill youtube-pipeline
 ```
 
 ---

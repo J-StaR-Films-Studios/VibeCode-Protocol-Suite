@@ -1,0 +1,2 @@
+UI smoke test
+created by coder subagent

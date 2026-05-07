@@ -15,6 +15,7 @@ import {
   copyAgentReadme,
   copyAgentYamls,
   copyLegacyManual,
+  copyBundledPiAssets,
   updateWorkflows,
   updateSkills,
   updateAgentYamls,
@@ -39,7 +40,12 @@ import {
   getStoreWorkflows,
   isStoreInitialized,
 } from './store.js';
+import { runDoctor } from './doctor.js';
+import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult } from './pi-harness.js';
+import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
+import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
 
+const packageJson = await fs.readJson(PATHS.packageJson);
 const program = new Command();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,6 +130,10 @@ async function init() {
     // 0. Install from local assets
     console.log(pc.cyan('📦 Installing from local bundle...\n'));
 
+    if (await copyBundledPiAssets(destRoot)) {
+      console.log(pc.green('✔ Installed Pi-native Takomi runtime (.pi).'));
+    }
+
     // 1. Handle .agent Folder
     if (response.components.includes('agent')) {
       const agentDest = path.join(destRoot, '.agent');
@@ -197,7 +207,8 @@ async function init() {
     console.log(pc.white(`\nNext steps:`));
     if (response.components.includes('agent')) {
       console.log(pc.gray(`1. Your .agent folder is armed and ready.`));
-      console.log(pc.gray(`2. In Codex, say "use takomi genesis" (slash command optional).`));
+      console.log(pc.gray(`2. Your Pi-native .pi Takomi runtime is installed.`));
+      console.log(pc.gray(`3. In Codex, say "use takomi genesis" (slash command optional).`));
     }
     console.log(pc.dim(`\n💡 Pro tip: Run "takomi install" to sync this toolkit across all your IDEs.\n`));
 
@@ -206,11 +217,125 @@ async function init() {
   }
 }
 
+async function installSkillsTarget() {
+  console.log(pc.magenta('🧰 Takomi Skills Install\n'));
+  try {
+    const result = await installBundledSkills(program.version());
+    const validation = await validateSkillsInstall();
+    printSkillsInstallSummary(result, validation);
+    console.log(pc.dim('\nGlobal skills are ready for Pi or other supported harnesses.\n'));
+  } catch (error) {
+    console.log(pc.red('\nSkills install failed.'));
+    console.log(pc.dim(String(error?.message || error)));
+  }
+}
+
+async function installAllTargets() {
+  await installPiTarget();
+  await installSkillsTarget();
+}
+
+async function installPiTarget() {
+  console.log(pc.magenta('🧭 Pi Harness Preflight\n'));
+  const report = await runDoctor({ version: program.version() });
+
+  if (!report.pi.installed) {
+    console.log(pc.cyan('\n📦 Installing Pi...\n'));
+    const installResult = await ensurePiInstalled();
+    printPiInstallResult(installResult);
+    if (!installResult.ok) {
+      console.log(pc.yellow('\nPi harness install stopped because Pi could not be installed.'));
+      console.log(pc.dim('Retry manually with: npm install -g @mariozechner/pi-coding-agent\n'));
+      return;
+    }
+  }
+
+  if (!report.piSubagents.localInstalled && !report.piSubagents.globalInstalled) {
+    console.log(pc.cyan('\n📦 Installing pi-subagents...\n'));
+    const installResult = await ensurePiSubagentsInstalled();
+    printPiSubagentsInstallResult(installResult);
+    if (!installResult.ok) {
+      console.log(pc.yellow('\nPi harness install stopped because pi-subagents could not be installed.'));
+      console.log(pc.dim('Retry manually with: npm install -g pi-subagents\n'));
+      return;
+    }
+  }
+
+  console.log(pc.cyan('\n📦 Installing Takomi Pi harness assets...\n'));
+  try {
+    const result = await installPiHarnessAssets(program.version());
+    const validation = await validatePiHarnessInstall();
+    printPiInstallSummary(result, validation);
+    console.log(pc.dim('\nNext: cd <project> && takomi\n'));
+  } catch (error) {
+    console.log(pc.red('\nPi harness asset install failed.'));
+    console.log(pc.dim(String(error?.message || error)));
+  }
+}
+
+async function syncPiTarget() {
+  console.log(pc.magenta('📡 Takomi Pi Sync\n'));
+  try {
+    const result = await syncPiHarnessAssets(program.version());
+    const validation = await validatePiHarnessInstall();
+    printPiInstallSummary(result, validation);
+  } catch (error) {
+    console.log(pc.red('\nPi sync failed.'));
+    console.log(pc.dim(String(error?.message || error)));
+  }
+}
+
+async function syncSkillsTarget() {
+  console.log(pc.magenta('📡 Takomi Skills Sync\n'));
+  try {
+    const result = await installBundledSkills(program.version());
+    const validation = await validateSkillsInstall();
+    printSkillsInstallSummary(result, validation);
+  } catch (error) {
+    console.log(pc.red('\nSkills sync failed.'));
+    console.log(pc.dim(String(error?.message || error)));
+  }
+}
+
+async function syncAllTargets() {
+  await syncPiTarget();
+  await syncSkillsTarget();
+}
+
+function printUnsupportedInstallTarget(target) {
+  console.log(pc.yellow(`Unsupported install target: ${target}`));
+  console.log(pc.dim('Supported targets right now: pi, skills, all'));
+  console.log(pc.dim('Use plain "takomi install" for the existing interactive global installer.\n'));
+}
+
+function printUnsupportedSyncTarget(target) {
+  console.log(pc.yellow(`Unsupported sync target: ${target}`));
+  console.log(pc.dim('Supported targets right now: pi, skills, all'));
+  console.log(pc.dim('Use plain "takomi sync" for the existing interactive global sync.\n'));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // takomi install (NEW — Global Setup + Harness Routing)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function install() {
+async function install(target) {
+  if (target) {
+    if (target === 'pi') {
+      await installPiTarget();
+      return;
+    }
+    if (target === 'skills') {
+      await installSkillsTarget();
+      return;
+    }
+    if (target === 'all') {
+      await installAllTargets();
+      return;
+    }
+
+    printUnsupportedInstallTarget(target);
+    return;
+  }
   console.log(pc.magenta(figlet.textSync('Takomi', { horizontalLayout: 'full' })));
   console.log(pc.cyan('   🌐 One install. Every IDE. Zero friction.\n'));
 
@@ -359,7 +484,23 @@ async function install() {
 // takomi sync (NEW — Re-sync store to all harnesses)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function sync() {
+async function sync(target) {
+  if (target) {
+    if (target === 'pi') {
+      await syncPiTarget();
+      return;
+    }
+    if (target === 'skills') {
+      await syncSkillsTarget();
+      return;
+    }
+    if (target === 'all') {
+      await syncAllTargets();
+      return;
+    }
+    printUnsupportedSyncTarget(target);
+    return;
+  }
   console.log(pc.magenta('📡 Syncing your toolkit to all connected IDEs...\n'));
 
   // Check if global store exists
@@ -535,7 +676,7 @@ async function harnesses() {
 program
   .name('takomi')
   .description('Your AI team. Activated. 🎯')
-  .version('2.0.7');
+  .version(packageJson.version);
 
 // Per-project setup (backward compatible)
 program
@@ -545,14 +686,14 @@ program
 
 // Global installer (NEW)
 program
-  .command('install')
-  .description('Build your global command center')
+  .command('install [target]')
+  .description('Build your global command center or run a target-specific installer')
   .action(install);
 
 // Re-sync (NEW)
 program
-  .command('sync')
-  .description('Push updates to all connected IDEs')
+  .command('sync [target]')
+  .description('Push updates to all connected IDEs or sync a target-specific install')
   .action(sync);
 
 // Add remote skills (NEW)
@@ -566,6 +707,11 @@ program
   .command('harnesses')
   .description('See your toolkit status and connected IDEs')
   .action(harnesses);
+
+program
+  .command('doctor')
+  .description('Run Pi/Takomi installation diagnostics')
+  .action(() => runDoctor({ version: program.version() }));
 
 // Update from GitHub (EXISTING — enhanced)
 program
@@ -636,4 +782,9 @@ program
     console.log(pc.magenta('\n✨ Your toolkit is fresh and ready to ship.'));
   });
 
-program.parse();
+if (process.argv.length <= 2) {
+  const exitCode = await launchTakomiHarness(process.cwd());
+  process.exitCode = exitCode;
+} else {
+  program.parse();
+}

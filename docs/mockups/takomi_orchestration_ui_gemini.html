@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg-dark: #09090B;
+    --bg-panel: #121214;
+    --bg-active: #18181B;
+    --border-dim: #27272A;
+    --border-focus: #3F3F46;
+    --text-main: #E4E4E7;
+    --text-muted: #A1A1AA;
+    --text-dim: #52525B;
+    
+    --accent-blue: #3B82F6;
+    --accent-yellow: #EAB308;
+    --accent-green: #10B981;
+    --accent-purple: #8B5CF6;
+    --accent-red: #EF4444;
+    
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', 'Consolas', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 2rem;
+    background: #000;
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+
+  .terminal-window {
+    width: 100%;
+    max-width: 960px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    height: 85vh;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05) inset;
+    overflow: hidden;
+  }
+
+  .title-bar {
+    padding: 8px 16px;
+    background: #000;
+    border-bottom: 1px solid var(--border-dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  
+  .title-bar .dots {
+    display: flex;
+    gap: 6px;
+  }
+  .title-bar .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border-dim);
+  }
+
+  .transcript {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    color: var(--text-muted);
+  }
+
+  .log-entry { margin-bottom: 16px; }
+  .log-entry.user { color: var(--accent-blue); }
+  .log-entry.system { color: var(--text-dim); }
+  
+  .orchestration-surface {
+    border-top: 1px solid var(--border-dim);
+    background: var(--bg-dark);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .agent-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-dim);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agent-card.active {
+    border-color: var(--border-focus);
+    background: var(--bg-active);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  .agent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .agent-role {
+    color: var(--text-main);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    background: var(--border-dim);
+    color: var(--text-muted);
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .status.running { color: var(--accent-yellow); }
+  .status.planning { color: var(--accent-purple); }
+  .status.done { color: var(--accent-green); }
+  .status.error { color: var(--accent-red); }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+
+  .agent-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .task-desc {
+    color: var(--text-main);
+  }
+
+  .live-log {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: #000;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .live-log.error-state {
+    color: var(--accent-red);
+    border-color: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.05);
+  }
+
+  .nested-container {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
+  .tree-line {
+    color: var(--border-focus);
+    font-family: monospace;
+    padding-top: 12px;
+    user-select: none;
+  }
+
+  .nested-container .agent-card {
+    flex: 1;
+  }
+
+  .command-bar {
+    background: #000;
+    border-top: 1px solid var(--border-dim);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .steer-indicator {
+    font-size: 11px;
+    color: var(--accent-yellow);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .steer-indicator::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-yellow);
+    box-shadow: 0 0 6px var(--accent-yellow);
+  }
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .prompt-symbol {
+    color: var(--text-dim);
+    font-weight: bold;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    outline: none;
+  }
+
+  input[type="text"]::placeholder {
+    color: var(--text-dim);
+  }
+
+  .system-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .pulse-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background-color: currentColor;
+    border-radius: 50%;
+    margin-right: 4px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+
+<div class="terminal-window">
+  <div class="title-bar">
+    <div class="dots">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+    <span>Takomi Command Deck • VibeCode Protocol</span>
+    <span>v1.0.4</span>
+  </div>
+
+  <div class="transcript">
+    <div class="log-entry system">
+      Takomi role set to orchestrator (Genesis-first: project foundation missing)
+    </div>
+    <div class="log-entry user">
+      ❯ I want to test the UI, so just spawn a bunch of agents randomly. They don't have to do anything crazy. Maybe spawn one to create a file, then another to delete it, so I can see how things look. Thanks.
+    </div>
+    <div class="log-entry system">
+      [System] Model preflight (`pi --list-models`) completed.<br>
+      [System] Exploring task management options...<br>
+      [System] Dispatching Takomi Subagent for smoke testing.
+    </div>
+    
+    <div class="log-entry system" style="opacity: 0.7; margin-top: 24px; border-left: 2px solid var(--border-dim); padding-left: 12px;">
+      <div style="color: var(--text-main); margin-bottom: 4px;">[✓] REVIEWER <span class="badge" style="margin-left: 8px;">gpt-5.4-mini</span></div>
+      Failed: No API key found for azure-openai-responses. See logs.
+    </div>
+  </div>
+
+  <div class="orchestration-surface">
+    <div class="agent-card">
+      <div class="agent-header">
+        <div class="agent-role">
+          <span class="pulse-dot" style="color: var(--accent-purple)"></span>
+          ORCHESTRATOR
+          <span class="badge">vibe-genesis</span>
+        </div>
+        <div class="status planning">
+          WAITING ON SUBAGENT
+        </div>
+      </div>
+      <div class="agent-body">
+        <div class="task-desc">Managing active session: UI smoke test delegation.</div>
+      </div>
+
+      <div class="nested-container">
+        <div class="tree-line">└─</div>
+        <div class="agent-card active">
+          <div class="agent-header">
+            <div class="agent-role">
+              <span class="pulse-dot" style="color: var(--accent-yellow)"></span>
+              CODER
+              <span class="badge">gemini-2.5-flash</span>
+            </div>
+            <div class="status running">
+              <span class="spinner">⟳</span> RUNNING
+            </div>
+          </div>
+          <div class="agent-body">
+            <div class="task-desc">UI smoke test only. Reply with exactly: subagent alive. Do not modify any files.</div>
+            <div class="live-log">
+              &gt; Tool Call: list_directory path="./src"
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="command-bar">
+    <div class="steer-indicator">STEERING <span>coder</span> (Interrupt / Add Context)</div>
+    <div class="input-row">
+      <span class="prompt-symbol">❯</span>
+      <input type="text" placeholder="Type a message to steer the active agent..." value="actually, just echo the text instead of touching the filesystem" autofocus />
+    </div>
+    <div class="system-footer">
+      <span>C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite</span>
+      <span>$0.201 (sub) 11.0%/272k • gpt-5.4-mini</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
