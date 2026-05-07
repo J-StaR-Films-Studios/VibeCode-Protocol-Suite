@@ -24,12 +24,41 @@ const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHU
 export const PATHS = {
   root: PACKAGE_ROOT,
   assets: path.join(PACKAGE_ROOT, 'assets'),
+  pi: path.join(PACKAGE_ROOT, '.pi'),
   agent: path.join(PACKAGE_ROOT, 'assets', '.agent'),
   workflows: path.join(PACKAGE_ROOT, 'assets', '.agent', 'workflows'),
   skills: path.join(PACKAGE_ROOT, 'assets', '.agent', 'skills'),
   agentsYaml: path.join(PACKAGE_ROOT, 'assets', 'Takomi-Agents'),
   manual: path.join(PACKAGE_ROOT, 'assets', 'Legacy'),
+  packageJson: path.join(PACKAGE_ROOT, 'package.json'),
 };
+
+function shouldCopyBundledPiAsset(relativePath = '') {
+  const normalized = relativePath.replace(/\\/g, '/');
+
+  if (!normalized) return true;
+  if (normalized === 'settings.json') return false;
+  if (normalized === 'takomi-profile.json') return false;
+  if (normalized === 'takomi/model-routing.md') return false;
+  if (normalized.startsWith('takomi/subagents')) return false;
+
+  return true;
+}
+
+export async function copyBundledPiAssets(targetDir) {
+  if (!await fs.pathExists(PATHS.pi)) return false;
+
+  await fs.copy(PATHS.pi, path.join(targetDir, '.pi'), {
+    overwrite: true,
+    errorOnExist: false,
+    filter: (src) => {
+      const relative = path.relative(PATHS.pi, src);
+      return shouldCopyBundledPiAsset(relative);
+    },
+  });
+
+  return true;
+}
 
 /**
  * Copies bundled resources from the npm package to the target directory.
@@ -48,19 +77,22 @@ export async function installResources(targetDir) {
     // Copying everything (Workflows, Skills, YAMLs)
     // We copy specific subfolders to match the expected structure in the user's project
 
-    // 1. .agent folder
+    // 1. Pi-native Takomi runtime bundle
+    await copyBundledPiAssets(targetDir);
+
+    // 2. .agent folder
     await fs.copy(PATHS.agent, path.join(targetDir, '.agent'), {
       overwrite: true,
       errorOnExist: false,
     });
 
-    // 2. VibeCode-Agents
+    // 3. VibeCode-Agents
     await fs.copy(PATHS.agentsYaml, path.join(targetDir, 'VibeCode-Agents'), {
       overwrite: true,
       errorOnExist: false,
     });
 
-    // 3. Legacy Protocols
+    // 4. Legacy Protocols
     await fs.copy(PATHS.manual, path.join(targetDir, 'Legacy-Protocols'), {
       overwrite: true,
       errorOnExist: false,

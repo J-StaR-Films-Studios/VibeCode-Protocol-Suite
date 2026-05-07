@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Takomi Orchestration - Terminal Native</title>
+<style>
+  :root {
+    --bg-main: #0C0C0C;
+    --bg-term: #000000;
+    --fg-main: #D4D4D4;
+    --fg-dim: #666666;
+    
+    --ansi-cyan: #4EC9B0;
+    --ansi-green: #57A64A;
+    --ansi-yellow: #DCDCAA;
+    --ansi-red: #F44747;
+    --ansi-magenta: #C586C0;
+    
+    --term-border: #333333;
+    --header-bg: #1E1E1E;
+    
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+
+  body {
+    margin: 0;
+    padding: 3rem;
+    background: var(--bg-main);
+    color: var(--fg-main);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .gallery-header {
+    margin-bottom: 2rem;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .gallery-header h1 {
+    font-size: 1.2rem;
+    font-weight: normal;
+    color: var(--fg-main);
+    border-bottom: 1px solid var(--term-border);
+    padding-bottom: 0.5rem;
+  }
+
+  .gallery {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .term-window {
+    background: var(--bg-term);
+    border: 1px solid var(--term-border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .term-header {
+    background: var(--header-bg);
+    color: #888;
+    padding: 4px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--term-border);
+  }
+  
+  .term-header .alert-bg {
+    background: var(--ansi-red);
+    color: #FFF;
+    padding: 0 8px;
+    margin-left: -12px;
+  }
+
+  .term-body {
+    margin: 0;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .dim { color: var(--fg-dim); }
+  .cyan { color: var(--ansi-cyan); }
+  .green { color: var(--ansi-green); }
+  .yellow { color: var(--ansi-yellow); }
+  .red { color: var(--ansi-red); }
+  .magenta { color: var(--ansi-magenta); }
+  .tree { color: var(--term-border); }
+
+  .prompt { color: var(--ansi-magenta); font-weight: bold; }
+
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 15px;
+    background-color: var(--fg-main);
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  .spinner {
+    display: inline-block;
+    animation: spin 1s steps(8) infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+  <div class="gallery-header">
+    <h1>Takomi Orchestration: Terminal Native State Gallery</h1>
+  </div>
+
+  <div class="gallery">
+
+    <div class="term-window">
+      <div class="term-header">
+        <span>[ takomi-orch ] - IDLE</span>
+        <span>1/7</span>
+      </div>
+<pre class="term-body">
+<span class="dim">[System]</span> Takomi initialized. No active session.
+
+<span class="prompt">❯</span> Awaiting project description to start Genesis... <span class="cursor"></span>
+</pre>
+    </div>
+
+    <div class="term-window">
+      <div class="term-header">
+        <span>[ takomi-orch ] - ACTIVE : VIBE-DESIGN</span>
+        <span>2/7</span>
+      </div>
+<pre class="term-body">
+<span class="dim">[Orchestrator]</span> Dispatching design subagent.
+
+<span class="cyan">▼ ACTIVE TASK: Generate UI Mockups</span>
+<span class="tree">│</span> Agent:  design-lead (ui-ux-pro-max)
+<span class="tree">│</span> Status: <span class="yellow">[RUNNING] ⣾</span>
+<span class="tree">│</span>
+<span class="tree">│</span> <span class="dim">09:41:22</span> <span class="prompt">&gt;</span> Tool Call: read (docs/mockups/...)
+<span class="tree">│</span> <span class="dim">09:41:25</span> <span class="prompt">&gt;</span> Analyzing terminal density parameters...
+<span class="tree">└───────────────────────────────────────────────────────────────────</span>
+</pre>
+    </div>
+
+    <div class="term-window">
+      <div class="term-header">
+        <span>[ takomi-orch ] - NESTED DELEGATION : VIBE-BUILD</span>
+        <span>3/7</span>
+      </div>
+<pre class="term-body">
+<span class="magenta">▼ ORCHESTRATOR: Build Stage Pipeline</span>
+<span class="tree">│</span> Status: <span class="cyan">[MANAGING SUBAGENTS]</span>
+<span class="tree">│</span>
+<span class="tree">├─</span><span class="cyan">▼ CODER: Implement Auth Context</span>
+<span class="tree">│ │</span> Agent:  coder (gemini-2.5-flash)
+<span class="tree">│ │</span> Status: <span class="yellow">[RUNNING] ⠧</span>
+<span class="tree">│ │</span> <span class="prompt">&gt;</span> Writing src/lib/auth.ts...
+<span class="tree">│ │</span>
+<span class="tree">│ └─</span><span class="dim">▼ REVIEWER: Code Audit</span>
+<span class="tree">│   │</span> Agent:  security-audit
+<span class="tree">│   │</span> Status: <span class="dim">[WAITING ON BATON]</span>
+<span class="tree">│</span>
+<span class="tree">└───────────────────────────────────────────────────────────────────</span>
+</pre>
+    </div>
+
+    <div class="term-window">
+      <div class="term-header">
+        <span>[ takomi-orch ] - STEERING FOCUS</span>
+        <span>4/7</span>
+      </div>
+<pre class="term-body">
+<span class="cyan">▼ ACTIVE TASK: Drafting FR-001 Issue</span>
+<span class="tree">│</span> Agent:  architect
+<span class="tree">│</span> Status: <span class="yellow">[PAUSED FOR STEERING]</span>
+<span class="tree">│</span>
+<span class="tree">│</span> <span class="prompt">&gt;</span> Formulating acceptance criteria...
+<span class="tree">│</span>
+<span class="tree">╞══════════════════════════════════════════════════════════════════╡</span>
+<span class="tree">│</span> <span class="yellow">[STEER INPUT]</span> Make sure to mention Stripe webhooks_<span class="cursor"></span>              <span class="tree">│</span>
+<span class="tree">│</span> <span class="dim">(Press Enter to send, Esc to cancel)</span>                             <span class="tree">│</span>
+<span class="tree">└───────────────────────────────────────────────────────────────────</span>
+</pre>
+    </div>
+
+    <div class="term-window">
+      <div class="term-header">
+        <span>[ takomi-orch ] - PIPELINE QUEUE</span>
+        <span>5/7</span>
+      </div>
+<pre class="term-body">
+<span class="green">[✓] TASK 1: Initialize Build</span> <span class="dim">(Completed in 4s)</span>
+
+<span class="cyan">▼ TASK 2: Build Frontend Components</span>
+<span class="tree">│</span> Agent:  coder
+<span class="tree">│</span> Status: <span class="yellow">[RUNNING] ⠼</span>
+<span class="tree">│</span> <span class="prompt">&gt;</span> Creating NavBar.tsx
+<span class="tree">└───────────────────────────────────────────────────────────────────</span>
+
+<span class="dim">[ ] TASK 3: Security & Audit Review (Queued)</span>
+<span class="dim">[ ] TASK 4: Final Verification (Queued)</span>
+</pre>
+    </div>
+
+    <div class="term-window">
+      <div class="term-header">
+        <span>[ takomi-orch ] - SESSION COMPLETED</span>
+        <span>6/7</span>
+      </div>
+<pre class="term-body">
+<span class="green">[✓] SESSION: Takomi Orchestration (Vibe-Design)</span>
+<span class="tree">│</span>
+<span class="tree">├─</span> <span class="green">[✓] Generate Design Constraints</span> <span class="dim">(12s)</span>
+<span class="tree">├─</span> <span class="green">[✓] Mockup TUI Wireframes</span> <span class="dim">(45s)</span>
+<span class="tree">└─</span> <span class="green">[✓] Final Review</span> <span class="dim">(8s)</span>
+
+<span class="dim">[System]</span> Session completed successfully. Control returned to user.
+<span class="prompt">❯</span> <span class="cursor"></span>
+</pre>
+    </div>
+
+    <div class="term-window">
+      <div class="term-header">
+        <span class="alert-bg">[ takomi-orch ] - BLOCKED</span>
+        <span>7/7</span>
+      </div>
+<pre class="term-body">
+<span class="red">▼ TASK: Run Build Script</span>
+<span class="tree">│</span> Agent:  coder
+<span class="tree">│</span> Status: <span class="red">[BLOCKED - INTERVENTION REQUIRED]</span>
+<span class="tree">│</span>
+<span class="tree">│</span> <span class="dim">10:12:01</span> <span class="prompt">&gt;</span> Executing: npm run build
+<span class="tree">│</span> <span class="dim">10:12:04</span> <span class="red">[ERROR] Cannot find module 'react-dom/client'</span>
+<span class="tree">│</span>
+<span class="tree">╞══════════════════════════════════════════════════════════════════╡</span>
+<span class="tree">│</span> <span class="red">ACTION REQUIRED: Subagent hit a fatal error.</span>                     <span class="tree">│</span>
+<span class="tree">│</span> <span class="cyan">[1]</span> Auto-Fix  <span class="cyan">[2]</span> Steer Agent  <span class="cyan">[3]</span> Skip Task  <span class="cyan">[4]</span> Abort          <span class="tree">│</span>
+<span class="tree">│</span> <span class="prompt">&gt;</span> <span class="cursor"></span>                                                              <span class="tree">│</span>
+<span class="tree">└───────────────────────────────────────────────────────────────────</span>
+</pre>
+    </div>
+
+  </div>
+</body>
+</html>

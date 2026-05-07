@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Takomi Orchestration - Pipeline UI State Gallery</title>
+<style>
+  :root {
+    --bg-main: #000000;
+    --bg-panel: #09090b;
+    --bg-card: #121214;
+    --bg-card-hover: #18181b;
+    --border-dim: #27272a;
+    --border-focus: #3f3f46;
+    
+    --text-main: #ededed;
+    --text-muted: #a1a1aa;
+    --text-dim: #52525b;
+    
+    --blue: #3b82f6;
+    --blue-glow: rgba(59, 130, 246, 0.15);
+    --purple: #8b5cf6;
+    --amber: #f5a623;
+    --amber-glow: rgba(245, 166, 35, 0.15);
+    --green: #10b981;
+    --red: #ef4444;
+    --red-glow: rgba(239, 68, 68, 0.15);
+    
+    --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 3rem;
+    background: var(--bg-main);
+    color: var(--text-main);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .gallery-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+
+  .gallery-header h1 {
+    font-size: 1.5rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .gallery-header p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 3rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .state-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .state-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    padding-left: 4px;
+  }
+
+  .ui-mockup {
+    width: 100%;
+    max-width: 380px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-dim);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    background: var(--border-dim);
+    color: var(--text-muted);
+  }
+  .badge.active { background: rgba(59, 130, 246, 0.2); color: var(--blue); }
+  .badge.success { background: rgba(16, 185, 129, 0.2); color: var(--green); }
+  .badge.error { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    text-align: center;
+    gap: 12px;
+    border: 1px dashed var(--border-dim);
+    border-radius: 8px;
+  }
+  .empty-icon { font-size: 1.5rem; opacity: 0.5; }
+  .empty-text { font-size: 0.85rem; color: var(--text-dim); line-height: 1.4; }
+
+  .task-list {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .task-list::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 20px;
+    bottom: 20px;
+    width: 2px;
+    background: var(--border-dim);
+    z-index: 0;
+  }
+
+  .task-card {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+  }
+
+  .task-card.running {
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 15px var(--blue-glow);
+  }
+
+  .task-card.steering {
+    border-color: rgba(245, 166, 35, 0.5);
+    box-shadow: 0 0 20px var(--amber-glow);
+  }
+
+  .task-card.blocked {
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 15px var(--red-glow);
+  }
+
+  .task-card.collapsed {
+    padding: 10px 12px;
+  }
+
+  .task-card.collapsed .task-header {
+    gap: 12px;
+  }
+
+  .task-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .task-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-main);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .task-card.queued .task-title {
+    color: var(--text-dim);
+  }
+
+  .task-model, .task-meta {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
+
+  .task-model {
+    background: var(--bg-main);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-dim);
+  }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  .spinner.blue { border-top-color: var(--blue); }
+  .spinner.purple { border-top-color: var(--purple); }
+  .spinner.amber { border-top-color: var(--amber); }
+
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+
+  .icon-check {
+    width: 14px;
+    height: 14px;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: bold;
+  }
+
+  .icon-error {
+    width: 14px;
+    height: 14px;
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--red);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: bold;
+  }
+
+  .icon-circle {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--text-dim);
+    border-radius: 50%;
+    margin: 1px;
+  }
+
+  .task-body {
+    padding-left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .log-line {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--bg-main);
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-meta {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+  }
+
+  .nested-tasks {
+    margin-top: 4px;
+    margin-left: 6px;
+    padding-left: 17px;
+    border-left: 1px solid var(--border-focus);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .nested-tasks .task-card {
+    background: var(--bg-panel);
+  }
+
+  .steer-input-area {
+    margin-top: 4px;
+    background: var(--bg-main);
+    border: 1px solid rgba(245, 166, 35, 0.3);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .steer-label {
+    font-size: 0.65rem;
+    color: var(--amber);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .steer-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--amber);
+    border-radius: 50%;
+  }
+
+  .pulse {
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(245, 166, 35, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0); }
+  }
+
+  .steer-input-area input {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-family: var(--font-ui);
+    font-size: 0.85rem;
+    outline: none;
+    width: 100%;
+  }
+
+  .steer-input-area input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .steer-hint {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  .error-body .log-line {
+    color: var(--red);
+    background: rgba(239, 68, 68, 0.05);
+    border-color: rgba(239, 68, 68, 0.2);
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .btn {
+    background: var(--bg-main);
+    border: 1px solid var(--border-dim);
+    color: var(--text-main);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn:hover { background: var(--border-focus); }
+
+  .btn.primary {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--red);
+  }
+  .btn.primary:hover { background: rgba(239, 68, 68, 0.2); }
+</style>
+</head>
+<body>
+
+  <div class="gallery-header">
+    <h1>Takomi Orchestration: The Lifecycle Pipeline</h1>
+    <p>Design Review Sheet &mdash; Direction B</p>
+  </div>
+
+  <div class="gallery-grid">
+
+    <div class="state-container">
+      <div class="state-label">01 / Idle State</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>TAKOMI ORCHESTRATION</span>
+          <span class="badge">IDLE</span>
+        </div>
+        <div class="empty-state">
+          <div class="empty-icon">⚡</div>
+          <div class="empty-text">No active session.<br>Describe a project to initialize Genesis.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="state-container">
+      <div class="state-label">02 / Single Active Agent</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>VIBE-DESIGN LIFECYCLE</span>
+          <span class="badge active">ACTIVE</span>
+        </div>
+        <div class="task-card running">
+          <div class="task-header">
+            <div class="spinner blue"></div>
+            <div class="task-title">Generate UI Mockups</div>
+            <div class="task-model">ui-ux-pro-max</div>
+          </div>
+          <div class="task-body">
+            <div class="log-line">Running tool: read (docs/mockups/...)</div>
+            <div class="log-meta">Elapsed: 12s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="state-container">
+      <div class="state-label">03 / Nested Delegation</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>VIBE-BUILD LIFECYCLE</span>
+          <span class="badge active">ACTIVE</span>
+        </div>
+        <div class="task-card running">
+          <div class="task-header">
+            <div class="spinner purple"></div>
+            <div class="task-title">Orchestrate Build Stage</div>
+            <div class="task-model">orchestrator</div>
+          </div>
+          <div class="nested-tasks">
+            <div class="task-card running">
+              <div class="task-header">
+                <div class="spinner blue"></div>
+                <div class="task-title">Implement Auth Context</div>
+                <div class="task-model">coder</div>
+              </div>
+              <div class="task-body">
+                <div class="log-line">Writing src/lib/auth.ts...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="state-container">
+      <div class="state-label">04 / Pipeline (Siblings visible)</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>LIFECYCLE PIPELINE</span>
+          <span class="badge active">RUNNING</span>
+        </div>
+        <div class="task-list">
+          <div class="task-card collapsed">
+            <div class="task-header">
+              <div class="icon-check">✓</div>
+              <div class="task-title" style="color: var(--text-muted)">Initialize Genesis</div>
+              <div class="task-meta">3 files</div>
+            </div>
+          </div>
+          <div class="task-card running">
+            <div class="task-header">
+              <div class="spinner blue"></div>
+              <div class="task-title">Build Frontend Components</div>
+              <div class="task-model">coder</div>
+            </div>
+            <div class="task-body">
+              <div class="log-line">Creating NavBar.tsx</div>
+            </div>
+          </div>
+          <div class="task-card collapsed queued">
+            <div class="task-header">
+              <div class="icon-circle"></div>
+              <div class="task-title">Security & Audit Review</div>
+              <div class="task-meta">Queued</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="state-container">
+      <div class="state-label">05 / Steer Mode Active</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>VIBE-GENESIS LIFECYCLE</span>
+          <span class="badge active">INTERRUPTED</span>
+        </div>
+        <div class="task-card steering">
+          <div class="task-header">
+            <div class="spinner amber"></div>
+            <div class="task-title">Drafting FR-001 Issue</div>
+            <div class="task-model">architect</div>
+          </div>
+          <div class="steer-input-area">
+            <div class="steer-label">
+              <span class="steer-dot pulse"></span> STEERING AGENT
+            </div>
+            <input type="text" value="Make sure to mention Stripe webhooks" />
+            <div class="steer-hint">Press Enter to send</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="state-container">
+      <div class="state-label">06 / Completion Collapse State</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>TAKOMI SESSION</span>
+          <span class="badge success">COMPLETED</span>
+        </div>
+        <div class="task-card collapsed">
+          <div class="task-header">
+            <div class="icon-check">✓</div>
+            <div class="task-title">Design Direction Approved</div>
+            <div class="task-meta">Completed in 45s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="state-container">
+      <div class="state-label">07 / Blocked / Error State</div>
+      <div class="ui-mockup">
+        <div class="panel-header">
+          <span>VIBE-BUILD LIFECYCLE</span>
+          <span class="badge error">BLOCKED</span>
+        </div>
+        <div class="task-card blocked">
+          <div class="task-header">
+            <div class="icon-error">⚠</div>
+            <div class="task-title">Run Build Script</div>
+            <div class="task-model">coder</div>
+          </div>
+          <div class="task-body error-body">
+            <div class="log-line">Error: Cannot find module 'react-dom/client'</div>
+            <div class="action-buttons">
+              <button class="btn primary">Auto-Fix</button>
+              <button class="btn">Steer</button>
+              <button class="btn">Skip</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "oauth-router",
+  "private": true,
+  "type": "module",
+  "description": "Pi extension for multi-account OAuth-aware routing across OpenAI-compatible upstreams",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "verify": "python scripts/vibe-verify.py"
+  }
+}

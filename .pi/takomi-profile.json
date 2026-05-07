@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "autoOrchestrate": true,
+  "launchMode": "auto",
+  "foreground": true,
+  "background": true,
+  "reviewAfterImplementation": true,
+  "roles": {
+    "orchestrator": {
+      "agent": "orchestrator",
+      "dispatchPolicy": "subagent"
+    },
+    "architect": {
+      "agent": "architect",
+      "dispatchPolicy": "subagent"
+    },
+    "design": {
+      "agent": "designer",
+      "dispatchPolicy": "subagent"
+    },
+    "code": {
+      "agent": "coder",
+      "dispatchPolicy": "subagent"
+    },
+    "review": {
+      "agent": "reviewer",
+      "dispatchPolicy": "review-first"
+    }
+  },
+  "stages": {
+    "genesis": {
+      "agent": "architect",
+      "dispatchPolicy": "subagent"
+    },
+    "design": {
+      "agent": "designer",
+      "dispatchPolicy": "subagent"
+    },
+    "build": {
+      "agent": "orchestrator",
+      "dispatchPolicy": "subagent"
+    }
+  },
+  "review": {
+    "enabled": true,
+    "agent": "reviewer",
+    "maxIterations": 2,
+    "sameConversation": true
+  }
+}
