@@ -186,11 +186,15 @@ export async function inspectInstalledTakomiPiHarness(home = HOME) {
   const targets = getPiGlobalTargets(home);
   const runtime = path.join(targets.extensions, 'takomi-runtime');
   const subagents = path.join(targets.extensions, 'takomi-subagents');
+  const core = path.join(path.dirname(targets.root), 'src', 'pi-takomi-core');
+  const piSubagentsModule = path.join(targets.root, 'node_modules', 'pi-subagents');
 
   return {
     targets,
     runtimeInstalled: await fs.pathExists(runtime),
     subagentsInstalled: await fs.pathExists(subagents),
+    coreInstalled: await fs.pathExists(core),
+    piSubagentsModuleInstalled: await fs.pathExists(piSubagentsModule),
     promptsInstalled: await fs.pathExists(targets.prompts),
     agentsInstalled: await fs.pathExists(targets.agents),
     themesInstalled: await fs.pathExists(targets.themes),

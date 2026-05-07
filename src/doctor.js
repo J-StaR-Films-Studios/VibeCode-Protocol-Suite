@@ -1,4 +1,5 @@
 import fs from 'fs-extra';
+import path from 'path';
 import pc from 'picocolors';
 import { inspectPiHarnessEnvironment } from './pi-harness.js';
 import { getStoreSkills, isStoreInitialized } from './store.js';
@@ -26,6 +27,8 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
   console.log(status(report.installed.runtimeInstalled, 'Installed takomi-runtime', report.installed.targets.extensions));
   console.log(status(report.installed.subagentsInstalled, 'Installed takomi-subagents', report.installed.targets.extensions));
   console.log(status(await fs.pathExists(`${report.installed.targets.extensions}/oauth-router`), 'Installed oauth-router', `${report.installed.targets.extensions}`));
+  console.log(status(report.installed.coreInstalled, 'Installed Takomi core', path.join(path.dirname(report.installed.targets.root), 'src', 'pi-takomi-core')));
+  console.log(status(report.installed.piSubagentsModuleInstalled, 'Installed pi-subagents module', path.join(report.installed.targets.root, 'node_modules', 'pi-subagents')));
   console.log(status(report.installed.agentsInstalled, 'Installed agents dir', report.installed.targets.agents));
   console.log(status(report.installed.themesInstalled, 'Installed themes dir', report.installed.targets.themes));
   console.log(status(await fs.pathExists(PI_MANIFEST_PATH), 'Pi install manifest', PI_MANIFEST_PATH));
@@ -51,8 +54,8 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
     console.log(pc.white('  - Package .pi assets before enabling takomi install pi in releases.'));
   }
 
-  if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled) {
-    console.log(pc.white('  - Run takomi install pi after the package-safe Pi asset layout is finalized.'));
+  if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled || !report.installed.coreInstalled || !report.installed.piSubagentsModuleInstalled) {
+    console.log(pc.white('  - Run takomi install pi to refresh the Pi harness, Takomi core, and pi-subagents runtime module.'));
   }
 
   if (!report.piSubagents.declaredVersion) {
