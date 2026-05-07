@@ -53,6 +53,16 @@ export type TakomiDispatchResult = {
   output: string;
   stderr: string;
   preflight: string;
+  startedAt?: number;
+  endedAt?: number;
+  lastActivityAt?: number;
+  currentTool?: string;
+  currentToolArgs?: string;
+  currentToolStartedAt?: number;
+  recentTools?: Array<{ tool: string; args: string; endMs: number }>;
+  recentOutput?: string[];
+  toolCount?: number;
+  sessionFile?: string;
 };
 
 export type TakomiDispatchHooks = {
@@ -72,6 +82,30 @@ export async function dispatchTakomiSubagent(
   const sessionDir = path.join(input.rootCwd, ".pi", "takomi", "subagents");
   const sessionPath = path.join(sessionDir, `${conversationId}.jsonl`);
   await mkdir(sessionDir, { recursive: true });
+  const startedAt = Date.now();
+  let lastActivityAt = startedAt;
+  let currentTool: string | undefined;
+  let currentToolArgs: string | undefined;
+  let currentToolStartedAt: number | undefined;
+  let toolCount = 0;
+  let recentTools: Array<{ tool: string; args: string; endMs: number }> = [];
+  const activeToolInvocations = new Map<string, { tool: string; args: string; startedAt: number }>();
+  let recentOutput: string[] = [];
+
+  const setCurrentToolFromActive = () => {
+    const latest = [...activeToolInvocations.values()].at(-1);
+    currentTool = latest?.tool;
+    currentToolArgs = latest?.args;
+    currentToolStartedAt = latest?.startedAt;
+  };
+
+  const appendRecentOutput = (text: string) => {
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (!lines.length) return;
+    recentOutput.push(...lines);
+    if (recentOutput.length > 8) recentOutput.splice(0, recentOutput.length - 8);
+    lastActivityAt = Date.now();
+  };
 
   hooks?.emit?.({
     type: "start",
@@ -123,6 +157,13 @@ export async function dispatchTakomiSubagent(
       output: "",
       stderr: preflight.report,
       preflight: preflight.report,
+      startedAt,
+      endedAt: Date.now(),
+      lastActivityAt,
+      recentTools,
+      recentOutput,
+      toolCount,
+      sessionFile: sessionPath,
     };
     hooks?.emit?.({
       type: "block",
@@ -154,13 +195,65 @@ export async function dispatchTakomiSubagent(
 
   const result = await runPiAgentJson(subagentCwd, args, signal, {
     onAssistantText: (text) => {
-      hooks?.emit?.({ type: "update", runKey, patch: { outputText: text, boardTaskStatus: input.boardTaskStatus, checklist: input.checklist } });
+      appendRecentOutput(text);
+      hooks?.emit?.({
+        type: "update",
+        runKey,
+        patch: {
+          outputText: text,
+          recentOutput,
+          currentTool,
+          currentToolArgs,
+          currentToolStartedAt,
+          recentTools,
+          toolCount,
+          boardTaskStatus: input.boardTaskStatus,
+          checklist: input.checklist,
+        },
+      });
     },
     onEventText: (line) => {
+      appendRecentOutput(line);
       hooks?.emit?.({ type: "appendLog", runKey, chunk: line });
+      hooks?.emit?.({ type: "update", runKey, patch: { recentOutput, boardTaskStatus: input.boardTaskStatus, checklist: input.checklist } });
+    },
+    onToolEvent: (event) => {
+      lastActivityAt = Date.now();
+      const invocationId = event.invocationId ?? event.toolName;
+      if (event.type === "start") {
+        activeToolInvocations.set(invocationId, {
+          tool: event.toolName,
+          args: event.args ?? "",
+          startedAt: Date.now(),
+        });
+        toolCount += 1;
+        setCurrentToolFromActive();
+      } else if (event.type === "end") {
+        const active = activeToolInvocations.get(invocationId);
+        recentTools.push({ tool: event.toolName, args: active?.args ?? "", endMs: Date.now() });
+        if (recentTools.length > 8) recentTools.splice(0, recentTools.length - 8);
+        activeToolInvocations.delete(invocationId);
+        setCurrentToolFromActive();
+      }
+      hooks?.emit?.({
+        type: "update",
+        runKey,
+        patch: {
+          currentTool,
+          currentToolArgs,
+          currentToolStartedAt,
+          recentTools,
+          recentOutput,
+          toolCount,
+          boardTaskStatus: input.boardTaskStatus,
+          checklist: input.checklist,
+        },
+      });
     },
     onStderr: (chunk) => {
+      appendRecentOutput(chunk);
       hooks?.emit?.({ type: "appendLog", runKey, chunk });
+      hooks?.emit?.({ type: "update", runKey, patch: { recentOutput, boardTaskStatus: input.boardTaskStatus, checklist: input.checklist } });
     },
   });
 
@@ -177,6 +270,16 @@ export async function dispatchTakomiSubagent(
     output,
     stderr: result.stderr.trim(),
     preflight: preflight.report,
+    startedAt,
+    endedAt: Date.now(),
+    lastActivityAt,
+    currentTool,
+    currentToolArgs,
+    currentToolStartedAt,
+    recentTools,
+    recentOutput,
+    toolCount,
+    sessionFile: sessionPath,
   };
 
   if (result.code !== 0) {

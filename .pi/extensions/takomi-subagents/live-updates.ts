@@ -16,9 +16,28 @@ type LiveTask = {
   conversationId?: string;
 };
 
+function mergeRecentTools(
+  existing: Array<{ tool: string; args: string; endMs: number }> | undefined,
+  incoming: Array<{ tool: string; args: string; endMs: number }> | undefined,
+): Array<{ tool: string; args: string; endMs: number }> | undefined {
+  if (!incoming?.length) return existing;
+  return incoming.slice(-8);
+}
+
 function appendLine(value: string, line: string): string {
   const next = [value, line.trim()].filter(Boolean).join("\n");
   return next.split(/\r?\n/).slice(-12).join("\n");
+}
+
+function compactOutputPreview(text: string): string[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((line) => !/^\*\*[^*]+\*\*\s+I\s/i.test(line))
+    .filter((line) => !/\bI need to make sure\b/i.test(line))
+    .filter((line) => !/\bI want the user to\b/i.test(line));
+  return lines.slice(-3);
 }
 
 export function createTakomiLiveUpdateBridge(
@@ -38,6 +57,10 @@ export function createTakomiLiveUpdateBridge(
     output: "Queued.",
     stderr: "",
     preflight: "",
+    lastActivityAt: Date.now(),
+    recentTools: [],
+    recentOutput: ["Queued."],
+    toolCount: 0,
   }));
 
   const emit = () => {
@@ -54,23 +77,52 @@ export function createTakomiLiveUpdateBridge(
     event(index: number, event: TakomiSubagentRuntimeEvent): void {
       const current = results[index];
       if (!current) return;
+      current.lastActivityAt = Date.now();
       if (event.type === "start") {
+        current.startedAt = Date.now();
         current.conversationId = event.state.conversationId ?? current.conversationId;
         current.thinking = event.state.thinking ?? current.thinking;
+        current.sessionFile = event.state.sessionFile ?? current.sessionFile;
         current.output = event.state.summary ?? "Starting.";
+        current.recentOutput = [current.output].filter(Boolean).slice(-8);
       } else if (event.type === "update") {
         current.model = event.patch.model ?? current.model;
         current.thinking = event.patch.thinking ?? current.thinking;
+        current.sessionFile = event.patch.sessionFile ?? current.sessionFile;
+        current.currentTool = event.patch.currentTool;
+        current.currentToolArgs = event.patch.currentToolArgs;
+        current.currentToolStartedAt = event.patch.currentToolStartedAt;
+        current.recentTools = mergeRecentTools(current.recentTools, event.patch.recentTools);
+        current.toolCount = event.patch.toolCount ?? current.toolCount;
         current.output = event.patch.outputText ?? event.patch.summary ?? current.output;
+        current.recentOutput = event.patch.recentOutput
+          ?? (event.patch.outputText ? compactOutputPreview(event.patch.outputText) : current.recentOutput);
         if (event.patch.logs?.length) current.output = appendLine(current.output, event.patch.logs.join("\n"));
       } else if (event.type === "appendLog") {
         current.output = appendLine(current.output, event.chunk);
+        current.recentOutput = [...(current.recentOutput ?? []), event.chunk.trim()].filter(Boolean).slice(-8);
       } else if (event.type === "complete") {
         current.code = 0;
+        current.endedAt = Date.now();
+        current.currentTool = undefined;
+        current.currentToolArgs = undefined;
+        current.currentToolStartedAt = undefined;
         current.output = event.patch?.outputText ?? event.patch?.summary ?? current.output;
+        current.recentOutput = event.patch?.recentOutput ?? current.recentOutput;
+        current.recentTools = mergeRecentTools(current.recentTools, event.patch?.recentTools);
+        current.toolCount = event.patch?.toolCount ?? current.toolCount;
+        current.sessionFile = event.patch?.sessionFile ?? current.sessionFile;
       } else if (event.type === "block") {
         current.code = 1;
+        current.endedAt = Date.now();
+        current.currentTool = undefined;
+        current.currentToolArgs = undefined;
+        current.currentToolStartedAt = undefined;
         current.output = event.patch?.outputText ?? event.patch?.summary ?? current.output;
+        current.recentOutput = event.patch?.recentOutput ?? current.recentOutput;
+        current.recentTools = mergeRecentTools(current.recentTools, event.patch?.recentTools);
+        current.toolCount = event.patch?.toolCount ?? current.toolCount;
+        current.sessionFile = event.patch?.sessionFile ?? current.sessionFile;
         if (event.patch?.logs?.length) current.stderr = event.patch.logs.join("\n");
       }
       emit();

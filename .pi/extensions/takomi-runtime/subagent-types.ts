@@ -25,6 +25,13 @@ export type TakomiSubagentRun = {
   boardTaskStatus?: TakomiBoardTaskStatus;
   summary?: string;
   outputText?: string;
+  currentTool?: string;
+  currentToolArgs?: string;
+  currentToolStartedAt?: number;
+  recentTools?: Array<{ tool: string; args: string; endMs: number }>;
+  recentOutput?: string[];
+  toolCount?: number;
+  sessionFile?: string;
   logs: string[];
   startedAt: number;
   updatedAt: number;
