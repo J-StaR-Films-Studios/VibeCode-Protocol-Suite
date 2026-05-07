@@ -89,12 +89,21 @@ export async function dispatchTakomiSubagent(
   let currentToolStartedAt: number | undefined;
   let toolCount = 0;
   let recentTools: Array<{ tool: string; args: string; endMs: number }> = [];
+  const activeToolInvocations = new Map<string, { tool: string; args: string; startedAt: number }>();
   let recentOutput: string[] = [];
+
+  const setCurrentToolFromActive = () => {
+    const latest = [...activeToolInvocations.values()].at(-1);
+    currentTool = latest?.tool;
+    currentToolArgs = latest?.args;
+    currentToolStartedAt = latest?.startedAt;
+  };
 
   const appendRecentOutput = (text: string) => {
     const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     if (!lines.length) return;
-    recentOutput = [...recentOutput, ...lines].slice(-8);
+    recentOutput.push(...lines);
+    if (recentOutput.length > 8) recentOutput.splice(0, recentOutput.length - 8);
     lastActivityAt = Date.now();
   };
 
@@ -210,18 +219,21 @@ export async function dispatchTakomiSubagent(
     },
     onToolEvent: (event) => {
       lastActivityAt = Date.now();
+      const invocationId = event.invocationId ?? event.toolName;
       if (event.type === "start") {
-        currentTool = event.toolName;
-        currentToolArgs = event.args;
-        currentToolStartedAt = Date.now();
+        activeToolInvocations.set(invocationId, {
+          tool: event.toolName,
+          args: event.args ?? "",
+          startedAt: Date.now(),
+        });
         toolCount += 1;
+        setCurrentToolFromActive();
       } else if (event.type === "end") {
-        recentTools = [...recentTools, { tool: event.toolName, args: currentTool === event.toolName ? currentToolArgs ?? "" : "", endMs: Date.now() }].slice(-8);
-        if (currentTool === event.toolName) {
-          currentTool = undefined;
-          currentToolArgs = undefined;
-          currentToolStartedAt = undefined;
-        }
+        const active = activeToolInvocations.get(invocationId);
+        recentTools.push({ tool: event.toolName, args: active?.args ?? "", endMs: Date.now() });
+        if (recentTools.length > 8) recentTools.splice(0, recentTools.length - 8);
+        activeToolInvocations.delete(invocationId);
+        setCurrentToolFromActive();
       }
       hooks?.emit?.({
         type: "update",

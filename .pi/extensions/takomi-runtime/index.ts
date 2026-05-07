@@ -1,6 +1,5 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "typebox";
@@ -47,9 +46,6 @@ import {
   type TakomiSubagentRuntimeEvent,
 } from "./subagent-types";
 import {
-  visibleWidth,
-  truncateToWidth,
-  formatFooterNumber,
   buildTaskPrompt,
   resolvePreferredModel,
 } from "./shared";
@@ -438,46 +434,8 @@ async function applyProfileDefaultsToTasks(ctx: ExtensionContext, tasks: Orchest
   return nextTasks;
 }
 
-// stripAnsi, visibleWidth, truncateToWidth, formatFooterNumber
-// are imported from "./shared"
-
 function installTakomiFooter(ctx: ExtensionContext, stateRef: { current: TakomiState }): void {
   ctx.ui.setFooter((tui, theme, footerData) => new TakomiFooterComponent(tui, theme, footerData, ctx, () => stateRef.current));
-  return;
-  ctx.ui.setFooter((_tui, theme, footerData) => ({
-    invalidate() {},
-    render(width: number): string[] {
-      const state = stateRef.current;
-      let input = 0;
-      let output = 0;
-      let cost = 0;
-      for (const entry of ctx.sessionManager.getBranch()) {
-        if (entry.type === "message" && entry.message.role === "assistant") {
-          const message = entry.message as AssistantMessage;
-          input += message.usage.input;
-          output += message.usage.output;
-          cost += message.usage.cost.total;
-        }
-      }
-
-      const cwd = theme.fg("dim", ctx.cwd);
-      const stats = theme.fg("dim", `↑${formatFooterNumber(input)} ↓${formatFooterNumber(output)} $${cost.toFixed(3)}`);
-      const leftPad = " ".repeat(Math.max(1, width - visibleWidth(cwd) - visibleWidth(stats)));
-      const topLine = truncateToWidth(cwd + leftPad + stats, width);
-
-      const extensionStatuses = [...footerData.getExtensionStatuses().entries()]
-        .filter(([key]) => key !== "takomi-runtime")
-        .map(([, value]) => value)
-        .filter(Boolean);
-      const runtimeStatus = renderRuntimeStatus(theme, state);
-      const left = [runtimeStatus, ...extensionStatuses].join(theme.fg("dim", "  ·  "));
-      const right = theme.fg("dim", ctx.model?.id || "no-model");
-      const rightPad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(right)));
-      const bottomLine = truncateToWidth(left + rightPad + right, width);
-
-      return [topLine, bottomLine];
-    },
-  }));
 }
 
 // Mutable state ref so the footer closure always reads the latest state

@@ -1,6 +1,5 @@
-import { renderSubagentResult, syncResultAnimation } from "pi-subagents/src/tui/render";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { Details } from "pi-subagents/src/shared/types";
+import { renderSubagentResult, syncResultAnimation, type Details } from "./pi-subagents-internal";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import type { TakomiSubagentToolParams } from "./tool-runner";

@@ -80,23 +80,24 @@ The new implementation returns native pi-subagents `AgentToolResult<Details>` di
 
 Takomi now requires `pi-subagents` to be installed and resolvable from the extension runtime.
 
-Current import path used by the extension:
+Current extension code imports pi-subagents internals through a single local adapter:
 
 ```ts
-import { createSubagentExecutor } from "pi-subagents/src/runs/foreground/subagent-executor";
+import { createSubagentExecutor } from "./pi-subagents-internal";
 ```
 
-This uses an internal-but-exported module from the package. If upstream changes the internal path, Takomi must update the adapter or vendor/fork a small stable API.
+The adapter wraps internal-but-exported pi-subagents modules, and `package.json` pins `pi-subagents` to `0.24.0` so upstream internal path changes cannot arrive through a caret update. If upstream exposes a stable public entry point later, Takomi should update only `.pi/extensions/takomi-subagents/pi-subagents-internal.ts`.
 
 ## Files changed
 
-- `C:/Users/johno/.pi/agent/extensions/takomi-subagents/pi-subagents-engine.ts`
-- `C:/Users/johno/.pi/agent/extensions/takomi-subagents/tool-runner.ts`
-- `C:/Users/johno/.pi/agent/extensions/takomi-subagents/native-render.ts`
+- `.pi/extensions/takomi-subagents/pi-subagents-engine.ts`
+- `.pi/extensions/takomi-subagents/pi-subagents-internal.ts`
+- `.pi/extensions/takomi-subagents/index.ts`
+- `.pi/extensions/takomi-subagents/native-render.ts`
 
-Legacy files retained but no longer used by the main `takomi_subagent` path:
+Runtime-board compatibility files are still retained for paths that call `dispatchTakomiSubagent` directly:
 
-- `dispatch.ts`
-- `live-updates.ts`
+- `.pi/extensions/takomi-subagents/dispatch.ts` tracks `recentTools`, `sessionFile`, current tool metadata, and bounded `recentOutput` snapshots.
+- `.pi/extensions/takomi-subagents/live-updates.ts` bridges those runtime-board snapshots into live tool updates.
 
-They can be deleted after a few successful test passes.
+They can be deleted only after runtime-board dispatch has been fully retired and verified.

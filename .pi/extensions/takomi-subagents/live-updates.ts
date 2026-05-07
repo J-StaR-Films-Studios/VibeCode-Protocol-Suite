@@ -57,7 +57,6 @@ export function createTakomiLiveUpdateBridge(
     output: "Queued.",
     stderr: "",
     preflight: "",
-    startedAt: Date.now(),
     lastActivityAt: Date.now(),
     recentTools: [],
     recentOutput: ["Queued."],
@@ -80,7 +79,7 @@ export function createTakomiLiveUpdateBridge(
       if (!current) return;
       current.lastActivityAt = Date.now();
       if (event.type === "start") {
-        current.startedAt = current.startedAt ?? Date.now();
+        current.startedAt = Date.now();
         current.conversationId = event.state.conversationId ?? current.conversationId;
         current.thinking = event.state.thinking ?? current.thinking;
         current.sessionFile = event.state.sessionFile ?? current.sessionFile;
