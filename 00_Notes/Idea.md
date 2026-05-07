@@ -19,10 +19,15 @@ New-Item -ItemType Junction -Path "$pi\agent\themes\takomi-noir.json" -Target "$
 New-Item -ItemType Junction -Path "$pi\src\pi-takomi-core" -Target "$repo\src\pi-takomi-core"
 
 ---
-
+sym-link
 powershell -ExecutionPolicy Bypass -File .\scripts\sync-pi-global.ps1
 
 .\scripts\sync-pi-global.ps1
+
+dev server
+powershell -ExecutionPolicy Bypass -File .\scripts\pi-dev.ps1
+
+
 
 Get-Process node,pi -ErrorAction SilentlyContinue | Stop-Process -Force
 Rename-Item -Path "$env:USERPROFILE\.pi" -NewName ".pi.local"
