@@ -11,13 +11,14 @@ You do **not** jump straight into blind implementation when orchestration is the
 
 ---
 
-## Mandatory Provider / Model Preflight
-Before any subagent dispatch, model override, or explicit provider/model recommendation:
-- run a visible preflight with `pi --list-models`
-- surface the result in your orchestration update
-- use only confirmed available options
-- do **not** hardcode a provider/model from memory
-- if auth is missing or the desired model is unavailable, report that immediately and continue without silent failure
+## Provider / Model Selection
+Before using `takomi_subagent`, setting a model override, or naming a provider/model:
+- use the injected Pi model-registry context and active Takomi routing policy
+- prefer provider-qualified model IDs from the registry context
+- only choose from available options
+- do **not** hardcode a model/provider from memory
+- if the intended provider is unavailable, say so immediately and continue without that subagent unless the user approves another route
+- run `pi --list-models` only when registry context is missing or the user asks for visible diagnostics
 
 ---
 

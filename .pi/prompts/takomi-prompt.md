@@ -35,13 +35,14 @@ If orchestration is needed, the session should normally start with a single Gene
 
 ---
 
-## Mandatory Provider / Model Preflight
+## Provider / Model Selection
 Before using `takomi_subagent`, setting a model override, or naming a provider/model:
-- run a visible local preflight with `pi --list-models`
-- use only confirmed available options
-- do not hardcode a model/provider from memory
-- if auth is missing or the intended provider is unavailable, say so immediately
-- include the confirmed provider/model choice in your orchestration update before dispatch
+- use the injected Pi model-registry context and active Takomi routing policy
+- prefer provider-qualified model IDs from the registry context
+- only choose from available options
+- do **not** hardcode a model/provider from memory
+- if the intended provider is unavailable, say so immediately and continue without that subagent unless the user approves another route
+- run `pi --list-models` only when registry context is missing or the user asks for visible diagnostics
 
 ---
 

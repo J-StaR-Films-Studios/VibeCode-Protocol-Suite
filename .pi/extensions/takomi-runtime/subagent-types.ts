@@ -1,3 +1,4 @@
+import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 import type { ChecklistInput } from "./shared";
 
 export type SubagentViewMode = "compact" | "expanded" | "fullscreen";
@@ -18,6 +19,8 @@ export type TakomiSubagentRun = {
   stage?: string;
   workflow?: string;
   model?: string;
+  fallbackModels?: string[];
+  thinking?: TakomiThinkingLevel;
   checklist?: ChecklistInput;
   boardTaskStatus?: TakomiBoardTaskStatus;
   summary?: string;
@@ -55,6 +58,7 @@ export type TakomiSubagentRenderState = {
 
 export interface TakomiSubagentController {
   hasRuns(): boolean;
+  getStatusSummary(): string;
   getViewMode(): SubagentViewMode;
   start(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, state: TakomiSubagentRunInit, runKey?: string): Promise<void>;
   update(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, patch: TakomiSubagentRunPatch, runKey?: string): Promise<void>;

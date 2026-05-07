@@ -36,7 +36,9 @@ export type ContextRuntimeState = {
   workflow?: string;
   activeSessionId?: string;
   autoOrch?: boolean;
+  launchMode?: string;
   planMode?: boolean;
+  activeSubagent?: string;
 };
 
 export type ContextPanelState = {
@@ -110,9 +112,12 @@ class ContextPanelComponent implements Component {
       if (ctx.model) {
         lines.push(`${pad}${theme.fg("dim", "Model:")}   ${theme.fg("muted", ellipsizeMiddle(ctx.model.id, innerWidth - 10))}`);
       }
+      if (state.runtime.activeSubagent) {
+        lines.push(`${pad}${theme.fg("dim", "Agent:")}   ${theme.fg("muted", truncateToWidth(state.runtime.activeSubagent, innerWidth - 10))}`);
+      }
 
       const modeFlags = [
-        state.runtime.autoOrch ? "auto" : "manual",
+        state.runtime.launchMode ?? (state.runtime.autoOrch ? "auto" : "manual"),
         state.runtime.planMode ? "plan" : "direct",
       ].join(" | ");
       lines.push(`${pad}${theme.fg("dim", "Mode:")}    ${theme.fg("muted", modeFlags)}`);
@@ -266,14 +271,6 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
 
   pi.on("session_start", () => {
     panel.resetSession();
-  });
-
-  pi.registerCommand("takomi-context", {
-    description: "Toggle the Takomi context panel (files edited, tool activity)",
-    handler: async (_args, ctx) => {
-      panel.toggle(ctx);
-      ctx.ui.notify(`Context panel ${panel.isVisible() ? "opened" : "closed"}`, "info");
-    },
   });
 
   pi.registerShortcut("alt+c", {
