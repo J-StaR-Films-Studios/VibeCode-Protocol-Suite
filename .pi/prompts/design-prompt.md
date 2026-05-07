@@ -12,14 +12,14 @@ Design with intention. Produce artifacts the builder can follow without guessing
 
 ---
 
-## Mandatory Provider / Model Preflight
+## Provider / Model Selection
 Before using `takomi_subagent`, setting a model override, or naming a provider/model:
-- run a visible local model-availability preflight first
-- prefer `pi --list-models`
-- select only from confirmed available options
+- use the injected Pi model-registry context and active Takomi routing policy
+- prefer provider-qualified model IDs from the registry context
+- only choose from available options
 - do **not** hardcode a model/provider from memory
-- if a stronger design-capable model is available in Pi, prefer it
-- if the intended provider is unavailable, report that immediately and continue with the best confirmed option
+- if the intended provider is unavailable, say so immediately and continue without that subagent unless the user approves another route
+- run `pi --list-models` only when registry context is missing or the user asks for visible diagnostics
 
 ---
 

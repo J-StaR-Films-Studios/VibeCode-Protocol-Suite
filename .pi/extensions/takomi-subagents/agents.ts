@@ -1,18 +1,45 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
-import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { getAgentDir, parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
+
+export type TakomiAgentScope = "user" | "project" | "both";
 
 export type TakomiAgentConfig = {
   name: string;
   description: string;
   tools?: string[];
   model?: string;
+  fallbackModels?: string[];
+  thinking?: TakomiThinkingLevel;
   systemPrompt: string;
   filePath: string;
+  source: "user" | "project";
 };
 
-function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
+function splitList(value?: string): string[] | undefined {
+  const parts = value
+    ?.split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts?.length ? parts : undefined;
+}
+
+function normalizeThinking(value?: string): TakomiThinkingLevel | undefined {
+  if (
+    value === "off"
+    || value === "minimal"
+    || value === "low"
+    || value === "medium"
+    || value === "high"
+    || value === "xhigh"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+function loadAgentsFromDirectory(agentsDir: string, source: "user" | "project"): TakomiAgentConfig[] {
   if (!fs.existsSync(agentsDir)) return [];
 
   const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
@@ -25,27 +52,50 @@ function loadAgentsFromDirectory(agentsDir: string): TakomiAgentConfig[] {
     const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
     if (!frontmatter.name || !frontmatter.description) continue;
 
-    const tools = frontmatter.tools
-      ?.split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
-
     agents.push({
       name: frontmatter.name,
       description: frontmatter.description,
-      tools,
+      tools: splitList(frontmatter.tools),
       model: frontmatter.model,
+      fallbackModels: splitList(frontmatter.fallbackModels ?? frontmatter.fallback_models),
+      thinking: normalizeThinking(frontmatter.thinking),
       systemPrompt: body,
       filePath,
+      source,
     });
   }
 
   return agents;
 }
 
-export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
-  const localAgents = loadAgentsFromDirectory(path.join(cwd, ".pi", "agents"));
-  const globalAgents = loadAgentsFromDirectory(path.join(os.homedir(), ".pi", "agent", "agents"));
+function isDirectory(target: string): boolean {
+  try {
+    return fs.statSync(target).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function findNearestProjectAgentsDirs(cwd: string): string[] {
+  let current = cwd;
+  while (true) {
+    const candidates = [
+      path.join(current, ".pi", "agents"),
+      path.join(current, ".agents"),
+    ].filter(isDirectory);
+    if (candidates.length > 0) return candidates;
+    const parent = path.dirname(current);
+    if (parent === current) return [];
+    current = parent;
+  }
+}
+
+export function discoverTakomiAgents(cwd: string, scope: TakomiAgentScope = "both"): TakomiAgentConfig[] {
+  const projectAgentsDirs = findNearestProjectAgentsDirs(cwd);
+  const localAgents = scope === "user"
+    ? []
+    : projectAgentsDirs.flatMap((agentsDir) => loadAgentsFromDirectory(agentsDir, "project"));
+  const globalAgents = scope === "project" ? [] : loadAgentsFromDirectory(path.join(getAgentDir(), "agents"), "user");
   const merged = new Map<string, TakomiAgentConfig>();
 
   for (const agent of globalAgents) {
@@ -56,4 +106,8 @@ export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
   }
 
   return [...merged.values()];
+}
+
+export function discoverProjectAgents(cwd: string): TakomiAgentConfig[] {
+  return discoverTakomiAgents(cwd, "both");
 }

@@ -18,6 +18,7 @@ import type {
 
 const SUBAGENT_UI_KEY = "takomi-subagent";
 const SUBAGENT_WIDGET_OPTIONS = { placement: "belowEditor" as const };
+const LEGACY_SUBAGENT_CHROME_ENABLED = false;
 
 class TakomiSharedSubagentController implements TakomiSubagentController {
   private readonly runs = new Map<string, TakomiSubagentRun>();
@@ -31,6 +32,24 @@ class TakomiSharedSubagentController implements TakomiSubagentController {
 
   hasRuns(): boolean {
     return this.runs.size > 0;
+  }
+
+  getStatusSummary(): string {
+    const runs = this.getOrderedRuns();
+    if (runs.length === 0) return "No Takomi subagents are active.";
+    const counts = runs.reduce<Record<string, number>>((acc, run) => {
+      const status = run.boardTaskStatus ?? run.status;
+      acc[status] = (acc[status] ?? 0) + 1;
+      return acc;
+    }, {});
+    const focused = this.getFocusedRun();
+    const parts = ["running", "in-progress", "completed", "blocked", "pending"]
+      .map((status) => counts[status] ? `${status}:${counts[status]}` : "")
+      .filter(Boolean);
+    return [
+      `Takomi subagents: ${runs.length}${parts.length ? ` (${parts.join(", ")})` : ""}.`,
+      focused ? `Focused: ${focused.agent} | ${focused.taskLabel} | ${focused.model ?? "default model"} | thinking=${focused.thinking ?? "default"}.` : "",
+    ].filter(Boolean).join("\n");
   }
 
   getViewMode(): SubagentViewMode {
@@ -183,6 +202,13 @@ class TakomiSharedSubagentController implements TakomiSubagentController {
 
   private syncChrome(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
+
+    if (!LEGACY_SUBAGENT_CHROME_ENABLED) {
+      ctx.ui.setStatus(SUBAGENT_UI_KEY, undefined);
+      ctx.ui.setWidget(SUBAGENT_UI_KEY, undefined);
+      this.dismissFullscreen();
+      return;
+    }
 
     const renderState = this.buildRenderState();
     if (!renderState.focusedRun) {
