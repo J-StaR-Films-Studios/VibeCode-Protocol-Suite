@@ -18,7 +18,7 @@ importers:
         specifier: ^11.3.0
         version: 11.3.4
       pi-subagents:
-        specifier: ^0.24.0
+        specifier: 0.24.0
         version: 0.24.0(@mariozechner/pi-agent-core@0.70.2(ws@8.20.0)(zod@4.3.6))(@mariozechner/pi-ai@0.70.2(ws@8.20.0)(zod@4.3.6))(@mariozechner/pi-coding-agent@0.70.2(ws@8.20.0)(zod@4.3.6))(@mariozechner/pi-tui@0.70.2)
       picocolors:
         specifier: ^1.1.1

@@ -75,8 +75,12 @@ async function writeCache(cache) {
 export async function getLatestTakomiVersion({ currentVersion, force = false } = {}) {
   const now = Date.now();
   const cache = await readCache();
-  if (!force && cache?.checkedAt && now - cache.checkedAt < CHECK_INTERVAL_MS) {
-    return cache;
+  if (!force && cache?.checkedAt && cache.latestVersion && now - cache.checkedAt < CHECK_INTERVAL_MS) {
+    return {
+      ...cache,
+      currentVersion,
+      updateAvailable: Boolean(currentVersion && isNewerVersion(cache.latestVersion, currentVersion)),
+    };
   }
 
   const info = await fetchLatestPackageInfo();

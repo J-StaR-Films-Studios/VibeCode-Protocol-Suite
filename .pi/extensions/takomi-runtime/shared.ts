@@ -200,6 +200,7 @@ export type JsonRunHooks = {
     args?: string;
     isError?: boolean;
     summary?: string;
+    invocationId?: string;
   }) => void;
   onStderr?: (chunk: string) => void;
 };
@@ -272,6 +273,14 @@ function extractAssistantSnapshot(event: Record<string, unknown>, currentText: s
   }
 
   return undefined;
+}
+
+function extractToolInvocationId(event: Record<string, unknown>, toolName: string): string {
+  for (const key of ["invocationId", "toolCallId", "toolUseId", "callId", "id"]) {
+    const value = event[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return toolName;
 }
 
 export function summarizeJsonEvent(event: Record<string, unknown>): string | undefined {
@@ -356,13 +365,13 @@ export async function runPiAgentJson(cwd: string, args: string[], signal?: Abort
         if (event.type === "tool_execution_start") {
           const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
           const args = typeof event.args === "string" ? event.args : event.args ? JSON.stringify(event.args) : undefined;
-          hooks?.onToolEvent?.({ type: "start", toolName, args, summary: messageText });
+          hooks?.onToolEvent?.({ type: "start", toolName, args, summary: messageText, invocationId: extractToolInvocationId(event, toolName) });
         } else if (event.type === "tool_execution_update") {
           const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
-          hooks?.onToolEvent?.({ type: "update", toolName, summary: messageText });
+          hooks?.onToolEvent?.({ type: "update", toolName, summary: messageText, invocationId: extractToolInvocationId(event, toolName) });
         } else if (event.type === "tool_execution_end") {
           const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
-          hooks?.onToolEvent?.({ type: "end", toolName, isError: event.isError === true, summary: messageText });
+          hooks?.onToolEvent?.({ type: "end", toolName, isError: event.isError === true, summary: messageText, invocationId: extractToolInvocationId(event, toolName) });
         }
 
         if (event.type === "message_end") {

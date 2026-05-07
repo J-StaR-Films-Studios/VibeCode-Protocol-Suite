@@ -3,19 +3,24 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { createSubagentExecutor, type SubagentParamsLike } from "pi-subagents/src/runs/foreground/subagent-executor";
-import { discoverAgents as discoverPiAgents, type AgentConfig, type AgentScope } from "pi-subagents/src/agents/agents";
 import {
-  DEFAULT_ARTIFACT_CONFIG,
+  createSubagentExecutor,
+  discoverPiAgents,
   TEMP_ARTIFACTS_DIR,
+  type AgentConfig,
+  type AgentScope,
   type Details,
   type ExtensionConfig,
+  type SubagentParamsLike,
   type SubagentState,
-} from "pi-subagents/src/shared/types";
+} from "./pi-subagents-internal";
 import { resolveAgentName } from "./agent-aliases";
 import type { TakomiSubagentToolParams, TakomiSubagentToolTask } from "./tool-runner";
 
 type ToolUpdate = (partial: AgentToolResult<Details>) => void;
+
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const NEVER_ABORT: AbortSignal = new AbortController().signal;
 
 function getSubagentSessionRoot(parentSessionFile: string | null): string {
   if (parentSessionFile) {
@@ -80,7 +85,7 @@ function resolveTasks(params: TakomiSubagentToolParams): TakomiSubagentToolTask[
 }
 
 function normalizeThinking(value: unknown): string | undefined {
-  return typeof value === "string" && ["off", "minimal", "low", "medium", "high", "xhigh"].includes(value) ? value : undefined;
+  return typeof value === "string" && (THINKING_LEVELS as readonly string[]).includes(value) ? value : undefined;
 }
 
 function buildTakomiTaskPrompt(task: TakomiSubagentToolTask): string {
@@ -102,7 +107,7 @@ function buildTakomiTaskPrompt(task: TakomiSubagentToolTask): string {
 function modelWithThinking(model: string | undefined, thinking: string | undefined): string | undefined {
   const level = normalizeThinking(thinking);
   if (!model || !level || level === "off") return model;
-  if (/:(off|minimal|low|medium|high|xhigh)$/i.test(model)) return model;
+  if (new RegExp(`:(${THINKING_LEVELS.join("|")})$`, "i").test(model)) return model;
   return `${model}:${level}`;
 }
 
@@ -111,9 +116,15 @@ function defaultChildExtensions(): string[] {
   // currently has both global and project Takomi extensions, which causes tool
   // name conflicts in children. But model providers such as oauth-router are
   // extensions too, so we explicitly allow the provider extension through.
-  const candidates = [
-    path.join(os.homedir(), ".pi", "agent", "extensions", "oauth-router", "index.ts"),
-  ];
+  const roots = [
+    process.env.PI_AGENT_ROOT,
+    path.join(os.homedir(), ".pi", "agent"),
+    path.join(process.cwd(), ".pi"),
+  ].filter((root): root is string => Boolean(root));
+  const candidates = roots.flatMap((root) => [
+    path.join(root, "extensions", "oauth-router", "index.ts"),
+    path.join(root, "extensions", "oauth-router", "index.js"),
+  ]);
   return candidates.filter((candidate) => fs.existsSync(candidate));
 }
 
@@ -222,7 +233,7 @@ export function createTakomiPiSubagentsEngine(pi: ExtensionAPI) {
     ): Promise<AgentToolResult<Details>> {
       const rootCwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
       const subagentParams = toSubagentParams(params, rootCwd);
-      return executor.execute(id, subagentParams, signal ?? new AbortController().signal, onUpdate, ctx);
+      return executor.execute(id, subagentParams, signal ?? NEVER_ABORT, onUpdate, ctx);
     },
   };
 }
