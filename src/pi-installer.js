@@ -112,6 +112,24 @@ export async function installPiHarnessAssets(version = 'unknown') {
     }
   }
 
+  // Pi loads extensions from ~/.pi/agent/extensions. The runtime imports the
+  // shared Takomi core via ../../../src/pi-takomi-core, which resolves to
+  // ~/.pi/src/pi-takomi-core from an installed extension path.
+  const coreSrc = path.join(PATHS.root, 'src', 'pi-takomi-core');
+  const coreDest = path.join(path.dirname(targets.root), 'src', 'pi-takomi-core');
+  if (await fs.pathExists(coreSrc)) {
+    copied['core:pi-takomi-core'] = await copyOwnedDirectory(coreSrc, coreDest);
+  }
+
+  // Keep Pi extension module resolution self-contained for clean machines.
+  // Extension files import pi-subagents internals, so place the package where
+  // Node can resolve it while loading ~/.pi/agent/extensions/*.
+  const piSubagentsSrc = path.join(PATHS.root, 'node_modules', 'pi-subagents');
+  const piSubagentsDest = path.join(targets.root, 'node_modules', 'pi-subagents');
+  if (await fs.pathExists(piSubagentsSrc)) {
+    copied['node_module:pi-subagents'] = await copyOwnedDirectory(piSubagentsSrc, piSubagentsDest);
+  }
+
   const owned = {
     prompts: { src: path.join(srcRoot, 'prompts'), dest: targets.prompts, type: 'dir' },
     agents: { src: path.join(srcRoot, 'agents'), dest: targets.agents, type: 'dir' },
@@ -155,6 +173,8 @@ export async function validatePiHarnessInstall() {
     agents: await fs.pathExists(targets.agents),
     themes: await fs.pathExists(targets.themes),
     readme: await fs.pathExists(path.join(targets.root, 'README.md')),
+    core: await fs.pathExists(path.join(path.dirname(targets.root), 'src', 'pi-takomi-core')),
+    piSubagentsModule: await fs.pathExists(path.join(targets.root, 'node_modules', 'pi-subagents')),
     settingsPreserved: !await fs.pathExists(path.join(PATHS.pi, 'settings.json')) || true,
   };
 }
@@ -167,5 +187,7 @@ export function printPiInstallSummary(result, validation) {
   console.log(pc.white(`  Prompts:    ${validation.prompts ? 'ok' : 'missing'}`));
   console.log(pc.white(`  Agents:     ${validation.agents ? 'ok' : 'missing'}`));
   console.log(pc.white(`  Themes:     ${validation.themes ? 'ok' : 'missing'}`));
+  console.log(pc.white(`  Core:       ${validation.core ? 'ok' : 'missing'}`));
+  console.log(pc.white(`  Subagents:  ${validation.piSubagentsModule ? 'ok' : 'missing module'}`));
   console.log(pc.dim('\nPreserved user-owned config: settings.json, takomi/model-routing.md, runtime session state.'));
 }

@@ -23,3 +23,6 @@ New-Item -ItemType Junction -Path "$pi\src\pi-takomi-core" -Target "$repo\src\pi
 powershell -ExecutionPolicy Bypass -File .\scripts\sync-pi-global.ps1
 
 .\scripts\sync-pi-global.ps1
+
+Get-Process node,pi -ErrorAction SilentlyContinue | Stop-Process -Force
+Rename-Item -Path "$env:USERPROFILE\.pi" -NewName ".pi.local"
