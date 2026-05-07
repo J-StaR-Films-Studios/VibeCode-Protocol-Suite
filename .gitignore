@@ -12,3 +12,4 @@ coverage
 .pi/takomi-profile.json
 .pi/takomi/model-routing.md
 .pi/takomi/subagents/
+.pi/takomi/orchestrator/
