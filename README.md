@@ -41,6 +41,10 @@ takomi install all
 takomi init
 ```
 
+### Subagent execution credit
+
+Takomi's Pi-native subagent execution and terminal UI build on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon**. That package provides the underlying Pi extension for delegated subagent runs, including the native subagent result renderer, live progress/status display, single/parallel/chain execution support, session/artifact handling, and related subagent tooling. Takomi adds its own lifecycle orchestration, model-routing policy, workflow metadata, board/checklist context, and agent conventions on top of that foundation.
+
 
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 
