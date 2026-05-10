@@ -12,9 +12,10 @@
 - Expandable: yes
 - Expanded At: 2026-05-10T00:16:20.494Z
 ### Design
-- Status: pending
-- Tasks: none yet
+- Status: completed
+- Tasks: TCM-DES-001, TCM-DES-002, TCM-DES-003, TCM-DES-004, TCM-DES-005, TCM-DES-006
 - Expandable: yes
+- Expanded At: 2026-05-10T00:23:47.394Z
 ### Build
 - Status: pending
 - Tasks: none yet
@@ -29,6 +30,12 @@
 | TCM-GEN-004 | genesis | Create 1:1 FR issue scaffolding for takomi-context-manager | completed | architect | architect | vibe-genesis | openai-codex/gpt-5.4 | high | subagent | - |
 | TCM-GEN-005 | genesis | Define orchestration-quality requirements to prevent lazy task decomposition | completed | architect | architect | vibe-genesis | openai-codex/gpt-5.5 | high | subagent | - |
 | TCM-GEN-006 | genesis | Create builder handoff and verification strategy | completed | architect | architect | vibe-genesis | openai-codex/gpt-5.4 | high | subagent | - |
+| TCM-DES-001 | design | Design extension architecture and file/module layout | completed | architect | architect | vibe-design | oauth-router/gpt-5.5 | high | subagent | - |
+| TCM-DES-002 | design | Design progressive skill loading APIs and behavior | completed | architect | architect | vibe-design | oauth-router/gpt-5.5 | high | subagent | - |
+| TCM-DES-003 | design | Design prompt rewriting and context firewall strategy | completed | architect | architect | vibe-design | oauth-router/gpt-5.5 | high | subagent | - |
+| TCM-DES-004 | design | Design context router scoring and candidate surfacing | completed | architect | architect | vibe-design | oauth-router/gpt-5.4 | high | subagent | - |
+| TCM-DES-005 | design | Design diagnostics, context report, and test plan | completed | review | reviewer | vibe-design | oauth-router/gpt-5.5 | medium | review-first | - |
+| TCM-DES-006 | design | Create build task breakdown for implementation | completed | orchestrator | orchestrator | vibe-design | oauth-router/gpt-5.5 | medium | subagent | - |
 
 ## Notes
 
