@@ -17,9 +17,10 @@
 - Expandable: yes
 - Expanded At: 2026-05-10T00:23:47.394Z
 ### Build
-- Status: pending
-- Tasks: none yet
+- Status: completed
+- Tasks: TCM-BLD-001, TCM-BLD-002, TCM-BLD-003
 - Expandable: yes
+- Expanded At: 2026-05-10T00:28:51.725Z
 ## Tasks
 
 | ID | Stage | Title | Status | Role | Preferred Agent | Workflow | Model | Thinking | Dispatch | Skills |
@@ -36,6 +37,9 @@
 | TCM-DES-004 | design | Design context router scoring and candidate surfacing | completed | architect | architect | vibe-design | oauth-router/gpt-5.4 | high | subagent | - |
 | TCM-DES-005 | design | Design diagnostics, context report, and test plan | completed | review | reviewer | vibe-design | oauth-router/gpt-5.5 | medium | review-first | - |
 | TCM-DES-006 | design | Create build task breakdown for implementation | completed | orchestrator | orchestrator | vibe-design | oauth-router/gpt-5.5 | medium | subagent | - |
+| TCM-BLD-001 | build | Implement takomi-context-manager extension scaffold and progressive skill tools | completed | code | coder | vibe-build | oauth-router/gpt-5.4 | high | subagent | - |
+| TCM-BLD-002 | build | Implement prompt rewrite, context router, dev script wiring, and documentation updates | completed | code | coder | vibe-build | oauth-router/gpt-5.4 | high | subagent | - |
+| TCM-BLD-003 | build | Verify takomi-context-manager MVP and create handoff report | completed | review | reviewer | vibe-build | oauth-router/gpt-5.5 | medium | review-first | - |
 
 ## Notes
 
