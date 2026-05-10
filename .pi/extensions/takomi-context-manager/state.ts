@@ -23,6 +23,7 @@ export function createEmptyReport(): ContextReport {
     editedFiles: [],
     writtenFiles: [],
     blockedActions: [],
+    duplicateExtensionWarnings: [],
     promptRewrite: {
       attempted: false,
       changed: false,

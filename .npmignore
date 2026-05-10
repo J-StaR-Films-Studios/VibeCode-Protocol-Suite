@@ -1,4 +1,6 @@
 .pi/takomi/subagents/
+.pi/takomi/policies/
+.pi/takomi/context-manager/
 takomi-pack.json
 packcheck.json
 **/__pycache__/

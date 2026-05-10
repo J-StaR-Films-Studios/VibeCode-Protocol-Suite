@@ -50,6 +50,7 @@ export type ContextReport = {
   editedFiles: string[];
   writtenFiles: string[];
   blockedActions: Array<{ toolName: string; reason: string; timestamp: string }>;
+  duplicateExtensionWarnings: Array<{ toolName: string; paths: string[] }>;
   promptRewrite: {
     attempted: boolean;
     changed: boolean;
