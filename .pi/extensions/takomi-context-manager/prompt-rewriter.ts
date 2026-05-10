@@ -3,14 +3,16 @@ import { renderCandidateHint } from "./context-router";
 import { sortedSkills } from "./skill-registry";
 
 function renderSkillIndex(skills: SkillRecord[]): string {
-  if (skills.length === 0) return "Available skills (names only): none discovered.";
-  return ["Available skills (names only):", ...skills.map((skill) => `- ${skill.name}`)].join("\n");
+  if (skills.length === 0) return "Skills: none discovered.";
+  return `Skills: ${skills.length} discovered. Use skill_index only when the task may need a skill.`;
 }
 
 function renderProgressiveRule(): string {
   return [
     "Skill loading:",
-    "- You are given a skill index containing skill names only.",
+    "- Skills are optional capability packs that give you special instructions/tools for specialized, repetitive tasks.",
+    "- Do not preload skill descriptions into the prompt.",
+    "- When doing specialized work, you may check whether a suited skill exists with skill_index.",
     "- For uncertain matches, request skill_manifest for likely skills; manifests include descriptions and locations.",
     "- If a skill is clearly relevant or the user names it directly, use skill_load without requesting a manifest first.",
     "- Load full skill instructions only for skills you will actually use.",
