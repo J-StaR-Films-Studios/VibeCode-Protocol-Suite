@@ -11,7 +11,16 @@
 - Skill registry normalization from `systemPromptOptions.skills` with XML fallback.
 - Prompt rewrite via `before_agent_start` that replaces verbose `<available_skills>` XML with names-only Skill Index plus progressive loading rules.
 - MVP context router candidate scoring and hint injection.
-- Diagnostic report state for prompt length, removed sections, candidates, tool calls, loaded skills, and warnings.
+- Diagnostic report state for prompt length, removed sections, candidates, tool calls, loaded skills, loaded policies, file ledger, blocked actions, and warnings.
+- Policy pack tools:
+  - `policy_manifest`
+  - `policy_load`
+- Model routing policy is discovered from Takomi's existing `/takomi routing` artifact via `.pi/settings.json -> takomi.modelRoutingPolicyFile`; the context manager does not own or generate that content.
+- Context prerequisite gate:
+  - `takomi_subagent` requires Takomi's `model-routing` policy from `/takomi routing`.
+  - On first blocked attempt, the gate returns the policy content, marks it loaded, and tells the agent to retry the original subagent call.
+  - No global read-before-edit/write gate is installed.
+- Full model routing policy and verbose model registry are compacted into lazy policy-pack guidance.
 - `/context-report` command.
 - Local dev script now loads `takomi-context-manager` explicitly.
 
@@ -30,6 +39,7 @@
 - `docs/context-manager/Context_Router_Design.md`
 - `docs/context-manager/Diagnostics_And_Test_Design.md`
 - `docs/context-manager/Build_Task_Breakdown.md`
+- `docs/context-manager/Policy_Gates_And_Tool_Ledger.md`
 - `docs/features/Takomi_Context_Manager.md`
 - `docs/features/Takomi_Orchestration_Task_Quality.md`
 - `docs/issues/FR-001.md` through `docs/issues/FR-012.md`
@@ -85,9 +95,12 @@ pi
 - `show context_report`
 - `list available skills using skill_index`
 - `show manifests for takomi and optimize-agent-context`
+- `load policy_manifest`
+- `load model-routing with policy_load`
 - `use the takomi skill`
 - `this system prompt feels bloated`
 - `fix a typo in README`
+- Attempt `takomi_subagent` before policy context is loaded and confirm the gate returns the model-routing policy plus retry instructions.
 
 ## Known Issues / Follow-Up
 
