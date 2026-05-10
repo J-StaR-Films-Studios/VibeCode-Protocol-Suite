@@ -10,6 +10,7 @@ import { registerPolicyTools } from "./policy-tools";
 import { registerDiagnostics } from "./diagnostics-tools";
 import { installPrerequisiteGates } from "./prerequisite-gates";
 import { installModelPolicyGate } from "./model-policy-gate";
+import { detectDuplicateTakomiExtensions } from "./extension-conflicts";
 import type { ContextManagerConfig } from "./types";
 
 export default function takomiContextManager(pi: ExtensionAPI) {
@@ -25,6 +26,7 @@ export default function takomiContextManager(pi: ExtensionAPI) {
   pi.on("before_agent_start", async (event, ctx) => {
     config = await loadConfig(ctx.cwd);
     state.policies = await discoverPolicies(ctx.cwd, config);
+    const duplicateExtensionWarnings = await detectDuplicateTakomiExtensions(ctx.cwd);
     const optionSkills = collectSkillsFromOptions(event.systemPromptOptions);
     const xmlSkills = collectSkillsFromXml(event.systemPrompt);
     state.skills = mergeSkills([...optionSkills, ...xmlSkills]);
@@ -38,6 +40,7 @@ export default function takomiContextManager(pi: ExtensionAPI) {
       userPrompt: event.prompt,
       skillCount: state.skills.size,
       candidates,
+      duplicateExtensionWarnings,
       promptRewrite: {
         attempted: true,
         changed: rewrite.changed,

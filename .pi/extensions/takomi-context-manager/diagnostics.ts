@@ -1,6 +1,7 @@
 import type { ContextManagerState } from "./state";
 import { sortedSkills } from "./skill-registry";
 import { syncReportLedger } from "./state";
+import { renderDuplicateExtensionGuidance } from "./extension-conflicts";
 
 export function renderReport(state: ContextManagerState, verbose = false): string {
   syncReportLedger(state);
@@ -25,6 +26,7 @@ export function renderReport(state: ContextManagerState, verbose = false): strin
     `- Edited files: ${report.editedFiles.length}`,
     `- Written files: ${report.writtenFiles.length}`,
     `- Blocked actions: ${report.blockedActions.length}`,
+    `- Duplicate extension warnings: ${report.duplicateExtensionWarnings.length}`,
     `- Tool calls: skill_index=${report.toolCalls.skillIndex}, skill_manifest=${report.toolCalls.skillManifest}, skill_load=${report.toolCalls.skillLoad}, policy_manifest=${report.toolCalls.policyManifest}, policy_load=${report.toolCalls.policyLoad}, context_report=${report.toolCalls.contextReport}`,
     `- Warnings: ${report.promptRewrite.warnings.join("; ") || "none"}`,
   ];
@@ -35,6 +37,9 @@ export function renderReport(state: ContextManagerState, verbose = false): strin
     }
   } else {
     lines.push("- Candidates: none");
+  }
+  if (report.duplicateExtensionWarnings.length > 0 || verbose) {
+    lines.push("", "Extension Conflict Diagnostics:", ...renderDuplicateExtensionGuidance(report.duplicateExtensionWarnings));
   }
   if (verbose) {
     lines.push("", "Skill Index:", ...sortedSkills(state.skills).map((skill) => `- ${skill.name}`));

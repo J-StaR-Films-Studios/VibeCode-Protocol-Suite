@@ -21,6 +21,7 @@
   - On first blocked attempt, the gate returns the policy content, marks it loaded, and tells the agent to retry the original subagent call.
   - No global read-before-edit/write gate is installed.
 - Full model routing policy and verbose model registry are compacted into lazy policy-pack guidance.
+- Duplicate global/project Takomi extension diagnostics in `context_report`.
 - `/context-report` command.
 - Local dev script now loads `takomi-context-manager` explicitly.
 
@@ -40,6 +41,8 @@
 - `docs/context-manager/Diagnostics_And_Test_Design.md`
 - `docs/context-manager/Build_Task_Breakdown.md`
 - `docs/context-manager/Policy_Gates_And_Tool_Ledger.md`
+- `docs/context-manager/Model_Policy_Gate_Testing.md`
+- `docs/context-manager/Test_Report.md`
 - `docs/features/Takomi_Context_Manager.md`
 - `docs/features/Takomi_Orchestration_Task_Quality.md`
 - `docs/issues/FR-001.md` through `docs/issues/FR-012.md`
@@ -105,7 +108,7 @@ pi
 ## Known Issues / Follow-Up
 
 - Full `npx tsc --noEmit` is currently blocked by existing `pi-subagents` type errors unrelated to the new extension.
-- Subagent dispatch previously failed when global and project Takomi extensions both registered the same tools. This is documented as `FR-009` future work.
+- Subagent dispatch previously failed when global and project Takomi extensions both registered the same tools. FR-009 diagnostics now surface known duplicate Takomi extension paths in `context_report`; automatic dedupe remains future hardening.
 - Candidate scoring is intentionally MVP string matching; semantic/RAG matching is `FR-010` future work.
 - Prompt rewriting depends on Pi's current `<available_skills>` XML shape. Diagnostics warn if the block is not found.
 
