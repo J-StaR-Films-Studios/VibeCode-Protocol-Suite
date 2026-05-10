@@ -13,3 +13,5 @@ coverage
 .pi/takomi/model-routing.md
 .pi/takomi/subagents/
 .pi/takomi/orchestrator/
+.pi/takomi/policies/
+.pi/takomi/context-manager/
