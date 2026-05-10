@@ -37,6 +37,7 @@ import { executeTakomiSubagentTool } from "../takomi-subagents/tool-runner";
 import {
   renderRuntimeStatus,
   renderRuntimeWidget,
+  renderTakomiHeader,
   TakomiFooterComponent,
 } from "./ui";
 import { getTakomiSubagentController } from "./subagent-controller";
@@ -443,6 +444,13 @@ const footerStateRef: { current: TakomiState; installed: boolean } = { current: 
 
 async function refreshUi(ctx: ExtensionContext, state: TakomiState) {
   if (!ctx.hasUI) return;
+  ctx.ui.setTitle("Takomi");
+  ctx.ui.setHeader((_tui, theme) => ({
+    invalidate() {},
+    render() {
+      return renderTakomiHeader(theme);
+    },
+  }));
   footerStateRef.current = state;
   ctx.ui.setStatus("takomi-runtime", renderRuntimeStatus(ctx.ui.theme, state));
   const widget = renderRuntimeWidget(ctx.ui.theme, state);

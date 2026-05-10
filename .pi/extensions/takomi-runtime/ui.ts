@@ -31,6 +31,27 @@ export type RuntimeHudState = {
 
 type Tone = "accent" | "warning" | "success" | "error" | "muted" | "dim" | "thinkingMinimal";
 
+export function renderTakomiHeader(theme: Theme): string[] {
+  const accent = (text: string) => theme.fg("accent", text);
+  const violet = (text: string) => theme.fg("thinkingMinimal", text);
+  const muted = (text: string) => theme.fg("muted", text);
+  const dim = (text: string) => theme.fg("dim", text);
+  const line = dim("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  return [
+    "",
+    accent("████████╗ █████╗ ██╗  ██╗ ██████╗ ███╗   ███╗██╗"),
+    accent("╚══██╔══╝██╔══██╗██║ ██╔╝██╔═══██╗████╗ ████║██║"),
+    violet("   ██║   ███████║█████╔╝ ██║   ██║██╔████╔██║██║"),
+    violet("   ██║   ██╔══██║██╔═██╗ ██║   ██║██║╚██╔╝██║██║"),
+    accent("   ██║   ██║  ██║██║  ██╗╚██████╔╝██║ ╚═╝ ██║██║"),
+    accent("   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝"),
+    line,
+    `${muted("         Genesis")} ${dim("→")} ${muted("Design")} ${dim("→")} ${muted("Build")}  ${dim("| custom Pi harness runtime")}`,
+    "",
+  ];
+}
+
 function stageTone(stage?: string): Tone {
   switch (stage) {
     case "genesis":
