@@ -6,6 +6,7 @@ coverage
 .idea
 .vscode
 *.log
+pi-session-*.html
 **/__pycache__/
 **/*.pyc
 .pi/settings.json
