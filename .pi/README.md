@@ -8,6 +8,7 @@ It is intentionally separate from the existing cross-harness assets under `asset
 
 - `extensions/takomi-runtime/` - Pi runtime glue, embedded workflow playbooks, and orchestrator board tools
 - `extensions/takomi-subagents/` - Takomi-facing subagent wrapper over Pi-style execution semantics with resumable conversation IDs
+- `extensions/takomi-context-manager/` - Progressive context loading, skill manifests, policy packs, model-routing gates, and context diagnostics
 - `prompts/` - Pi-native prompt shortcuts
 - `agents/` - Pi-native specialist agent definitions, including a design-stage agent
 
@@ -39,6 +40,7 @@ Inside Pi, use:
 - `/takomi subagents status|expand|collapse|fullscreen|next|prev|toggle` to inspect or reshape the active subagent stack
 - `/takomi-status` to show lifecycle, gate, session, and active subagent state
 - `/takomi-reset` to reset session-local Takomi runtime state
+- `/context-report` to inspect prompt compaction, skill loading, policy gates, model routing corrections, and duplicate extension diagnostics
 - `takomi_board` actions now include stage expansion, task updates, multi-task dispatch, and redispatch support for review loops
 - The old standalone commands (`/takomi-genesis`, `/takomi-design`, `/takomi-build`, `/takomi-kickoff`, `/autoorch`, `/orch`, `/architect`, `/code`, `/review`, and the `/takomi-subagent*` variants) are folded into `/takomi` subcommands so slash autocomplete stays small.
 - prompt shortcuts are suffixed with `-prompt` to avoid collisions with runtime commands, e.g. `/orch-prompt`, `/build-prompt`, `/design-prompt`, `/genesis-prompt`, `/takomi-prompt`, `/prime-prompt`
@@ -67,6 +69,7 @@ Bundled with Takomi now:
 
 - `.pi/extensions/takomi-runtime/`
 - `.pi/extensions/takomi-subagents/`
+- `.pi/extensions/takomi-context-manager/`
 - `.pi/prompts/`
 - `.pi/agents/`
 - `.pi/themes/`
@@ -112,6 +115,11 @@ So when working on packaging, agents should distinguish between:
 - Active Takomi subagent work now streams through the native Pi-style result UI instead of Takomi's older below-editor stack.
 - Use Pi's native result expansion, `Alt+T`, or `/takomi subagents expand` to inspect detailed subagent output.
 - Takomi still tracks active runs internally for status, review continuity, and board synchronization, but it no longer opens a custom subagent fullscreen overlay.
+- `takomi-context-manager` reduces prompt bloat by replacing the always-on skill description dump with a names-only Skill Index plus progressive `skill_manifest`/`skill_load` tools.
+- `takomi-context-manager` treats `/takomi routing` as the source of truth for model-routing policy via `.pi/settings.json -> takomi.modelRoutingPolicyFile`.
+- `takomi-context-manager` gates `takomi_subagent` when model-routing context has not been loaded, provides the routing policy, and tells the agent to retry.
+- `takomi-context-manager` can correct safe wrong-provider model requests, block or pause on policy violations, and ask the user whether to retry with an approved model or stop.
+- `takomi-context-manager` detects known duplicate global/project Takomi extension paths in `context_report` to help diagnose tool registration conflicts.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default
   - expand a lifecycle stage into additional tasks

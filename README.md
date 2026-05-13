@@ -45,6 +45,16 @@ takomi init
 
 Takomi's Pi-native subagent execution and terminal UI build on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon**. That package provides the underlying Pi extension for delegated subagent runs, including the native subagent result renderer, live progress/status display, single/parallel/chain execution support, session/artifact handling, and related subagent tooling. Takomi adds its own lifecycle orchestration, model-routing policy, workflow metadata, board/checklist context, and agent conventions on top of that foundation.
 
+### Context Manager
+
+Takomi now ships a Pi-native `takomi-context-manager` extension. It reduces prompt bloat with progressive context loading:
+
+- skill names are always visible, while descriptions and full `SKILL.md` files load only when needed
+- `skill_manifest`, `skill_load`, `policy_manifest`, `policy_load`, and `context_report` tools expose context on demand
+- `/takomi routing` remains the source of truth for model-routing policy
+- `takomi_subagent` is guarded by routing-policy context and can recover from wrong-provider model choices
+- `/context-report` shows prompt compaction, loaded skills/policies, blocked actions, model-routing corrections, and duplicate extension diagnostics
+
 
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 
