@@ -24,6 +24,8 @@ Those are user/project state. They are excluded by `.gitignore` and `.npmignore`
 ## Pre-Publish Checks
 
 - [x] `.pi/extensions/takomi-context-manager/` exists and is modularized.
+- [x] `src/pi-installer.js` automatically installs every bundled directory under `.pi/extensions/`, including `takomi-context-manager`.
+- [x] `takomi doctor` reports bundled/installed `takomi-context-manager`.
 - [x] README documents the context manager.
 - [x] `.pi/README.md` documents bundled extension behavior.
 - [x] `.npmignore` excludes local context-manager/policies state.
@@ -74,6 +76,7 @@ Only publish after reviewing the dry-run file list and confirming no local proje
 
 - package: `takomi@2.1.8`
 - `.pi/extensions/takomi-context-manager/index.ts` is included
+- `.pi/extensions/takomi-context-manager/model-policy-gate.ts` is included
 - `.pi/extensions/takomi-runtime/index.ts` is included
 - `.pi/takomi/context-manager/config.json` is not included
 - `.pi/takomi/policies/subagent-routing.md` is not included
