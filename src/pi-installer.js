@@ -104,11 +104,13 @@ export async function installPiHarnessAssets(version = 'unknown') {
     copied.readme = await copyOwnedFile(readmeSrc, path.join(targets.root, 'README.md'));
   }
 
-  const extensionNames = ['takomi-runtime', 'takomi-subagents', 'oauth-router'];
-  for (const name of extensionNames) {
-    const src = path.join(srcRoot, 'extensions', name);
-    if (await fs.pathExists(src)) {
-      copied[`extension:${name}`] = await copyOwnedDirectory(src, path.join(targets.extensions, name));
+  const extensionsRoot = path.join(srcRoot, 'extensions');
+  if (await fs.pathExists(extensionsRoot)) {
+    const extensionEntries = await fs.readdir(extensionsRoot, { withFileTypes: true });
+    for (const entry of extensionEntries) {
+      if (!entry.isDirectory()) continue;
+      const src = path.join(extensionsRoot, entry.name);
+      copied[`extension:${entry.name}`] = await copyOwnedDirectory(src, path.join(targets.extensions, entry.name));
     }
   }
 
@@ -168,6 +170,7 @@ export async function validatePiHarnessInstall() {
   return {
     runtime: await fs.pathExists(path.join(targets.extensions, 'takomi-runtime')),
     subagents: await fs.pathExists(path.join(targets.extensions, 'takomi-subagents')),
+    contextManager: await fs.pathExists(path.join(targets.extensions, 'takomi-context-manager')),
     oauthRouter: await fs.pathExists(path.join(targets.extensions, 'oauth-router')),
     prompts: await fs.pathExists(targets.prompts),
     agents: await fs.pathExists(targets.agents),
@@ -183,7 +186,7 @@ export function printPiInstallSummary(result, validation) {
   console.log(pc.green('\n✔ Installed Takomi Pi harness assets'));
   console.log(pc.white(`  Root:       ${result.targets.root}`));
   console.log(pc.white(`  Manifest:   ${PI_MANIFEST_PATH}`));
-  console.log(pc.white(`  Extensions: ${validation.runtime && validation.subagents && validation.oauthRouter ? 'ok' : 'check needed'}`));
+  console.log(pc.white(`  Extensions: ${validation.runtime && validation.subagents && validation.contextManager && validation.oauthRouter ? 'ok' : 'check needed'}`));
   console.log(pc.white(`  Prompts:    ${validation.prompts ? 'ok' : 'missing'}`));
   console.log(pc.white(`  Agents:     ${validation.agents ? 'ok' : 'missing'}`));
   console.log(pc.white(`  Themes:     ${validation.themes ? 'ok' : 'missing'}`));

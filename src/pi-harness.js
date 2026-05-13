@@ -72,6 +72,7 @@ export function getBundledPiAssetTargets() {
     root,
     runtime: path.join(root, 'extensions', 'takomi-runtime'),
     subagents: path.join(root, 'extensions', 'takomi-subagents'),
+    contextManager: path.join(root, 'extensions', 'takomi-context-manager'),
     prompts: path.join(root, 'prompts'),
     agents: path.join(root, 'agents'),
     themes: path.join(root, 'themes'),
@@ -162,6 +163,7 @@ export async function inspectBundledPiAssets() {
     root: await fs.pathExists(targets.root),
     runtime: await fs.pathExists(targets.runtime),
     subagents: await fs.pathExists(targets.subagents),
+    contextManager: await fs.pathExists(targets.contextManager),
     prompts: await fs.pathExists(targets.prompts),
     agents: await fs.pathExists(targets.agents),
     themes: await fs.pathExists(targets.themes),
@@ -186,6 +188,7 @@ export async function inspectInstalledTakomiPiHarness(home = HOME) {
   const targets = getPiGlobalTargets(home);
   const runtime = path.join(targets.extensions, 'takomi-runtime');
   const subagents = path.join(targets.extensions, 'takomi-subagents');
+  const contextManager = path.join(targets.extensions, 'takomi-context-manager');
   const core = path.join(path.dirname(targets.root), 'src', 'pi-takomi-core');
   const piSubagentsModule = path.join(targets.root, 'node_modules', 'pi-subagents');
 
@@ -193,6 +196,7 @@ export async function inspectInstalledTakomiPiHarness(home = HOME) {
     targets,
     runtimeInstalled: await fs.pathExists(runtime),
     subagentsInstalled: await fs.pathExists(subagents),
+    contextManagerInstalled: await fs.pathExists(contextManager),
     coreInstalled: await fs.pathExists(core),
     piSubagentsModuleInstalled: await fs.pathExists(piSubagentsModule),
     promptsInstalled: await fs.pathExists(targets.prompts),
