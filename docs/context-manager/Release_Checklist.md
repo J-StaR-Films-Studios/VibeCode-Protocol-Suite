@@ -25,6 +25,7 @@ Those are user/project state. They are excluded by `.gitignore` and `.npmignore`
 
 - [x] `.pi/extensions/takomi-context-manager/` exists and is modularized.
 - [x] `src/pi-installer.js` automatically installs every bundled directory under `.pi/extensions/`, including `takomi-context-manager`.
+- [x] `takomi install pi` / `takomi sync pi` run `pi update` to refresh Pi-managed packages such as `pi-subagents`.
 - [x] `takomi doctor` reports bundled/installed `takomi-context-manager`.
 - [x] README documents the context manager.
 - [x] `.pi/README.md` documents bundled extension behavior.

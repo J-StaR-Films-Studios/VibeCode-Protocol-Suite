@@ -35,7 +35,7 @@ Useful management commands:
 
 ```bash
 takomi doctor
-takomi sync pi
+takomi sync pi   # refreshes Takomi Pi assets and runs pi update for Pi-managed packages
 takomi sync skills
 takomi install all
 takomi init

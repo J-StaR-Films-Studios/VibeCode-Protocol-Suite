@@ -129,7 +129,8 @@ export async function installPiHarnessAssets(version = 'unknown') {
   const piSubagentsSrc = path.join(PATHS.root, 'node_modules', 'pi-subagents');
   const piSubagentsDest = path.join(targets.root, 'node_modules', 'pi-subagents');
   if (await fs.pathExists(piSubagentsSrc)) {
-    copied['node_module:pi-subagents'] = await copyOwnedDirectory(piSubagentsSrc, piSubagentsDest);
+    const resolvedPiSubagentsSrc = await fs.realpath(piSubagentsSrc);
+    copied['node_module:pi-subagents'] = await copyOwnedDirectory(resolvedPiSubagentsSrc, piSubagentsDest);
   }
 
   const owned = {

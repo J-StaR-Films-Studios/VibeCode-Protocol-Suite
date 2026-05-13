@@ -297,6 +297,30 @@ export function printPiSubagentsInstallResult(result) {
   if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
 }
 
+export async function updatePiManagedPackages() {
+  const pi = await detectPiCommand();
+  if (!pi.installed) return { ok: false, changed: false, report: 'Pi is not installed.' };
+
+  const command = pi.path || 'pi';
+  const result = runCommand(command, ['update']);
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+  return {
+    ok: result.status === 0,
+    changed: result.status === 0,
+    report: output || (result.status === 0 ? 'Pi managed packages are up to date.' : 'pi update failed.'),
+  };
+}
+
+export function printPiManagedPackageUpdateResult(result) {
+  if (result.ok) {
+    console.log(pc.green('✔ Updated Pi-managed packages'));
+    if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
+    return;
+  }
+  console.log(pc.yellow('⚠ Could not update Pi-managed packages'));
+  if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
+}
+
 export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
   const pi = await detectPiCommand();
   const bundled = await inspectBundledPiAssets();
