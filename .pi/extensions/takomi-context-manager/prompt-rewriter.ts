@@ -2,17 +2,31 @@ import type { CandidateContext, ContextManagerConfig, SkillRecord } from "./type
 import { renderCandidateHint } from "./context-router";
 import { sortedSkills } from "./skill-registry";
 
-function renderSkillIndex(skills: SkillRecord[]): string {
-  if (skills.length === 0) return "Skills: none discovered.";
-  return `Skills: ${skills.length} discovered. Use skill_index only when the task may need a skill.`;
+function renderSkillNames(skills: SkillRecord[]): string {
+  return ["Available skills (names only):", ...skills.map((skill) => `- ${skill.name}`)].join("\n");
 }
 
-function renderProgressiveRule(): string {
+function renderSkillDisplay(skills: SkillRecord[], candidates: CandidateContext[], config: ContextManagerConfig): string {
+  const mode = config.skillDisplay.mode;
+  const countLine = skills.length === 0 ? "Skills: none discovered." : `Skills: ${skills.length} available.`;
+
+  if (mode === "hidden") return `${countLine} Use skill_index if this task may need a skill.`;
+  if (mode === "all-names") return skills.length === 0 ? countLine : renderSkillNames(skills);
+  if (mode === "auto" && skills.length <= config.skillDisplay.maxVisibleSkillNames) {
+    return skills.length === 0 ? countLine : renderSkillNames(skills);
+  }
+
+  const candidateHint = renderCandidateHint(candidates);
+  return [countLine, candidateHint || "Use skill_index if a specialized skill may help."].join("\n");
+}
+
+function renderProgressiveRule(config: ContextManagerConfig): string {
+  if (!config.skillDisplay.alwaysShowToolInstructions) return "";
   return [
     "Skill loading:",
     "- Skills are optional capability packs that give you special instructions/tools for specialized, repetitive tasks.",
     "- Do not preload skill descriptions into the prompt.",
-    "- When doing specialized work, you may check whether a suited skill exists with skill_index.",
+    "- Use skill_index to view all skill names when needed.",
     "- For uncertain matches, request skill_manifest for likely skills; manifests include descriptions and locations.",
     "- If a skill is clearly relevant or the user names it directly, use skill_load without requesting a manifest first.",
     "- Load full skill instructions only for skills you will actually use.",
@@ -60,7 +74,11 @@ export function rewritePrompt(systemPrompt: string, skills: Map<string, SkillRec
   let changed = false;
 
   if (config.promptCompaction.compactSkillDescriptions) {
-    const replacement = [renderSkillIndex(sortedSkills(skills)), renderProgressiveRule(), renderCandidateHint(candidates)].filter(Boolean).join("\n\n");
+    const sorted = sortedSkills(skills);
+    const replacement = [
+      renderSkillDisplay(sorted, candidates, config),
+      renderProgressiveRule(config),
+    ].filter(Boolean).join("\n\n");
     const skillBlockRegex = /<available_skills>[\s\S]*?<\/available_skills>/i;
     if (!skillBlockRegex.test(next)) {
       warnings.push("No <available_skills> block found; appended progressive skill guidance instead.");
@@ -69,7 +87,7 @@ export function rewritePrompt(systemPrompt: string, skills: Map<string, SkillRec
     } else {
       next = next.replace(skillBlockRegex, replacement);
       changed = true;
-      removedSections.push("available_skills descriptions");
+      removedSections.push(`available_skills descriptions (${config.skillDisplay.mode} display)`);
     }
   }
 
