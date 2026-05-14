@@ -167,20 +167,103 @@ function renderBullets(items?: string[], empty = "- None specified."): string[] 
   return items.map((item) => `- ${item}`);
 }
 
-function renderLifecycleSummary(state: OrchestratorSessionState): string[] {
-  return (Object.keys(state.lifecycle) as VibeLifecycleStage[]).flatMap((stage) => {
-    const entry = state.lifecycle[stage];
-    const taskSummary = entry.taskIds.length ? entry.taskIds.join(", ") : "none yet";
-    return [
-      `### ${stage[0].toUpperCase()}${stage.slice(1)}`,
-      `- Status: ${entry.status}`,
-      `- Tasks: ${taskSummary}`,
-      `- Expandable: ${entry.canExpand === false ? "no" : "yes"}`,
-      entry.expandedAt ? `- Expanded At: ${entry.expandedAt}` : "",
-      entry.notes ? `- Notes: ${entry.notes}` : "",
-      "",
-    ].filter(Boolean);
+function formatCodeList(items?: string[], empty = "none"): string {
+  if (!items?.length) return empty;
+  return items.map((item) => `\`${item}\``).join(", ");
+}
+
+function formatTaskDependencies(task: OrchestratorTask): string {
+  return task.dependencies?.length ? task.dependencies.join(", ") : "none";
+}
+
+function describeWorkflowPhase(workflow?: OrchestratorTask["workflow"]): string {
+  switch (workflow) {
+    case "vibe-genesis":
+      return "Product framing and blueprint generation";
+    case "vibe-design":
+      return "Design planning and interaction definition";
+    case "vibe-build":
+      return "Implementation and delivery";
+    default:
+      return "Task-specific execution";
+  }
+}
+
+function renderSkillRegistry(tasks: OrchestratorTask[]): string[] {
+  const seen = new Set<string>();
+  const skills = tasks.flatMap((task) => task.skills ?? []).filter((skill) => {
+    if (seen.has(skill)) return false;
+    seen.add(skill);
+    return true;
   });
+
+  if (!skills.length) {
+    return [
+      "| Skill | Why It Applies |",
+      "| --- | --- |",
+      "| - | No explicit skills recorded for this session. |",
+    ];
+  }
+
+  return [
+    "| Skill | Why It Applies |",
+    "| --- | --- |",
+    ...skills.map((skill) => `| \`${skill}\` | Required by the session plan for one or more tasks. |`),
+  ];
+}
+
+function renderWorkflowRegistry(tasks: OrchestratorTask[]): string[] {
+  const seen = new Set<string>();
+  const workflows = tasks
+    .map((task) => task.workflow)
+    .filter((workflow): workflow is NonNullable<OrchestratorTask["workflow"]> => Boolean(workflow))
+    .filter((workflow) => {
+      if (seen.has(workflow)) return false;
+      seen.add(workflow);
+      return true;
+    });
+
+  if (!workflows.length) {
+    return [
+      "| Workflow | Phase |",
+      "| --- | --- |",
+      "| - | No explicit workflows recorded for this session. |",
+    ];
+  }
+
+  return [
+    "| Workflow | Phase |",
+    "| --- | --- |",
+    ...workflows.map((workflow) => `| \`${workflow}\` | ${describeWorkflowPhase(workflow)} |`),
+  ];
+}
+
+function deriveCurrentPhase(state: OrchestratorSessionState): string {
+  const ordered = Object.keys(state.lifecycle) as VibeLifecycleStage[];
+  const inProgress = ordered.find((stage) => state.lifecycle[stage].status === "in-progress");
+  if (inProgress) return `${inProgress} in progress`;
+  const pending = ordered.find((stage) => state.lifecycle[stage].taskIds.length > 0 && state.lifecycle[stage].status === "pending");
+  if (pending) return `${pending} queued`;
+  const blocked = ordered.find((stage) => state.lifecycle[stage].status === "blocked");
+  if (blocked) return `${blocked} blocked`;
+  return "all planned stages completed";
+}
+
+function renderProgressChecklist(state: OrchestratorSessionState): string[] {
+  const initialized = state.tasks.length > 0;
+  const genesisDone = state.lifecycle.genesis.status === "completed";
+  const designDone = state.lifecycle.design.status === "completed";
+  const buildDone = state.lifecycle.build.status === "completed";
+
+  return [
+    `- [${initialized ? "x" : " "}] Initialize orchestration session structure`,
+    `- [${genesisDone ? "x" : " "}] Complete Genesis tasks`,
+    `- [${genesisDone ? "x" : " "}] Review and approve Genesis outputs`,
+    `- [${designDone ? "x" : " "}] Complete Design tasks`,
+    `- [${designDone ? "x" : " "}] Review and approve Design outputs`,
+    `- [${buildDone ? "x" : " "}] Complete Build tasks`,
+    `- [${buildDone ? "x" : " "}] Complete verification and handoff`,
+  ];
 }
 
 export function renderMasterPlan(sessionOrId: OrchestratorSessionState | string, title?: string, tasks?: OrchestratorTask[]): string {
@@ -189,56 +272,80 @@ export function renderMasterPlan(sessionOrId: OrchestratorSessionState | string,
     : normalizeSessionState(sessionOrId);
 
   const rows = state.tasks
-    .map((task) => `| ${task.id} | ${task.stage ?? "-"} | ${task.title} | ${task.status} | ${task.role} | ${task.preferredAgent ?? "-"} | ${task.workflow ?? "-"} | ${task.preferredModel ?? task.preferredModelHint ?? "-"} | ${task.preferredThinking ?? "-"} | ${task.dispatchPolicy ?? "-"} | ${task.skills?.join(", ") ?? "-"} |`)
+    .map((task) => `| ${task.id} | ${task.title} | ${task.role} | \`${task.workflow ?? "-"}\` | ${formatCodeList(task.skills)} | ${formatTaskDependencies(task)} | ${task.status} |`)
     .join("\n");
 
   return [
-    `# Master Plan: ${state.title}`,
+    "# Orchestrator Master Plan",
     "",
-    `**Session ID:** ${state.sessionId}`,
-    `**Runtime Mode:** ${state.mode}`,
-    `**Session Intent:** ${state.sessionIntent ?? "full-project"}`,
+    "## Overview",
     "",
-    "## Lifecycle",
+    `- Session ID: \`${state.sessionId}\``,
+    `- Title: ${state.title}`,
+    `- Runtime mode: ${state.mode}`,
+    `- Session intent: ${state.sessionIntent ?? "full-project"}`,
+    `- Current phase: ${deriveCurrentPhase(state)}`,
     "",
-    ...renderLifecycleSummary(state),
-    "## Tasks",
+    "## Context Intake",
     "",
-    "| ID | Stage | Title | Status | Role | Preferred Agent | Workflow | Model | Thinking | Dispatch | Skills |",
-    "|---|---|---|---|---|---|---|---|---|---|---|",
-    rows || "| - | - | No tasks yet | - | - | - | - | - | - | - | - |",
+    "- Vision brief: not captured in machine state",
+    "- Source of truth: current project docs, feature docs, and the approved session plan",
+    "- Constraint summary: see task packets, feature blueprints, and lifecycle stage notes",
+    "",
+    "## Skills Registry",
+    "",
+    ...renderSkillRegistry(state.tasks),
+    "",
+    "## Workflows Registry",
+    "",
+    ...renderWorkflowRegistry(state.tasks),
+    "",
+    "## Task Table",
+    "",
+    "| # | Subtask | Mode | Workflow | Skills | Dependency | Status |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+    rows || "| - | No tasks yet | - | - | - | - | - |",
+    "",
+    "## Progress Checklist",
+    "",
+    ...renderProgressChecklist(state),
     "",
     "## Notes",
     "",
     "- Human-readable task docs live in this session folder.",
     "- Machine state lives in `.pi/takomi/orchestrator/<sessionId>.json`.",
-    "- Sending a task back to the same agent should reuse its conversationId when continuity is helpful.",
     "- Sessions follow the Genesis -> Design -> Build lifecycle, but each stage may stay compact or expand into more tasks.",
+    "- Rich runtime metadata such as conversation continuity, model overrides, and dispatch behavior remains in JSON rather than cluttering the markdown surface.",
   ].join("\n");
 }
 
 export function renderTaskFile(task: OrchestratorTask, context?: string): string {
+  const skillLines = task.skills?.length
+    ? [
+        "| Skill | Why |",
+        "| --- | --- |",
+        ...task.skills.map((skill) => `| \`${skill}\` | Required by the session plan for this task |`),
+      ]
+    : ["No explicit skills are required for this task."];
+
   return [
-    `# Task: ${task.title}`,
+    `# Task ${task.id}: ${task.title}`,
     "",
-    `**Task ID:** ${task.id}`,
-    `**Stage:** ${task.stage ?? "-"}`,
-    `**Status:** ${task.status}`,
-    `**Role:** ${task.role}`,
-    task.parentTaskId ? `**Parent Task:** ${task.parentTaskId}` : "",
-    `**Preferred Agent:** ${task.preferredAgent ?? "-"}`,
-    `**Conversation ID:** ${task.conversationId ?? "-"}`,
-    `**Workflow:** ${task.workflow ?? "-"}`,
-    task.preferredModel ? `**Model Override:** ${task.preferredModel}` : "",
-    task.preferredModelHint ? `**Model Hint:** ${task.preferredModelHint}` : "",
-    task.fallbackModels?.length ? `**Fallback Models:** ${task.fallbackModels.join(", ")}` : "",
-    task.preferredThinking ? `**Thinking Level:** ${task.preferredThinking}` : "",
-    task.dispatchPolicy ? `**Dispatch Policy:** ${task.dispatchPolicy}` : "",
-    task.skills?.length ? `**Required Skills:** ${task.skills.join(", ")}` : "",
+    "## 🔧 Agent Setup (DO THIS FIRST)",
     "",
-    "## Context",
+    "### Workflow to Follow",
     "",
-    context ?? "Add task-specific context here.",
+    task.workflow
+      ? `Read the \`${task.workflow}\` workflow before starting this task.`
+      : "Read the relevant assigned workflow before starting this task.",
+    "",
+    "### Prime Agent Context",
+    "",
+    "Prime the task with the current session plan, related feature docs, and the context below before taking action.",
+    "",
+    "### Required Skills",
+    "",
+    ...skillLines,
     "",
     "## Objective",
     "",
@@ -248,11 +355,11 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     "",
     ...renderBullets(task.scope),
     "",
-    "## Checklist",
+    "## Context",
     "",
-    ...renderChecklist(task.checklist),
+    context ?? "Add task-specific context here.",
     "",
-    "## Definition of Done",
+    "## Definition Of Done",
     "",
     ...renderBullets(task.definitionOfDone),
     "",
@@ -262,20 +369,15 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     "",
     "## Dependencies",
     "",
-    ...renderBullets(task.dependencies),
+    ...renderBullets(task.dependencies, "- none"),
     "",
-    "## Review Checkpoint",
-    "",
-    task.reviewCheckpoint ?? "Review before implementation handoff or final completion.",
-    "",
-    "## Instructions",
+    "## Constraints",
     "",
     ...renderBullets(task.instructions ?? [
-      "complete the task within scope",
-      "use the listed workflow and skills when they are provided",
-      "report blockers clearly",
-      "if review sends this back, continue using the same conversation id when possible",
-      "summarize what changed and what remains",
+      "Complete the task within scope.",
+      "Use the assigned workflow and skills when they are provided.",
+      "Report blockers clearly.",
+      "Summarize what changed and what remains.",
     ]),
     task.notes ? "" : "",
     task.notes ? "## Notes" : "",
