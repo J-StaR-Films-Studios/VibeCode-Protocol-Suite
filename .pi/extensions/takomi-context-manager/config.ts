@@ -3,6 +3,11 @@ import path from "node:path";
 import type { ContextManagerConfig } from "./types";
 
 export const DEFAULT_CONFIG: ContextManagerConfig = {
+  skillDisplay: {
+    mode: "candidates",
+    maxVisibleSkillNames: 80,
+    alwaysShowToolInstructions: true,
+  },
   candidateRouter: {
     maxCandidates: 5,
     highConfidence: 100,
@@ -23,6 +28,7 @@ function mergeConfig(value: Partial<ContextManagerConfig>): ContextManagerConfig
   return {
     ...DEFAULT_CONFIG,
     ...value,
+    skillDisplay: { ...DEFAULT_CONFIG.skillDisplay, ...value.skillDisplay },
     candidateRouter: { ...DEFAULT_CONFIG.candidateRouter, ...value.candidateRouter },
     promptCompaction: { ...DEFAULT_CONFIG.promptCompaction, ...value.promptCompaction },
     policyPaths: value.policyPaths ?? DEFAULT_CONFIG.policyPaths,

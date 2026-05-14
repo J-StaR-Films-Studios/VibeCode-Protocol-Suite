@@ -22,7 +22,14 @@ export type PolicyPack = {
 
 export type Prerequisite = { type: "policies"; policies: string[] };
 
+export type SkillIndexDisplayMode = "hidden" | "candidates" | "all-names" | "auto";
+
 export type ContextManagerConfig = {
+  skillDisplay: {
+    mode: SkillIndexDisplayMode;
+    maxVisibleSkillNames: number;
+    alwaysShowToolInstructions: boolean;
+  };
   candidateRouter: {
     maxCandidates: number;
     highConfidence: number;
