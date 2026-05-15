@@ -276,6 +276,7 @@ export function renderMasterPlan(sessionOrId: OrchestratorSessionState | string,
     .join("\n");
 
   return [
+    "<!-- takomi-generated-master-plan -->",
     "# Orchestrator Master Plan",
     "",
     "## Overview",

@@ -433,7 +433,10 @@ async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState)
   await mkdir(paths.completed, { recursive: true });
   await mkdir(paths.blocked, { recursive: true });
   await mkdir(paths.stateDir, { recursive: true });
-  await writeFile(paths.masterPlan, renderMasterPlan(normalizedState), "utf8");
+  const existingMasterPlan = await readFile(paths.masterPlan, "utf8").catch(() => "");
+  if (!existingMasterPlan || existingMasterPlan.includes("takomi-generated-master-plan")) {
+    await writeFile(paths.masterPlan, renderMasterPlan(normalizedState), "utf8");
+  }
   const validation = validateSessionState(normalizedState);
   await writeFile(paths.summary, [
     `# Orchestrator Summary: ${normalizedState.title}`,
@@ -465,6 +468,7 @@ async function writeOrchestratorSession(cwd: string, session: OrchestratorSessio
 type IncomingTask = {
   id?: string;
   title: string;
+  taskMarkdown?: string;
   role: TakomiRole;
   stage?: VibeLifecycleStage;
   workflow?: TakomiWorkflowId;
@@ -776,9 +780,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     name: "takomi_board",
     label: "Takomi Board",
     description: "Create and manage lifecycle-aware Takomi orchestration session artifacts.",
-    promptSnippet: "Create or expand a Genesis -> Design -> Build orchestration session only when the work is large enough to merit it.",
+    promptSnippet: "Track/delegate a Genesis -> Design -> Build orchestration session after the core plan has been authored in markdown.",
     promptGuidelines: [
       "Use this when you need a concrete orchestrator session directory and task artifacts on disk.",
+      "Do not use takomi_board as a substitute for authoring PRD, issue, design, build, master-plan, or task markdown. Write the human-facing markdown first, then use this tool to register/preserve it for state tracking and dispatch.",
+      "For high-quality orchestration sessions, provide masterPlanMarkdown and taskMarkdown values that contain the authored plan/task packets; JSON fields should carry IDs/status/roles/workflow/dependencies/checklists for tracking, not replace expressive markdown.",
       "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
       "If the request is small enough, do not force orchestration just because the tool exists.",
       "If a reviewed task needs more work, keep or reuse its conversationId so the same subagent can continue it.",
@@ -811,9 +817,11 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         index: Type.Optional(Type.Number()),
         done: Type.Optional(Type.Boolean()),
       }))),
+      masterPlanMarkdown: Type.Optional(Type.String()),
       tasks: Type.Optional(Type.Array(Type.Object({
         id: Type.Optional(Type.String()),
         title: Type.String(),
+        taskMarkdown: Type.Optional(Type.String()),
         role: StringEnum(["general", "orchestrator", "architect", "design", "code", "review"] as const),
         stage: Type.Optional(StringEnum(["genesis", "design", "build"] as const)),
         workflow: Type.Optional(StringEnum(["vibe-genesis", "vibe-design", "vibe-build"] as const)),
@@ -1178,6 +1186,15 @@ ${stateJson}` }],
         );
         nextState = markStageExpanded(nextState, params.stage, params.notes);
         const paths = await writeOrchestratorSession(ctx.cwd, nextState);
+        if (params.masterPlanMarkdown?.trim()) {
+          await writeFile(paths.masterPlan, params.masterPlanMarkdown.trimEnd() + "\n", "utf8");
+        }
+        for (const task of nextState.tasks) {
+          const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
+          if (authored?.trim()) {
+            await writeFile(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored.trimEnd() + "\n", "utf8");
+          }
+        }
         state.activeSessionId = nextState.sessionId;
         persistState();
         syncContextPanelState();
@@ -1207,6 +1224,15 @@ ${stateJson}` }],
         },
       );
       const paths = await writeOrchestratorSession(ctx.cwd, nextState);
+      if (params.masterPlanMarkdown?.trim()) {
+        await writeFile(paths.masterPlan, params.masterPlanMarkdown.trimEnd() + "\n", "utf8");
+      }
+      for (const task of nextState.tasks) {
+        const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
+        if (authored?.trim()) {
+          await writeFile(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored.trimEnd() + "\n", "utf8");
+        }
+      }
       state.activeSessionId = nextState.sessionId;
       state.role = "orchestrator";
       state.stage = nextState.lifecycle.genesis.status === "completed" ? "build" : "genesis";

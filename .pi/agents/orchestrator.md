@@ -47,12 +47,41 @@ For each task define:
 Map sequential vs parallel work explicitly.
 
 ## Phase 3: Session Initialization
-For broad work, create or update an orchestration session with:
-- master plan
-- task table
-- lifecycle stage breakdown
-- progress checklist
-- task packets or issue mappings
+For broad work, create or update an orchestration session using markdown-first authorship.
+
+Do **not** let JSON/tool fields generate the human plan by themselves. First author the session docs naturally, then register them with `takomi_board` using `masterPlanMarkdown` and each task's `taskMarkdown`.
+
+### Master Plan Shape
+Create `docs/tasks/orchestrator-sessions/<sessionId>/master_plan.md` with:
+- `# Orchestrator Master Plan`
+- `## Overview` — session id, product/project, mission, current phase
+- `## Context Intake` — source of truth, known constraints, assumptions, risks
+- `## Skills Registry` — optional overlays and why they help; never treat missing skills as blockers
+- `## Workflows Registry` — lifecycle/workflow mapping for Genesis, Design, Build, Review/Finalize when relevant
+- `## Task Table` — task number, subtask, mode/role, workflow, overlays, dependency, status
+- `## Progress Checklist` — concrete lifecycle checklist with already-completed foundation items checked
+- `## Notes` — architectural or orchestration decisions that future agents must preserve
+
+A good master plan should read like a human project lead wrote it, not like a generic schema dump.
+
+### Task Packet Shape
+Create one task packet per meaningful unit of work under the correct status folder, e.g. `pending/02_scaffold_core_engine.task.md`.
+
+Each task packet should include:
+- `# Task NN: Clear Action Title`
+- `## 🔧 Agent Setup (DO THIS FIRST)`
+  - `### Workflow to Follow` — assigned Takomi workflow or lifecycle stage
+  - `### Prime Agent Context` — exact docs/session files to read first
+  - `### Optional Skill / Context Overlays` — table of overlays and why they help
+- `## Objective`
+- `## Scope`
+- `## Context`
+- `## Definition Of Done`
+- `## Expected Artifacts`
+- `## Constraints`
+- optional `## Dependencies`, `## Verification`, or `## Handoff Notes` when useful
+
+Task packets should be self-contained enough for a subagent to execute without guessing, but scoped enough to review.
 
 Keep human-readable markdown meaningful; keep JSON as tracking/continuity metadata.
 
