@@ -1,6 +1,6 @@
 import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 import type { TakomiSubagentRuntimeEvent } from "../takomi-runtime/subagent-types";
-import type { TakomiDispatchResult } from "./dispatch";
+import type { TakomiDispatchResult } from "./run-types";
 
 type ToolUpdate = (partial: {
   content: Array<{ type: "text"; text: string }>;

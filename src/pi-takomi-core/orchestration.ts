@@ -316,7 +316,7 @@ export function renderMasterPlan(sessionOrId: OrchestratorSessionState | string,
     "- Human-readable task docs live in this session folder.",
     "- Machine state lives in `.pi/takomi/orchestrator/<sessionId>.json`.",
     "- Sessions follow the Genesis -> Design -> Build lifecycle, but each stage may stay compact or expand into more tasks.",
-    "- Rich runtime metadata such as conversation continuity, model overrides, and dispatch behavior remains in JSON rather than cluttering the markdown surface.",
+    "- Rich runtime metadata such as conversation continuity, model overrides, and execution hints remains in JSON rather than cluttering the markdown surface.",
   ].join("\n");
 }
 

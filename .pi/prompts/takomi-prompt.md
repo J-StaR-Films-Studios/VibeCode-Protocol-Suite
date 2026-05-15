@@ -16,6 +16,9 @@ Always-on Takomi behavior.
 - Do not blend architecture, design, and implementation sloppily.
 - When the right path is clear, make a recommendation instead of hedging.
 - For broad work, Genesis may create the orchestration session that carries work into later stages.
+- Orchestration sessions use canonical timestamp IDs: `orch-YYYYMMDD-HHMMSS`.
+- Orchestration sessions are markdown-first: author `master_plan.md` and task packets first, then call `takomi_board` with the same `sessionId`, `masterPlanMarkdown`, task `taskMarkdown`, and matching task statuses. Do not create a second board session for already-authored session docs.
+- `takomi_board` never runs subagents. Use `takomi_subagent` for execution, then come back to `takomi_board update_task` to record results.
 
 ## Shared Mode Pattern
 - Load context before acting.
