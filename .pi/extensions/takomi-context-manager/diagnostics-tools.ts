@@ -20,6 +20,8 @@ export function registerDiagnostics(pi: ExtensionAPI, state: ContextManagerState
   pi.registerCommand("context-report", {
     description: "Show takomi-context-manager diagnostics",
     handler: async (_args, ctx) => {
+      state.report.cwd = ctx.cwd;
+      state.report.toolCalls.contextReport += 1;
       ctx.ui.notify(renderReport(state, true), "info");
     },
   });

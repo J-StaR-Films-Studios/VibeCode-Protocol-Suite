@@ -91,8 +91,3 @@ After priming, continue directly into the user request using the loaded context.
 - name missing docs explicitly
 - preserve verification context for the rest of the session
 - keep the priming summary compact and useful
-
----
-
-## User request:
-$@

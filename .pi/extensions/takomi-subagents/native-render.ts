@@ -1,8 +1,8 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import { renderSubagentResult, syncResultAnimation, type Details } from "./pi-subagents-internal";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import type { TakomiSubagentToolParams } from "./tool-runner";
+import type { Details } from "./pi-subagents-internal";
 
 type ToolResult = AgentToolResult<Details>;
 
@@ -30,7 +30,12 @@ export function renderTakomiSubagentCall(params: TakomiSubagentToolParams, theme
   );
 }
 
-export function renderTakomiSubagentResult(result: ToolResult, options: { expanded?: boolean; isPartial?: boolean }, theme: Theme, context: any) {
-  syncResultAnimation(result, context);
-  return renderSubagentResult(result, { expanded: options.expanded ?? false }, theme);
+export function renderTakomiSubagentResult(result: ToolResult, _options: { expanded?: boolean; isPartial?: boolean }, theme: Theme, _context: any) {
+  const status = (result as any)?.error ? "failed" : "completed";
+  const text = typeof (result as any)?.content === "string"
+    ? (result as any).content
+    : Array.isArray((result as any)?.content)
+      ? (result as any).content.map((part: any) => part?.text ?? "").filter(Boolean).join("\n")
+      : JSON.stringify((result as any)?.details ?? {}, null, 2);
+  return new Text(`${theme.fg("toolTitle", theme.bold(`takomi_subagent ${status}`))}\n${text || "No result content."}`, 0, 0);
 }

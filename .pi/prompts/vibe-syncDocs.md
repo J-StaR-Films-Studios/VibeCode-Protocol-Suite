@@ -93,8 +93,3 @@ Report:
 - prefer updating the right existing doc over creating duplicates
 - keep architecture notes concrete
 - mention exact file paths where helpful
-
----
-
-## User request:
-$@

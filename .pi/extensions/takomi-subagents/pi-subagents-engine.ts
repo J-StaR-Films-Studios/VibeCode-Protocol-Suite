@@ -4,13 +4,10 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import {
-  createSubagentExecutor,
-  discoverPiAgents,
-  TEMP_ARTIFACTS_DIR,
+  loadPiSubagentsInternals,
   type AgentConfig,
   type AgentScope,
   type Details,
-  type ExtensionConfig,
   type SubagentParamsLike,
   type SubagentState,
 } from "./pi-subagents-internal";
@@ -139,12 +136,12 @@ function withTakomiAgentDefaults(agent: AgentConfig): AgentConfig {
   };
 }
 
-function discoverUnifiedAgents(cwd: string, scope: AgentScope): { agents: AgentConfig[] } {
+function discoverUnifiedAgents(discoverPiAgents: any, cwd: string, scope: AgentScope): { agents: AgentConfig[] } {
   return { agents: discoverPiAgents(cwd, scope).agents.map(withTakomiAgentDefaults) };
 }
 
-function agentNameSet(cwd: string): Set<string> {
-  return new Set(discoverUnifiedAgents(cwd, "both").agents.map((agent) => agent.name));
+function agentNameSet(discoverPiAgents: any, cwd: string): Set<string> {
+  return new Set(discoverUnifiedAgents(discoverPiAgents, cwd, "both").agents.map((agent) => agent.name));
 }
 
 function mapSingleTask(task: TakomiSubagentToolTask, names: Set<string>) {
@@ -157,10 +154,10 @@ function mapSingleTask(task: TakomiSubagentToolTask, names: Set<string>) {
   };
 }
 
-function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string): SubagentParamsLike {
+function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, discoverPiAgents: any): SubagentParamsLike {
   const mode = resolveMode(params);
   const tasks = resolveTasks(params);
-  const names = agentNameSet(rootCwd);
+  const names = agentNameSet(discoverPiAgents, rootCwd);
   if (!mode) throw new Error("Provide exactly one mode: agent/task, tasks, or chain.");
 
   const base = {
@@ -207,21 +204,33 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string): Su
 
 export function createTakomiPiSubagentsEngine(pi: ExtensionAPI) {
   const state = createState();
-  const config: ExtensionConfig = {
-    maxSubagentDepth: 2,
-    asyncByDefault: false,
-    forceTopLevelAsync: false,
-  };
-  const executor = createSubagentExecutor({
-    pi,
-    state,
-    config,
-    asyncByDefault: false,
-    tempArtifactsDir: TEMP_ARTIFACTS_DIR,
-    getSubagentSessionRoot,
-    expandTilde,
-    discoverAgents: discoverUnifiedAgents,
-  });
+  let executorPromise: Promise<any> | null = null;
+
+  async function getExecutor() {
+    if (!executorPromise) {
+      executorPromise = loadPiSubagentsInternals().then((internals) => {
+        const config = {
+          maxSubagentDepth: 2,
+          asyncByDefault: false,
+          forceTopLevelAsync: false,
+        };
+        return {
+          executor: internals.createSubagentExecutor({
+            pi,
+            state,
+            config,
+            asyncByDefault: false,
+            tempArtifactsDir: internals.TEMP_ARTIFACTS_DIR,
+            getSubagentSessionRoot,
+            expandTilde,
+            discoverAgents: (cwd: string, scope: AgentScope) => discoverUnifiedAgents(internals.discoverPiAgents, cwd, scope),
+          }),
+          discoverPiAgents: internals.discoverPiAgents,
+        };
+      });
+    }
+    return executorPromise;
+  }
 
   return {
     async execute(
@@ -232,7 +241,8 @@ export function createTakomiPiSubagentsEngine(pi: ExtensionAPI) {
       ctx: ExtensionContext,
     ): Promise<AgentToolResult<Details>> {
       const rootCwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
-      const subagentParams = toSubagentParams(params, rootCwd);
+      const { executor, discoverPiAgents } = await getExecutor();
+      const subagentParams = toSubagentParams(params, rootCwd, discoverPiAgents);
       return executor.execute(id, subagentParams, signal ?? NEVER_ABORT, onUpdate, ctx);
     },
   };
