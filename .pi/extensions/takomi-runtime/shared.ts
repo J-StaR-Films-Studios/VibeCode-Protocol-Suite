@@ -512,7 +512,7 @@ export function buildTaskPrompt(task: {
   return [
     task.stage ? `Stage: ${task.stage}` : "",
     task.workflow ? `Workflow: ${task.workflow}` : "",
-    task.skills?.length ? `Skills: ${task.skills.join(", ")}` : "",
+    task.skills?.length ? `Optional skill/context overlays: ${task.skills.join(", ")}` : "",
     formatChecklist(task.checklist),
     "Task:",
     task.task,

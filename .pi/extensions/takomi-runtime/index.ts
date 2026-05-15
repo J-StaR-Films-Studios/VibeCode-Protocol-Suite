@@ -57,7 +57,7 @@ import {
   getProfileDefaults,
   loadTakomiProfile,
 } from "./profile";
-import { installTakomiRoutingPolicy, loadTakomiRoutingPolicy } from "./routing-policy";
+import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy } from "./routing-policy";
 
 type TakomiState = {
   enabled: boolean;
@@ -69,6 +69,7 @@ type TakomiState = {
   workflow?: TakomiWorkflowId;
   activeSessionId?: string;
   subagentsEnabled: boolean;
+  lastFullPromptKey?: string;
 };
 
 const DEFAULT_STATE: TakomiState = {
@@ -166,14 +167,36 @@ function planPrompt(): string {
   ].join("\n");
 }
 
-function getInjectedPlaybook(state: TakomiState): string | undefined {
+function stripPromptFrontmatter(content: string): string {
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
+}
+
+async function loadWorkflowPrompt(cwd: string, workflow: TakomiWorkflowId): Promise<string | undefined> {
+  const fileName = workflow === "vibe-genesis"
+    ? "genesis-prompt.md"
+    : workflow === "vibe-design"
+      ? "design-prompt.md"
+      : "build-prompt.md";
+  try {
+    const raw = await readFile(path.join(cwd, ".pi", "prompts", fileName), "utf8");
+    const cleaned = stripPromptFrontmatter(raw);
+    return cleaned || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function getInjectedPlaybook(cwd: string, state: TakomiState, includeFullWorkflow: boolean): Promise<string | undefined> {
   if (!state.workflow) return undefined;
   const workflow = getWorkflowDefinition(state.workflow);
+  const prompt = includeFullWorkflow ? await loadWorkflowPrompt(cwd, state.workflow) : undefined;
   return [
     `${workflow.title} is the active Takomi workflow.`,
     workflow.purpose,
     workflow.preferredModelHint ?? "",
-    workflow.playbook,
+    includeFullWorkflow
+      ? (prompt ?? workflow.playbook)
+      : `Compact reminder: follow the ${workflow.id} stage. Full workflow was injected when this role/workflow became active; reload the markdown prompt only if behavior degrades or the task is complex.`,
     workflow.nextStage ? `After this stage, recommend ${workflow.nextStage}.` : "",
   ].filter(Boolean).join("\n\n");
 }
@@ -1181,7 +1204,15 @@ ${stateJson}` }],
       routingNote = "Blank project detected; orchestrator remains in control and must honor Genesis → Design → Build.";
     }
 
-    const routingPolicy = await loadTakomiRoutingPolicy(runtimeCwd);
+    const promptKey = `${effectiveState.role}:${effectiveState.workflow ?? "none"}`;
+    const includeFullWorkflow = Boolean(effectiveState.workflow && effectiveState.lastFullPromptKey !== promptKey);
+    if (includeFullWorkflow) {
+      state.lastFullPromptKey = promptKey;
+      persistState();
+      syncContextPanelState();
+    }
+
+    const routingPolicy = await resolveTakomiRoutingPolicy(runtimeCwd);
     const modelPreflightContext = (() => {
       try {
         const available = typeof (runtimeCtx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } } | undefined)?.modelRegistry?.getAvailable === "function"
@@ -1198,9 +1229,11 @@ ${stateJson}` }],
       "Takomi runtime is active for this turn.",
       rolePrompt(effectiveState.role),
       effectiveState.planMode ? planPrompt() : "",
-      getInjectedPlaybook(effectiveState),
+      await getInjectedPlaybook(runtimeCwd, effectiveState, includeFullWorkflow),
       `Routing note: ${routingNote}`,
-      routingPolicy ? `Project Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy}` : "No project Takomi model routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
+      routingPolicy.text
+        ? `${routingPolicy.source === "bundled" ? "Bundled" : "Project"} Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy.text}`
+        : "No Takomi routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
       modelPreflightContext,
       `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       `Takomi execution gate: ${effectiveState.launchMode === "manual" ? "review" : "auto"}. In review gate mode, show the delegation plan before launching and return to the user after each task with results, verification guidance, and the recommended next step.`,

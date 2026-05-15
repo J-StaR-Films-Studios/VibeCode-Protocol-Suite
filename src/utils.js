@@ -45,6 +45,12 @@ function shouldCopyBundledPiAsset(relativePath = '') {
   return true;
 }
 
+async function seedBundledPiFileIfMissing(sourcePath, targetPath) {
+  if (!await fs.pathExists(sourcePath) || await fs.pathExists(targetPath)) return;
+  await fs.ensureDir(path.dirname(targetPath));
+  await fs.copy(sourcePath, targetPath, { overwrite: false, errorOnExist: false });
+}
+
 export async function copyBundledPiAssets(targetDir) {
   if (!await fs.pathExists(PATHS.pi)) return false;
 
@@ -56,6 +62,11 @@ export async function copyBundledPiAssets(targetDir) {
       return shouldCopyBundledPiAsset(relative);
     },
   });
+
+  await seedBundledPiFileIfMissing(
+    path.join(PATHS.pi, 'takomi', 'model-routing.md'),
+    path.join(targetDir, '.pi', 'takomi', 'model-routing.md'),
+  );
 
   return true;
 }
