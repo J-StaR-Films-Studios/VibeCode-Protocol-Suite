@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { ContextManagerState } from "./state";
 import { recordBlocked } from "./state";
+import { resolveTakomiRoutingPolicy } from "../takomi-runtime/routing-policy";
 
 type Settings = {
   takomi?: { modelRoutingPolicyFile?: string };
@@ -68,17 +69,9 @@ function collectModelsFromPolicy(text: string): string[] {
 async function loadSnapshot(cwd: string): Promise<ModelPolicySnapshot> {
   const settings = await readSettings(cwd);
   const settingsModels = collectModelsFromSettings(settings);
-  const sourceFiles: string[] = [];
-  let policyModels: string[] = [];
-  const configured = settings.takomi?.modelRoutingPolicyFile ?? ".pi/takomi/model-routing.md";
-  const policyPath = path.isAbsolute(configured) ? configured : path.resolve(cwd, configured);
-  try {
-    const text = await readFile(policyPath, "utf8");
-    sourceFiles.push(policyPath);
-    policyModels = collectModelsFromPolicy(text);
-  } catch {
-    // Routing policy may not exist yet.
-  }
+  const resolvedPolicy = await resolveTakomiRoutingPolicy(cwd);
+  const sourceFiles = resolvedPolicy.policyPath ? [resolvedPolicy.policyPath] : [];
+  const policyModels = resolvedPolicy.text ? collectModelsFromPolicy(resolvedPolicy.text) : [];
   const approvedModels = unique([...settingsModels, ...policyModels]);
   return { approvedModels, preferredModels: settingsModels.length ? unique(settingsModels) : approvedModels, sourceFiles };
 }

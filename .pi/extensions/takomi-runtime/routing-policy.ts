@@ -1,13 +1,29 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const TAKOMI_ROUTING_POLICY_RELATIVE = path.join(".pi", "takomi", "model-routing.md");
+export const BUNDLED_TAKOMI_ROUTING_POLICY_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "takomi",
+  "model-routing.md",
+);
 
 export type RoutingPolicyInstallResult = {
   policyPath: string;
   settingsPath: string;
   settingsUpdated: boolean;
   detectedDefaults: string[];
+};
+
+export type RoutingPolicySource = "project" | "bundled" | "missing";
+
+export type ResolvedRoutingPolicy = {
+  source: RoutingPolicySource;
+  policyPath?: string;
+  text?: string;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -21,6 +37,15 @@ async function readJsonObject(filePath: string): Promise<JsonObject> {
     return asObject(JSON.parse(await readFile(filePath, "utf8")));
   } catch {
     return {};
+  }
+}
+
+async function readPolicyText(filePath: string): Promise<string | undefined> {
+  try {
+    const text = (await readFile(filePath, "utf8")).trim();
+    return text || undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -63,6 +88,31 @@ function deriveSubagentDefaults(policy: string): { overrides: JsonObject; detect
   return { overrides, detected };
 }
 
+export async function resolveTakomiRoutingPolicy(cwd: string): Promise<ResolvedRoutingPolicy> {
+  const settingsPath = path.join(cwd, ".pi", "settings.json");
+  const settings = await readJsonObject(settingsPath);
+  const takomi = asObject(settings.takomi);
+  const configured = typeof takomi.modelRoutingPolicyFile === "string"
+    ? takomi.modelRoutingPolicyFile
+    : TAKOMI_ROUTING_POLICY_RELATIVE;
+  const configuredPath = path.isAbsolute(configured) ? configured : path.join(cwd, configured);
+  const configuredText = await readPolicyText(configuredPath);
+  if (configuredText) {
+    return { source: "project", policyPath: configuredPath, text: configuredText };
+  }
+
+  const bundledText = await readPolicyText(BUNDLED_TAKOMI_ROUTING_POLICY_PATH);
+  if (bundledText) {
+    return {
+      source: "bundled",
+      policyPath: BUNDLED_TAKOMI_ROUTING_POLICY_PATH,
+      text: bundledText,
+    };
+  }
+
+  return { source: "missing" };
+}
+
 export async function installTakomiRoutingPolicy(cwd: string, input: string): Promise<RoutingPolicyInstallResult> {
   const policy = extractQuotedPolicy(input);
   if (!policy) throw new Error("No routing policy text found. Paste the policy after /takomi routing or inside triple quotes.");
@@ -91,15 +141,5 @@ export async function installTakomiRoutingPolicy(cwd: string, input: string): Pr
 }
 
 export async function loadTakomiRoutingPolicy(cwd: string): Promise<string | undefined> {
-  const settingsPath = path.join(cwd, ".pi", "settings.json");
-  const settings = await readJsonObject(settingsPath);
-  const takomi = asObject(settings.takomi);
-  const configured = typeof takomi.modelRoutingPolicyFile === "string" ? takomi.modelRoutingPolicyFile : TAKOMI_ROUTING_POLICY_RELATIVE;
-  const policyPath = path.isAbsolute(configured) ? configured : path.join(cwd, configured);
-  try {
-    const text = (await readFile(policyPath, "utf8")).trim();
-    return text || undefined;
-  } catch {
-    return undefined;
-  }
+  return (await resolveTakomiRoutingPolicy(cwd)).text;
 }

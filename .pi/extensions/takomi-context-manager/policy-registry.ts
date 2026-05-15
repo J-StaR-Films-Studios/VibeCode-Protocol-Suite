@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ContextManagerConfig, PolicyPack } from "./types";
 import { normalizeName } from "./skill-registry";
+import { resolveTakomiRoutingPolicy } from "../takomi-runtime/routing-policy";
 
 function descriptionFromMarkdown(content: string): string {
   const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -30,18 +31,15 @@ function addPolicy(policies: Map<string, PolicyPack>, policy: PolicyPack | undef
   policies.set(key, policy);
 }
 
-async function discoverTakomiSettingsPolicy(cwd: string): Promise<PolicyPack | undefined> {
-  try {
-    const settingsPath = path.resolve(cwd, ".pi/settings.json");
-    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
-      takomi?: { modelRoutingPolicyFile?: string };
-    };
-    const modelRoutingPolicyFile = settings.takomi?.modelRoutingPolicyFile;
-    if (!modelRoutingPolicyFile) return undefined;
-    return readPolicyFile("model-routing", path.resolve(cwd, modelRoutingPolicyFile));
-  } catch {
-    return undefined;
-  }
+async function discoverResolvedModelRoutingPolicy(cwd: string): Promise<PolicyPack | undefined> {
+  const resolved = await resolveTakomiRoutingPolicy(cwd);
+  if (!resolved.text) return undefined;
+  return {
+    name: "model-routing",
+    description: descriptionFromMarkdown(resolved.text),
+    content: resolved.text,
+    path: resolved.policyPath,
+  };
 }
 
 async function discoverExplicitPolicyFiles(cwd: string, config: ContextManagerConfig): Promise<PolicyPack[]> {
@@ -58,9 +56,8 @@ export async function discoverPolicies(cwd: string, config: ContextManagerConfig
     addPolicy(policies, policy, true);
   }
 
-  // Source-of-truth priority 2: Takomi's own routing artifact created by `/takomi routing`.
-  // The context manager must consume this file, not invent/own model routing policy text.
-  addPolicy(policies, await discoverTakomiSettingsPolicy(cwd), true);
+  // Source-of-truth priority 2: Takomi routing policy resolved from project settings or the bundled harness default.
+  addPolicy(policies, await discoverResolvedModelRoutingPolicy(cwd), true);
 
   // Source-of-truth priority 3: discovered markdown policy packs. These are supplemental/default packs.
   for (const policyPath of config.policyPaths) {

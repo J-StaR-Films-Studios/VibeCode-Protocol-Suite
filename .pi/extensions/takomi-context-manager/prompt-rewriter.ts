@@ -33,8 +33,9 @@ function renderProgressiveRule(config: ContextManagerConfig): string {
     "",
     "Policy loading:",
     "- Model/subagent/lifecycle policies are lazy-loaded policy packs.",
-    "- Use policy_manifest to inspect available policies.",
-    "- Use policy_load before sensitive tools such as takomi_subagent.",
+    "- The active routing policy may come from the project or the bundled Takomi harness default.",
+    "- Use policy_manifest or policy_load when you need to inspect or quote a policy explicitly.",
+    "- If takomi_subagent is blocked for missing policy context, the gate has already loaded the required policy for this session; retry the tool call and follow it.",
   ].join("\n");
 }
 
@@ -42,7 +43,7 @@ function compactHeavyPolicyBlocks(prompt: string, config: ContextManagerConfig):
   let next = prompt;
   const removedSections: string[] = [];
   if (config.promptCompaction.compactModelRouting) {
-    const modelRoutingRegex = /Project Takomi model routing policy is active\. Apply it when choosing parent\/subagent models and escalation levels:\s*\n\n# Takomi Model Routing Policy[\s\S]*?(?=\nAvailable model context from Pi registry:)/;
+    const modelRoutingRegex = /(Project|Bundled) Takomi model routing policy is active\. Apply it when choosing parent\/subagent models and escalation levels:\s*\n\n# Takomi Model Routing Policy[\s\S]*?(?=\nAvailable model context from Pi registry:)/;
     if (modelRoutingRegex.test(next)) {
       next = next.replace(modelRoutingRegex, [
         "Project Takomi model routing policy is available as a lazy-loaded policy pack.",

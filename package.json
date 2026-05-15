@@ -14,7 +14,12 @@
     ".pi/agents",
     ".pi/extensions",
     ".pi/prompts",
-    ".pi/themes"
+    ".pi/themes",
+    ".pi/settings.json",
+    ".pi/takomi-profile.json",
+    ".pi/takomi/context-manager",
+    ".pi/takomi/model-routing.md",
+    ".pi/takomi/policies"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -201,14 +201,14 @@ function renderSkillRegistry(tasks: OrchestratorTask[]): string[] {
     return [
       "| Skill | Why It Applies |",
       "| --- | --- |",
-      "| - | No explicit skills recorded for this session. |",
+      "| - | No explicit skill/context overlays recorded for this session; rely on harness defaults and repo docs. |",
     ];
   }
 
   return [
     "| Skill | Why It Applies |",
     "| --- | --- |",
-    ...skills.map((skill) => `| \`${skill}\` | Required by the session plan for one or more tasks. |`),
+    ...skills.map((skill) => `| \`${skill}\` | Optional overlay named by the session plan; use it only if installed and genuinely helpful. |`),
   ];
 }
 
@@ -324,9 +324,9 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     ? [
         "| Skill | Why |",
         "| --- | --- |",
-        ...task.skills.map((skill) => `| \`${skill}\` | Required by the session plan for this task |`),
+        ...task.skills.map((skill) => `| \`${skill}\` | Optional overlay for this task; use it only if installed and genuinely helpful |`),
       ]
-    : ["No explicit skills are required for this task."];
+    : ["No explicit skill/context overlays are required for this task; rely on the harness defaults and repo source of truth."];
 
   return [
     `# Task ${task.id}: ${task.title}`,
@@ -343,7 +343,7 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     "",
     "Prime the task with the current session plan, related feature docs, and the context below before taking action.",
     "",
-    "### Required Skills",
+    "### Optional Skill / Context Overlays",
     "",
     ...skillLines,
     "",
@@ -375,7 +375,7 @@ export function renderTaskFile(task: OrchestratorTask, context?: string): string
     "",
     ...renderBullets(task.instructions ?? [
       "Complete the task within scope.",
-      "Use the assigned workflow and skills when they are provided.",
+      "Use the assigned workflow and any listed skill/context overlays when they are available; otherwise rely on the harness defaults and repo source of truth.",
       "Report blockers clearly.",
       "Summarize what changed and what remains.",
     ]),
