@@ -9,11 +9,18 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "forceConsistentCasingInFileNames": true
   },
   "include": [
     "src/**/*.ts",
     ".pi/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tmp",
+    ".tmp"
   ]
 }

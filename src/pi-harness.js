@@ -48,8 +48,8 @@ export function getPiGlobalTargets(home = HOME) {
     agents: path.join(agentRoot, 'agents'),
     themes: path.join(agentRoot, 'themes'),
     settings: path.join(agentRoot, 'settings.json'),
-    takomi: path.join(agentRoot, 'takomi'),
-    routingPolicy: path.join(agentRoot, 'takomi', 'model-routing.md'),
+    takomi: path.join(home, '.pi', 'takomi'),
+    routingPolicy: path.join(home, '.pi', 'takomi', 'model-routing.md'),
   };
 }
 

@@ -51,8 +51,8 @@ export class RouterStateStore {
         version: 1,
         policy:
           parsed.policy === "weighted-round-robin" || parsed.policy === "round-robin" ? parsed.policy : initialPolicy,
-        rrCursor: Number.isFinite(parsed.rrCursor) ? parsed.rrCursor : 0,
-        weightedCursor: Number.isFinite(parsed.weightedCursor) ? parsed.weightedCursor : 0,
+        rrCursor: typeof parsed.rrCursor === "number" && Number.isFinite(parsed.rrCursor) ? parsed.rrCursor : 0,
+        weightedCursor: typeof parsed.weightedCursor === "number" && Number.isFinite(parsed.weightedCursor) ? parsed.weightedCursor : 0,
         accounts,
       };
     } catch {

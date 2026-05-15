@@ -138,8 +138,3 @@ Usually recommend:
 - make decisive recommendations when the evidence is clear
 - make the output strong enough that design/build can follow without guessing
 - keep FRs and issue files aligned 1:1
-
----
-
-## Current User Request
-$@

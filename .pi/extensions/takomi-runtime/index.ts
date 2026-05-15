@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "typebox";
@@ -17,8 +18,10 @@ import {
   normalizeSessionState,
   renderMasterPlan,
   renderTaskFile,
+  renderValidationReport,
   serializeSessionState,
   slugifyTaskTitle,
+  validateSessionState,
   type OrchestratorTask,
   type OrchestratorSessionState,
   type OrchestratorTaskStatus,
@@ -122,7 +125,7 @@ function setStageAndWorkflow(state: TakomiState, stage: VibeLifecycleStage, opti
   state.enabled = true;
 }
 
-function rolePrompt(role: TakomiRole): string {
+function fallbackRolePrompt(role: TakomiRole): string {
   switch (role) {
     case "orchestrator":
       return [
@@ -139,7 +142,6 @@ function rolePrompt(role: TakomiRole): string {
       return [
         "You are operating in Takomi design mode.",
         "Translate genesis context into build-ready UX and visual direction.",
-        "Prefer Gemini or a similarly strong design-oriented model if available.",
       ].join("\n");
     case "code":
       return [
@@ -159,6 +161,43 @@ function rolePrompt(role: TakomiRole): string {
   }
 }
 
+function agentFileNameForRole(role: TakomiRole): string | undefined {
+  switch (role) {
+    case "orchestrator": return "orchestrator.md";
+    case "architect": return "architect.md";
+    case "design": return "designer.md";
+    case "code": return "coder.md";
+    case "review": return "reviewer.md";
+    default: return undefined;
+  }
+}
+
+async function loadRolePrompt(cwd: string, role: TakomiRole): Promise<string> {
+  const fileName = agentFileNameForRole(role);
+  if (!fileName) return fallbackRolePrompt(role);
+
+  const candidates = [
+    path.join(cwd, ".pi", "agents", fileName),
+    path.join(installedAssetRoot("agents"), fileName),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await readFile(candidate, "utf8");
+      const cleaned = stripPromptFrontmatter(raw);
+      if (cleaned) {
+        return [
+          fallbackRolePrompt(role),
+          `Canonical Takomi role mirror loaded from ${candidate}:`,
+          cleaned,
+        ].join("\n\n");
+      }
+    } catch {}
+  }
+
+  return fallbackRolePrompt(role);
+}
+
 function planPrompt(): string {
   return [
     "Takomi planning mode is active.",
@@ -171,32 +210,62 @@ function stripPromptFrontmatter(content: string): string {
   return content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
 }
 
+function stripTemplateOnlyRequestPlaceholder(content: string): string {
+  return content
+    .replace(/\n?---\s*\r?\n\s*## Current User Request\s*\r?\n\s*(?:\$@|\$ARGUMENTS)\s*$/i, "")
+    .replace(/\n?## Current User Request\s*\r?\n\s*(?:\$@|\$ARGUMENTS)\s*$/i, "")
+    .trim();
+}
+
+function installedAssetRoot(kind: "agents" | "prompts"): string {
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    kind,
+  );
+}
+
 async function loadWorkflowPrompt(cwd: string, workflow: TakomiWorkflowId): Promise<string | undefined> {
   const fileName = workflow === "vibe-genesis"
     ? "genesis-prompt.md"
     : workflow === "vibe-design"
       ? "design-prompt.md"
       : "build-prompt.md";
-  try {
-    const raw = await readFile(path.join(cwd, ".pi", "prompts", fileName), "utf8");
-    const cleaned = stripPromptFrontmatter(raw);
-    return cleaned || undefined;
-  } catch {
-    return undefined;
+  const candidates = [
+    path.join(cwd, ".pi", "prompts", fileName),
+    path.join(installedAssetRoot("prompts"), fileName),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await readFile(candidate, "utf8");
+      const cleaned = stripTemplateOnlyRequestPlaceholder(stripPromptFrontmatter(raw));
+      if (cleaned) return cleaned;
+    } catch {}
   }
+
+  return undefined;
 }
 
 async function getInjectedPlaybook(cwd: string, state: TakomiState, includeFullWorkflow: boolean): Promise<string | undefined> {
   if (!state.workflow) return undefined;
   const workflow = getWorkflowDefinition(state.workflow);
   const prompt = includeFullWorkflow ? await loadWorkflowPrompt(cwd, state.workflow) : undefined;
+
+  if (includeFullWorkflow) {
+    return [
+      `Active Takomi workflow: ${workflow.title} (${workflow.id}).`,
+      prompt ?? workflow.playbook,
+      workflow.nextStage ? `After this stage, recommend ${workflow.nextStage}.` : "",
+    ].filter(Boolean).join("\n\n");
+  }
+
   return [
-    `${workflow.title} is the active Takomi workflow.`,
+    `Active Takomi workflow: ${workflow.title} (${workflow.id}).`,
     workflow.purpose,
     workflow.preferredModelHint ?? "",
-    includeFullWorkflow
-      ? (prompt ?? workflow.playbook)
-      : `Compact reminder: follow the ${workflow.id} stage. Full workflow was injected when this role/workflow became active; reload the markdown prompt only if behavior degrades or the task is complex.`,
+    `Compact reminder: follow the ${workflow.id} stage. Full workflow was injected when this role/workflow became active; reload the markdown prompt only if behavior degrades or the task is complex.`,
     workflow.nextStage ? `After this stage, recommend ${workflow.nextStage}.` : "",
   ].filter(Boolean).join("\n\n");
 }
@@ -325,6 +394,37 @@ async function loadSessionState(cwd: string, sessionId: string): Promise<{ state
   return { state, paths };
 }
 
+function repairTaskMarkdown(content: string): string {
+  return content
+    .replace(/### Required Skills/g, "### Optional Skill / Context Overlays")
+    .replace(/Required Skills/g, "Optional Skill / Context Overlays")
+    .replace(/Load ALL required skills/g, "Use relevant optional skill/context overlays only when available and genuinely helpful")
+    .replace(/Required skills/g, "Optional skill/context overlays")
+    .replace(/required skills/g, "optional skill/context overlays");
+}
+
+async function findExistingTaskFile(paths: ReturnType<typeof getSessionPaths>, task: OrchestratorTask): Promise<string | undefined> {
+  for (const folder of [paths.pending, paths.inProgress, paths.completed, paths.blocked]) {
+    const entries = await readdir(folder).catch(() => [] as string[]);
+    const match = entries.find((entry) => entry.endsWith(".task.md") && entry.startsWith(`${task.id}_`));
+    if (match) return path.join(folder, match);
+  }
+  return undefined;
+}
+
+async function writeTaskArtifact(paths: ReturnType<typeof getSessionPaths>, state: OrchestratorSessionState, task: OrchestratorTask) {
+  const targetPath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
+  const existingPath = await findExistingTaskFile(paths, task);
+  if (!existingPath) {
+    await writeFile(targetPath, renderTaskFile(task, `Parent session: ${state.sessionId}\n\nTask title: ${task.title}`), "utf8");
+    return;
+  }
+
+  const existing = repairTaskMarkdown(await readFile(existingPath, "utf8"));
+  await writeFile(targetPath, existing, "utf8");
+  if (existingPath !== targetPath) await rm(existingPath, { force: true });
+}
+
 async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState) {
   const normalizedState = normalizeSessionState(session);
   const paths = getSessionPaths(cwd, normalizedState.sessionId);
@@ -334,6 +434,7 @@ async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState)
   await mkdir(paths.blocked, { recursive: true });
   await mkdir(paths.stateDir, { recursive: true });
   await writeFile(paths.masterPlan, renderMasterPlan(normalizedState), "utf8");
+  const validation = validateSessionState(normalizedState);
   await writeFile(paths.summary, [
     `# Orchestrator Summary: ${normalizedState.title}`,
     "",
@@ -342,21 +443,16 @@ async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState)
     `- Machine state: ${paths.stateFile}`,
     `- Runtime mode: ${normalizedState.mode}`,
     `- Session intent: ${normalizedState.sessionIntent ?? "full-project"}`,
+    `- Validation: ${validation.ok ? "PASS" : "ERRORS"} (${validation.errors.length} errors, ${validation.warnings.length} warnings)`,
+    "",
+    "## Validation",
+    "",
+    renderValidationReport(validation),
   ].join("\n"), "utf8");
   await writeFile(paths.stateFile, serializeSessionState(normalizedState), "utf8");
 
-  for (const folder of [paths.pending, paths.inProgress, paths.completed, paths.blocked]) {
-    const entries = await readdir(folder).catch(() => [] as string[]);
-    for (const entry of entries) {
-      if (entry.endsWith(".task.md")) {
-        await rm(path.join(folder, entry), { force: true });
-      }
-    }
-  }
-
   for (const task of normalizedState.tasks) {
-    const filePath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
-    await writeFile(filePath, renderTaskFile(task, `Parent session: ${normalizedState.sessionId}\n\nTask title: ${task.title}`), "utf8");
+    await writeTaskArtifact(paths, normalizedState, task);
   }
 
   return paths;
@@ -1227,7 +1323,7 @@ ${stateJson}` }],
 
     const parts = [
       "Takomi runtime is active for this turn.",
-      rolePrompt(effectiveState.role),
+      await loadRolePrompt(runtimeCwd, effectiveState.role),
       effectiveState.planMode ? planPrompt() : "",
       await getInjectedPlaybook(runtimeCwd, effectiveState, includeFullWorkflow),
       `Routing note: ${routingNote}`,
