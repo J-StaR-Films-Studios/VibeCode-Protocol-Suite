@@ -130,11 +130,18 @@ export async function printTakomiUpdateStatus(currentVersion) {
 
 export function upgradeTakomiPackage() {
   console.log(pc.cyan('Updating Takomi from npm...\n'));
-  const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const result = spawnSync(command, ['install', '-g', 'takomi@latest'], {
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  });
+
+  // Avoid `shell: true` here. Newer Node versions emit DEP0190 when args are
+  // passed alongside `shell: true`, because they are concatenated rather than
+  // escaped. On Windows, invoke the npm cmd shim through cmd.exe explicitly.
+  const result = process.platform === 'win32'
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'install', '-g', 'takomi@latest'], {
+        stdio: 'inherit',
+      })
+    : spawnSync('npm', ['install', '-g', 'takomi@latest'], {
+        stdio: 'inherit',
+      });
+
   if (result.status === 0) {
     console.log(pc.green('\nTakomi updated. Run `takomi --version` to confirm.'));
     return 0;

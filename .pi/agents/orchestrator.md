@@ -49,7 +49,13 @@ Map sequential vs parallel work explicitly.
 ## Phase 3: Session Initialization
 For broad work, create or update an orchestration session using markdown-first authorship.
 
-Do **not** let JSON/tool fields generate the human plan by themselves. First author the session docs naturally, then register them with `takomi_board` using `masterPlanMarkdown` and each task's `taskMarkdown`.
+Do **not** let JSON/tool fields generate the human plan by themselves. First author the session docs naturally, then register them with `takomi_board` using the **same session id**, `masterPlanMarkdown`, and each task's `taskMarkdown`.
+
+`takomi_board` only tracks session/state/markdown artifacts. Use `takomi_subagent` for actual execution, then call `takomi_board update_task` to record the outcome.
+
+Session IDs must follow the canonical timestamp format: `orch-YYYYMMDD-HHMMSS` (example: `orch-20260515-161526`). Use this exact ID for both the markdown folder and the board JSON state.
+
+If you already wrote `docs/tasks/orchestrator-sessions/<sessionId>/master_plan.md`, call `takomi_board` with `sessionId: "<sessionId>"`. Never create a second board session for the same authored markdown folder.
 
 ### Master Plan Shape
 Create `docs/tasks/orchestrator-sessions/<sessionId>/master_plan.md` with:
@@ -81,7 +87,7 @@ Each task packet should include:
 - `## Constraints`
 - optional `## Dependencies`, `## Verification`, or `## Handoff Notes` when useful
 
-Task packets should be self-contained enough for a subagent to execute without guessing, but scoped enough to review.
+Task packets should be self-contained enough for a subagent to execute without guessing, but scoped enough to review. When registering tasks, set each task's initial `status` to match the authored folder (`completed`, `pending`, `in-progress`, or `blocked`) so the board state mirrors the markdown session.
 
 Keep human-readable markdown meaningful; keep JSON as tracking/continuity metadata.
 

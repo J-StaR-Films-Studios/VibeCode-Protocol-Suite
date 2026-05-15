@@ -9,7 +9,8 @@ import {
 import { resolveAgentName } from "./agent-aliases";
 import { discoverTakomiAgents, type TakomiAgentConfig, type TakomiAgentScope } from "./agents";
 import { createTakomiDelegationPlan, renderTakomiDelegationPlan } from "./delegation-plan";
-import { dispatchTakomiSubagent, type TakomiDispatchResult } from "./dispatch";
+import type { TakomiDispatchResult } from "./run-types";
+import { createTakomiPiSubagentsEngine } from "./pi-subagents-engine";
 import { createTakomiLiveUpdateBridge } from "./live-updates";
 
 type ChecklistItem = string | { text: string; done?: boolean };
@@ -110,6 +111,7 @@ export async function executeTakomiSubagentTool(
   onUpdate: ToolUpdate | undefined,
   ctx: ExtensionContext,
 ) {
+  const engine = createTakomiPiSubagentsEngine(pi);
   const rootCwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
   const profile = await loadTakomiProfile(rootCwd);
   const agentScope = params.agentScope ?? "both";
@@ -161,10 +163,9 @@ export async function executeTakomiSubagentTool(
   const runOne = async (item: TakomiSubagentToolTask, index: number, previousOutput = "") => {
     const config = byName.get(item.agent);
     if (!config) throw new Error(`Unknown subagent '${item.agent}'. Available: ${agents.map((agent) => `${agent.name} (${agent.source})`).join(", ") || "none"}`);
-    const result = await dispatchTakomiSubagent(ctx, {
-      agent: config,
+    const raw: any = await engine.execute(`takomi-tool-${index + 1}`, {
+      agent: item.agent,
       task: item.task.replaceAll("{previous}", previousOutput),
-      rootCwd,
       cwd: item.cwd,
       workflow: item.workflow,
       skills: item.skills,
@@ -173,13 +174,22 @@ export async function executeTakomiSubagentTool(
       thinking: item.thinking,
       conversationId: item.conversationId,
       checklist: item.checklist,
-      source: "takomi-tool",
-    }, signal, {
-      emit: (event) => {
-        emitRuntimeSubagentEvent(pi, event);
-        live.event(index, event);
-      },
-    });
+    }, signal, undefined as any, ctx);
+    const single = raw?.details?.results?.[0] ?? {};
+    const result: TakomiDispatchResult = {
+      agent: single.agent ?? config.name,
+      task: item.task,
+      workflow: item.workflow,
+      model: single.model ?? item.model,
+      warning: single.warning,
+      thinking: item.thinking,
+      conversationId: single.conversationId ?? item.conversationId ?? `${config.name}-${Date.now()}`,
+      code: single.exitCode ?? 1,
+      output: single.messages?.map((message: any) => message?.content?.map((part: any) => part?.type === "text" ? part.text : "").filter(Boolean).join("\n")).filter(Boolean).join("\n\n") ?? "",
+      stderr: single.stderr ?? "",
+      preflight: raw?.content?.[0]?.text ?? "",
+      sessionFile: single.sessionFile,
+    };
     live.finish(index, result);
     return result;
   };
