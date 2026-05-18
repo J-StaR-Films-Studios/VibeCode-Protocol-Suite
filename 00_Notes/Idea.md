@@ -32,4 +32,3 @@ powershell -ExecutionPolicy Bypass -File .\scripts\pi-dev.ps1
 
 Get-Process node,pi -ErrorAction SilentlyContinue | Stop-Process -Force
 Rename-Item -Path "$env:USERPROFILE\.pi" -NewName ".pi.local"
-
