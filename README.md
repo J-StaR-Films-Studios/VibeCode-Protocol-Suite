@@ -41,10 +41,6 @@ takomi install all
 takomi init
 ```
 
-### Subagent execution credit
-
-Takomi's Pi-native subagent execution and terminal UI build on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon**. That package provides the underlying Pi extension for delegated subagent runs, including the native subagent result renderer, live progress/status display, single/parallel/chain execution support, session/artifact handling, and related subagent tooling. Takomi adds its own lifecycle orchestration, model-routing policy, workflow metadata, board/checklist context, and agent conventions on top of that foundation.
-
 ### Context Manager
 
 Takomi now ships a Pi-native `takomi-context-manager` extension. It reduces prompt bloat with progressive context loading:
@@ -480,6 +476,8 @@ Externally sourced skills in this bundle retain credit to their upstream creator
 - **Gemini CLI**: Custom VibeCode skill for large-context processing with Gemini 3 Pro.
 - **Google Stitch Skills**: From [google-labs-code/stitch-skills](https://github.com/google-labs-code/stitch-skills) — Design-to-code suite including **design-md**, **enhance-prompt**, **stitch-loop**, **react-components**, and **shadcn-ui**.
 - **Jules**: From [sanjay3290/ai-skills](https://github.com/sanjay3290/ai-skills) — delegate coding tasks to Google Jules AI agent.
+- **Subagent Execution**: Built on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon** — providing the underlying Pi extension for delegated subagent runs (result rendering, live progress, single/parallel/chain execution, session/artifact handling, and related subagent tooling), upon which Takomi adds its own lifecycle orchestration, model-routing policy, and workflow metadata.
+- **Git Commit Generation**: From the **[`kilocode`](https://github.com/Kilo-Org/kilocode)** repository by **Kilo-Org** (specifically, [git-commit-generation.md](https://github.com/Kilo-Org/kilocode/blob/main/packages/kilo-docs/pages/code-with-ai/features/git-commit-generation.md)) — enabling automated, high-quality conventional git commit messages based on staged changes.
 
 ## 📄 License
 
