@@ -2,8 +2,11 @@
 // pi-subagents ships TS internals rather than a stable public JS API. Import them
 // dynamically with computed specifiers so Takomi's own tsc does not type-check
 // dependency source, while Pi's runtime TS loader can still load them.
+// Do not hide import() inside Function/eval: Pi's extension VM does not provide
+// a dynamic import callback for that path and fails with
+// "A dynamic import callback was not specified."
 
-const dynamicImport = new Function("specifier", "return import(specifier)") as <T = any>(specifier: string) => Promise<T>;
+const dynamicImport = async <T = any>(specifier: string): Promise<T> => import(specifier) as Promise<T>;
 const spec = (path: string) => `pi-subagents/${path}.ts`;
 
 export async function loadPiSubagentsInternals() {
