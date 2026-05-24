@@ -23,9 +23,11 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
   console.log(status(report.bundled.packageReady, 'Bundled .pi assets', report.bundled.targets.root));
   console.log(status(report.bundled.checks.runtime, 'Bundled takomi-runtime', report.bundled.targets.runtime));
   console.log(status(report.bundled.checks.subagents, 'Bundled takomi-subagents', report.bundled.targets.subagents));
+  console.log(status(report.bundled.checks.contextManager, 'Bundled takomi-context-manager', report.bundled.targets.contextManager));
   console.log(status(report.bundled.packageIncluded, 'Package includes .pi assets', report.bundled.packageIncluded ? 'yes' : 'no'));
   console.log(status(report.installed.runtimeInstalled, 'Installed takomi-runtime', report.installed.targets.extensions));
   console.log(status(report.installed.subagentsInstalled, 'Installed takomi-subagents', report.installed.targets.extensions));
+  console.log(status(report.installed.contextManagerInstalled, 'Installed takomi-context-manager', report.installed.targets.extensions));
   console.log(status(await fs.pathExists(`${report.installed.targets.extensions}/oauth-router`), 'Installed oauth-router', `${report.installed.targets.extensions}`));
   console.log(status(report.installed.coreInstalled, 'Installed Takomi core', path.join(path.dirname(report.installed.targets.root), 'src', 'pi-takomi-core')));
   console.log(status(report.installed.piSubagentsModuleInstalled, 'Installed pi-subagents module', path.join(report.installed.targets.root, 'node_modules', 'pi-subagents')));
@@ -54,7 +56,7 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
     console.log(pc.white('  - Package .pi assets before enabling takomi install pi in releases.'));
   }
 
-  if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled || !report.installed.coreInstalled || !report.installed.piSubagentsModuleInstalled) {
+  if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled || !report.installed.contextManagerInstalled || !report.installed.coreInstalled || !report.installed.piSubagentsModuleInstalled) {
     console.log(pc.white('  - Run takomi install pi to refresh the Pi harness, Takomi core, and pi-subagents runtime module.'));
   }
 

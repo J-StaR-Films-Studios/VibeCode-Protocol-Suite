@@ -27,6 +27,48 @@ Use this skill only for **React-family** projects. If the repo is not React-base
 - `scripts/build-manual-handoff-template.mjs`
   Generate a manual handoff markdown file for the user.
 
+## Raw Code Resolution Standard
+
+Do not derive 21st.dev CDN source URLs by string concatenation or by manually modifying the community page URL.
+
+Always treat the user-facing 21st.dev component page as the source of truth, then resolve it into metadata before fetching code.
+
+### Required workflow
+1. Start with the 21st.dev community component URL.
+2. Run the resolver script on that page URL.
+3. Read `codeUrl` and `demoCodeUrl` from the resolver output.
+4. Fetch source from those returned URLs.
+5. Only fall back to manual copy/paste if resolution succeeds but raw source cannot be fetched in the current environment.
+
+### Command
+```bash
+node scripts/resolve-21st-component.mjs --url "<21st-component-url>" --json
+```
+
+### Why this rule exists
+21st.dev community URLs do not always map cleanly to CDN paths. Mismatches can include:
+- author slug differences between page URL and CDN path
+- internal user IDs in CDN paths instead of public author names
+- timestamped filenames such as `code.1748367465506.tsx`
+- version query params such as `?v=1`
+- demo paths that are not reliably predictable
+
+Because of this, the correct standard is:
+
+**community page URL -> resolve metadata -> fetch `codeUrl` / `demoCodeUrl`**
+
+not:
+
+**community page URL -> manually transform into CDN URL**
+
+### Manual fallback rule
+If the resolver returns metadata but the environment cannot fetch the raw source files, ask the user for one of these:
+- pasted code from the 21st.dev Copy Code action
+- downloaded component source
+- permission to use an alternate environment that can fetch the returned CDN URLs
+
+This resolution step is mandatory in both Auto mode and Manual mode whenever the environment allows it.
+
 ## Mode Router
 
 ### Use Auto mode when
@@ -107,6 +149,8 @@ Prefer:
 
 ### Step 6: Fetch source and integrate
 
+Fetch component/demo source from the resolved `codeUrl` and `demoCodeUrl` values. Do not guess CDN paths manually.
+
 Fetch component/demo source from CDN URLs:
 
 ```bash
@@ -173,7 +217,8 @@ Do not make the user re-explain the same page structure if the handoff already c
 
 For each returned section:
 - resolve the component URL if present
-- fetch source if needed
+- read normalized metadata first, especially `codeUrl`, `demoCodeUrl`, and dependencies
+- fetch source from the resolved raw URLs when needed
 - merge copied prompt/code information with repo context
 - install dependencies
 - adapt imports, component paths, and utility functions to the current repo
@@ -190,6 +235,7 @@ For each returned section:
 
 - Bad reference URL or blocked crawl: switch to Manual mode and generate a handoff template.
 - 21st.dev page resolves but source URLs are missing: use the copied prompt path or ask for the component's copied prompt/code only for that section.
+- Resolver succeeds but the environment cannot fetch the raw CDN URLs: ask the user for pasted Copy Code output, downloaded source, or permission to use another environment for fetch.
 - Non-React target repo: explain the limitation and stop.
 
 ## Output Defaults

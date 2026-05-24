@@ -7,7 +7,7 @@ import type {
 } from "../../../src/pi-takomi-core";
 import { commandHelp, completions, statusText, workflowPrompt } from "./command-text";
 import type { TakomiSubagentController } from "./subagent-types";
-import { installTakomiRoutingPolicy } from "./routing-policy";
+import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy, type RoutingPolicyInstallScope } from "./routing-policy";
 
 export type TakomiRuntimeCommandState = {
   enabled: boolean;
@@ -82,14 +82,87 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
   }
 
   async function handleRouting(ctx: ExtensionCommandContext, body?: string): Promise<void> {
-    if (!body?.trim()) {
-      ctx.ui.notify("Usage: /takomi routing <policy text>\nTip: paste the policy after the command, or say: Update Takomi routing logic: \"\"\"...\"\"\"", "warning");
+    const trimmed = body?.trim() ?? "";
+
+    const usage = [
+      "Usage:",
+      "/takomi routing show                 Print the full active policy",
+      "/takomi routing where                Show source/path only",
+      "/takomi routing <policy text>        Update the global policy",
+      "/takomi routing local <policy text>  Create/update this project's override",
+    ].join("\n");
+
+    async function showRoutingHelp(): Promise<void> {
+      const resolved = await resolveTakomiRoutingPolicy(ctx.cwd);
+      ctx.ui.notify([
+        "Takomi routing options",
+        "",
+        `Active source: ${resolved.source}`,
+        `Active path: ${resolved.policyPath ?? "not found"}`,
+        "",
+        usage,
+        "",
+        "Resolution order: project .pi/takomi/model-routing.md → global ~/.pi/takomi/model-routing.md → bundled fallback.",
+      ].join("\n"), "warning");
+    }
+
+    async function showRoutingLocation(): Promise<void> {
+      const resolved = await resolveTakomiRoutingPolicy(ctx.cwd);
+      ctx.ui.notify([
+        "Active Takomi routing policy location",
+        "",
+        `Source: ${resolved.source}`,
+        `Path: ${resolved.policyPath ?? "not found"}`,
+        "",
+        usage,
+      ].join("\n"), resolved.source === "missing" ? "warning" : "info");
+    }
+
+    async function showActivePolicy(): Promise<void> {
+      const resolved = await resolveTakomiRoutingPolicy(ctx.cwd);
+      const text = resolved.text ?? "No Takomi routing policy found.";
+      const clipped = text.length > 6000 ? `${text.slice(0, 6000)}\n\n…truncated; open the file above for the full policy.` : text;
+      ctx.ui.notify([
+        "Active Takomi routing policy",
+        "",
+        `Source: ${resolved.source}`,
+        `Path: ${resolved.policyPath ?? "not found"}`,
+        "",
+        clipped,
+        "",
+        usage,
+      ].join("\n"), resolved.source === "missing" ? "warning" : "info");
+    }
+
+    if (!trimmed) {
+      await showRoutingHelp();
       return;
     }
+    if (/^(where|path|status)$/i.test(trimmed)) {
+      await showRoutingLocation();
+      return;
+    }
+    if (/^(show|view)$/i.test(trimmed)) {
+      await showActivePolicy();
+      return;
+    }
+
+    if (/^(global|local|project|set)$/i.test(trimmed)) {
+      ctx.ui.notify(usage, "warning");
+      return;
+    }
+
+    const scopeMatch = trimmed.match(/^(global|local|project)\s+([\s\S]+)$/i);
+    const scope: RoutingPolicyInstallScope = scopeMatch?.[1]?.toLowerCase() === "local" || scopeMatch?.[1]?.toLowerCase() === "project" ? "project" : "global";
+    const policyText = scopeMatch?.[2] ?? trimmed.replace(/^set\s+/i, "");
+
     try {
-      const result = await installTakomiRoutingPolicy(ctx.cwd, body);
+      const result = await installTakomiRoutingPolicy(ctx.cwd, policyText, { scope });
       const detected = result.detectedDefaults.length ? `\n\nDetected defaults:\n- ${result.detectedDefaults.join("\n- ")}` : "\n\nNo model names were auto-detected; saved policy only.";
-      ctx.ui.notify(`Takomi routing policy updated.\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}`, "info");
+      const overrideNote = scope === "global"
+        ? "\n\nThis will be used by every project unless that project has its own .pi/takomi/model-routing.md override."
+        : "\n\nThis project-local policy overrides the global policy for the current project.";
+      ctx.ui.notify(`Takomi routing policy updated (${scope}).\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}${overrideNote}`, "info");
     } catch (error) {
       ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
     }

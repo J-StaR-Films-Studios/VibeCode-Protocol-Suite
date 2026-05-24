@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "typebox";
@@ -17,8 +18,10 @@ import {
   normalizeSessionState,
   renderMasterPlan,
   renderTaskFile,
+  renderValidationReport,
   serializeSessionState,
   slugifyTaskTitle,
+  validateSessionState,
   type OrchestratorTask,
   type OrchestratorSessionState,
   type OrchestratorTaskStatus,
@@ -30,13 +33,10 @@ import {
   type TakomiWorkflowId,
   type VibeLifecycleStage,
 } from "../../../src/pi-takomi-core";
-import { discoverProjectAgents, type TakomiAgentConfig } from "../takomi-subagents/agents";
-import { dispatchTakomiSubagent, type TakomiDispatchResult } from "../takomi-subagents/dispatch";
-import { createTakomiDelegationPlan, renderTakomiDelegationPlan } from "../takomi-subagents/delegation-plan";
-import { executeTakomiSubagentTool } from "../takomi-subagents/tool-runner";
 import {
   renderRuntimeStatus,
   renderRuntimeWidget,
+  renderTakomiHeader,
   TakomiFooterComponent,
 } from "./ui";
 import { getTakomiSubagentController } from "./subagent-controller";
@@ -56,7 +56,7 @@ import {
   getProfileDefaults,
   loadTakomiProfile,
 } from "./profile";
-import { installTakomiRoutingPolicy, loadTakomiRoutingPolicy } from "./routing-policy";
+import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy } from "./routing-policy";
 
 type TakomiState = {
   enabled: boolean;
@@ -68,6 +68,7 @@ type TakomiState = {
   workflow?: TakomiWorkflowId;
   activeSessionId?: string;
   subagentsEnabled: boolean;
+  lastFullPromptKey?: string;
 };
 
 const DEFAULT_STATE: TakomiState = {
@@ -120,7 +121,7 @@ function setStageAndWorkflow(state: TakomiState, stage: VibeLifecycleStage, opti
   state.enabled = true;
 }
 
-function rolePrompt(role: TakomiRole): string {
+function fallbackRolePrompt(role: TakomiRole): string {
   switch (role) {
     case "orchestrator":
       return [
@@ -137,7 +138,6 @@ function rolePrompt(role: TakomiRole): string {
       return [
         "You are operating in Takomi design mode.",
         "Translate genesis context into build-ready UX and visual direction.",
-        "Prefer Gemini or a similarly strong design-oriented model if available.",
       ].join("\n");
     case "code":
       return [
@@ -157,6 +157,43 @@ function rolePrompt(role: TakomiRole): string {
   }
 }
 
+function agentFileNameForRole(role: TakomiRole): string | undefined {
+  switch (role) {
+    case "orchestrator": return "orchestrator.md";
+    case "architect": return "architect.md";
+    case "design": return "designer.md";
+    case "code": return "coder.md";
+    case "review": return "reviewer.md";
+    default: return undefined;
+  }
+}
+
+async function loadRolePrompt(cwd: string, role: TakomiRole): Promise<string> {
+  const fileName = agentFileNameForRole(role);
+  if (!fileName) return fallbackRolePrompt(role);
+
+  const candidates = [
+    path.join(cwd, ".pi", "agents", fileName),
+    path.join(installedAssetRoot("agents"), fileName),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await readFile(candidate, "utf8");
+      const cleaned = stripPromptFrontmatter(raw);
+      if (cleaned) {
+        return [
+          fallbackRolePrompt(role),
+          `Canonical Takomi role mirror loaded from ${candidate}:`,
+          cleaned,
+        ].join("\n\n");
+      }
+    } catch { }
+  }
+
+  return fallbackRolePrompt(role);
+}
+
 function planPrompt(): string {
   return [
     "Takomi planning mode is active.",
@@ -165,14 +202,66 @@ function planPrompt(): string {
   ].join("\n");
 }
 
-function getInjectedPlaybook(state: TakomiState): string | undefined {
+function stripPromptFrontmatter(content: string): string {
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
+}
+
+function stripTemplateOnlyRequestPlaceholder(content: string): string {
+  return content
+    .replace(/\n?---\s*\r?\n\s*## Current User Request\s*\r?\n\s*(?:\$@|\$ARGUMENTS)\s*$/i, "")
+    .replace(/\n?## Current User Request\s*\r?\n\s*(?:\$@|\$ARGUMENTS)\s*$/i, "")
+    .trim();
+}
+
+function installedAssetRoot(kind: "agents" | "prompts"): string {
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    kind,
+  );
+}
+
+async function loadWorkflowPrompt(cwd: string, workflow: TakomiWorkflowId): Promise<string | undefined> {
+  const fileName = workflow === "vibe-genesis"
+    ? "genesis-prompt.md"
+    : workflow === "vibe-design"
+      ? "design-prompt.md"
+      : "build-prompt.md";
+  const candidates = [
+    path.join(cwd, ".pi", "prompts", fileName),
+    path.join(installedAssetRoot("prompts"), fileName),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await readFile(candidate, "utf8");
+      const cleaned = stripTemplateOnlyRequestPlaceholder(stripPromptFrontmatter(raw));
+      if (cleaned) return cleaned;
+    } catch { }
+  }
+
+  return undefined;
+}
+
+async function getInjectedPlaybook(cwd: string, state: TakomiState, includeFullWorkflow: boolean): Promise<string | undefined> {
   if (!state.workflow) return undefined;
   const workflow = getWorkflowDefinition(state.workflow);
+  const prompt = includeFullWorkflow ? await loadWorkflowPrompt(cwd, state.workflow) : undefined;
+
+  if (includeFullWorkflow) {
+    return [
+      `Active Takomi workflow: ${workflow.title} (${workflow.id}).`,
+      prompt ?? workflow.playbook,
+      workflow.nextStage ? `After this stage, recommend ${workflow.nextStage}.` : "",
+    ].filter(Boolean).join("\n\n");
+  }
+
   return [
-    `${workflow.title} is the active Takomi workflow.`,
+    `Active Takomi workflow: ${workflow.title} (${workflow.id}).`,
     workflow.purpose,
     workflow.preferredModelHint ?? "",
-    workflow.playbook,
+    `Compact reminder: follow the ${workflow.id} stage. Full workflow was injected when this role/workflow became active; reload the markdown prompt only if behavior degrades or the task is complex.`,
     workflow.nextStage ? `After this stage, recommend ${workflow.nextStage}.` : "",
   ].filter(Boolean).join("\n\n");
 }
@@ -185,11 +274,7 @@ function shouldAutoRoute(text: string): boolean {
 }
 
 function buildTaskRows(tasks: OrchestratorTask[]): string {
-  return tasks.map((task) => `${task.id}: ${task.stage ?? "-"} | ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.preferredThinking ? ` | thinking=${task.preferredThinking}` : ""}${task.dispatchPolicy ? ` | dispatch=${task.dispatchPolicy}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
-}
-
-function resolveTaskAgent(task: OrchestratorTask): string {
-  return task.preferredAgent ?? (task.role === "code" ? "coder" : task.role === "design" ? "designer" : task.role === "architect" ? "architect" : task.role === "review" ? "reviewer" : "orchestrator");
+  return tasks.map((task) => `${task.id}: ${task.stage ?? "-"} | ${task.title} [${task.status}] -> ${task.preferredAgent ?? task.role}${task.conversationId ? ` (${task.conversationId})` : ""}${task.workflow ? ` | workflow=${task.workflow}` : ""}${task.preferredModel ? ` | model=${task.preferredModel}` : ""}${task.preferredThinking ? ` | thinking=${task.preferredThinking}` : ""}${task.dispatchPolicy ? ` | execution=${task.dispatchPolicy}` : ""}${task.skills?.length ? ` | skills=${task.skills.join(",")}` : ""}`).join("\n");
 }
 
 function appendTaskNote(existing: string | undefined, heading: string, body?: string): string {
@@ -301,6 +386,37 @@ async function loadSessionState(cwd: string, sessionId: string): Promise<{ state
   return { state, paths };
 }
 
+function repairTaskMarkdown(content: string): string {
+  return content
+    .replace(/### Required Skills/g, "### Optional Skill / Context Overlays")
+    .replace(/Required Skills/g, "Optional Skill / Context Overlays")
+    .replace(/Load ALL required skills/g, "Use relevant optional skill/context overlays only when available and genuinely helpful")
+    .replace(/Required skills/g, "Optional skill/context overlays")
+    .replace(/required skills/g, "optional skill/context overlays");
+}
+
+async function findExistingTaskFile(paths: ReturnType<typeof getSessionPaths>, task: OrchestratorTask): Promise<string | undefined> {
+  for (const folder of [paths.pending, paths.inProgress, paths.completed, paths.blocked]) {
+    const entries = await readdir(folder).catch(() => [] as string[]);
+    const match = entries.find((entry) => entry.endsWith(".task.md") && entry.startsWith(`${task.id}_`));
+    if (match) return path.join(folder, match);
+  }
+  return undefined;
+}
+
+async function writeTaskArtifact(paths: ReturnType<typeof getSessionPaths>, state: OrchestratorSessionState, task: OrchestratorTask) {
+  const targetPath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
+  const existingPath = await findExistingTaskFile(paths, task);
+  if (!existingPath) {
+    await writeFile(targetPath, renderTaskFile(task, `Parent session: ${state.sessionId}\n\nTask title: ${task.title}`), "utf8");
+    return;
+  }
+
+  const existing = repairTaskMarkdown(await readFile(existingPath, "utf8"));
+  await writeFile(targetPath, existing, "utf8");
+  if (existingPath !== targetPath) await rm(existingPath, { force: true });
+}
+
 async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState) {
   const normalizedState = normalizeSessionState(session);
   const paths = getSessionPaths(cwd, normalizedState.sessionId);
@@ -309,7 +425,11 @@ async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState)
   await mkdir(paths.completed, { recursive: true });
   await mkdir(paths.blocked, { recursive: true });
   await mkdir(paths.stateDir, { recursive: true });
-  await writeFile(paths.masterPlan, renderMasterPlan(normalizedState), "utf8");
+  const existingMasterPlan = await readFile(paths.masterPlan, "utf8").catch(() => "");
+  if (!existingMasterPlan || existingMasterPlan.includes("takomi-generated-master-plan")) {
+    await writeFile(paths.masterPlan, renderMasterPlan(normalizedState), "utf8");
+  }
+  const validation = validateSessionState(normalizedState);
   await writeFile(paths.summary, [
     `# Orchestrator Summary: ${normalizedState.title}`,
     "",
@@ -318,21 +438,16 @@ async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState)
     `- Machine state: ${paths.stateFile}`,
     `- Runtime mode: ${normalizedState.mode}`,
     `- Session intent: ${normalizedState.sessionIntent ?? "full-project"}`,
+    `- Validation: ${validation.ok ? "PASS" : "ERRORS"} (${validation.errors.length} errors, ${validation.warnings.length} warnings)`,
+    "",
+    "## Validation",
+    "",
+    renderValidationReport(validation),
   ].join("\n"), "utf8");
   await writeFile(paths.stateFile, serializeSessionState(normalizedState), "utf8");
 
-  for (const folder of [paths.pending, paths.inProgress, paths.completed, paths.blocked]) {
-    const entries = await readdir(folder).catch(() => [] as string[]);
-    for (const entry of entries) {
-      if (entry.endsWith(".task.md")) {
-        await rm(path.join(folder, entry), { force: true });
-      }
-    }
-  }
-
   for (const task of normalizedState.tasks) {
-    const filePath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
-    await writeFile(filePath, renderTaskFile(task, `Parent session: ${normalizedState.sessionId}\n\nTask title: ${task.title}`), "utf8");
+    await writeTaskArtifact(paths, normalizedState, task);
   }
 
   return paths;
@@ -345,6 +460,8 @@ async function writeOrchestratorSession(cwd: string, session: OrchestratorSessio
 type IncomingTask = {
   id?: string;
   title: string;
+  taskMarkdown?: string;
+  status?: OrchestratorTaskStatus;
   role: TakomiRole;
   stage?: VibeLifecycleStage;
   workflow?: TakomiWorkflowId;
@@ -354,6 +471,7 @@ type IncomingTask = {
   preferredModelHint?: string;
   preferredThinking?: TakomiThinkingLevel;
   fallbackModels?: string[];
+  executionHint?: TakomiDispatchPolicy;
   dispatchPolicy?: TakomiDispatchPolicy;
   skills?: string[];
   checklist?: Array<string | { text: string; done?: boolean }>;
@@ -394,7 +512,8 @@ async function materializeTasksFromInput(
       preferredModelHint: [task.preferredModelHint, resolvedModel.warning].filter(Boolean).join(" ").trim() || undefined,
       preferredThinking: task.preferredThinking ?? defaults.thinking,
       fallbackModels: fallbackModels.length ? fallbackModels : undefined,
-      dispatchPolicy: task.dispatchPolicy ?? defaults.dispatchPolicy,
+      status: task.status ?? "pending",
+      dispatchPolicy: task.executionHint ?? task.dispatchPolicy ?? defaults.dispatchPolicy,
       skills: task.skills,
       checklist: (task.checklist ?? []).map((item) => typeof item === "string" ? { text: item } : item),
       objective: task.objective,
@@ -443,6 +562,13 @@ const footerStateRef: { current: TakomiState; installed: boolean } = { current: 
 
 async function refreshUi(ctx: ExtensionContext, state: TakomiState) {
   if (!ctx.hasUI) return;
+  ctx.ui.setTitle("Takomi");
+  ctx.ui.setHeader((_tui, theme) => ({
+    invalidate() { },
+    render() {
+      return renderTakomiHeader(theme);
+    },
+  }));
   footerStateRef.current = state;
   ctx.ui.setStatus("takomi-runtime", renderRuntimeStatus(ctx.ui.theme, state));
   const widget = renderRuntimeWidget(ctx.ui.theme, state);
@@ -649,32 +775,25 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     name: "takomi_board",
     label: "Takomi Board",
     description: "Create and manage lifecycle-aware Takomi orchestration session artifacts.",
-    promptSnippet: "Create or expand a Genesis -> Design -> Build orchestration session only when the work is large enough to merit it.",
+    promptSnippet: "Register or update Takomi session/state/markdown artifacts; subagent execution happens elsewhere.",
     promptGuidelines: [
       "Use this when you need a concrete orchestrator session directory and task artifacts on disk.",
+      "takomi_board never runs subagents. Author the human-facing markdown first, use takomi_subagent for execution, then return here with takomi_board update_task to record the outcome.",
+      "Session IDs must use the canonical timestamp format orch-YYYYMMDD-HHMMSS. Use the same sessionId for the authored docs folder and the board JSON state.",
+      "For high-quality orchestration sessions, provide sessionId, masterPlanMarkdown, and taskMarkdown values that match the authored session folder. If you already wrote docs/tasks/orchestrator-sessions/<id>, call this tool with sessionId=<id>; do not create a second session id.",
+      "JSON fields should carry IDs/status/roles/workflow/dependencies/checklists for tracking, not replace expressive markdown.",
       "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
       "If the request is small enough, do not force orchestration just because the tool exists.",
-      "If a reviewed task needs more work, keep or reuse its conversationId so the same subagent can continue it.",
+      "If a reviewed task needs more work, reuse the task conversationId when you call takomi_subagent again, then update the board with the new result.",
     ],
     parameters: Type.Object({
-      action: StringEnum(["init_session", "expand_stage", "show_workflows", "show_session", "update_task", "redispatch_task", "review_and_redispatch", "dispatch_tasks"] as const),
+      action: StringEnum(["init_session", "expand_stage", "show_workflows", "show_session", "update_task"] as const),
       title: Type.Optional(Type.String()),
       sessionId: Type.Optional(Type.String()),
       taskId: Type.Optional(Type.String()),
-      taskIds: Type.Optional(Type.Array(Type.String())),
-      dispatchMode: Type.Optional(StringEnum(["single", "parallel", "chain"] as const)),
-      agentScope: Type.Optional(StringEnum(["user", "project", "both"] as const)),
-      confirmProjectAgents: Type.Optional(Type.Boolean()),
       stage: Type.Optional(StringEnum(["genesis", "design", "build"] as const)),
       status: Type.Optional(StringEnum(["pending", "in-progress", "completed", "blocked"] as const)),
       notes: Type.Optional(Type.String()),
-      rerunInstructions: Type.Optional(Type.String()),
-      confirmLaunch: Type.Optional(Type.Boolean()),
-      previewOnly: Type.Optional(Type.Boolean()),
-      preferredAgent: Type.Optional(Type.String()),
-      preferredModel: Type.Optional(Type.String()),
-      preferredThinking: Type.Optional(ThinkingSchema),
-      includeReview: Type.Optional(Type.Boolean()),
       checklist: Type.Optional(Type.Array(Type.Union([
         Type.String(),
         Type.Object({ text: Type.String(), done: Type.Optional(Type.Boolean()) }),
@@ -684,9 +803,12 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         index: Type.Optional(Type.Number()),
         done: Type.Optional(Type.Boolean()),
       }))),
+      masterPlanMarkdown: Type.Optional(Type.String()),
       tasks: Type.Optional(Type.Array(Type.Object({
         id: Type.Optional(Type.String()),
         title: Type.String(),
+        taskMarkdown: Type.Optional(Type.String()),
+        status: Type.Optional(StringEnum(["pending", "in-progress", "completed", "blocked"] as const)),
         role: StringEnum(["general", "orchestrator", "architect", "design", "code", "review"] as const),
         stage: Type.Optional(StringEnum(["genesis", "design", "build"] as const)),
         workflow: Type.Optional(StringEnum(["vibe-genesis", "vibe-design", "vibe-build"] as const)),
@@ -696,7 +818,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         preferredModelHint: Type.Optional(Type.String()),
         preferredThinking: Type.Optional(ThinkingSchema),
         fallbackModels: Type.Optional(Type.Array(Type.String())),
-        dispatchPolicy: Type.Optional(StringEnum(["direct", "subagent", "review-first"] as const)),
+        executionHint: Type.Optional(StringEnum(["direct", "subagent", "review-first"] as const)),
         skills: Type.Optional(Type.Array(Type.String())),
         checklist: Type.Optional(Type.Array(Type.Union([
           Type.String(),
@@ -731,8 +853,10 @@ export default function takomiRuntime(pi: ExtensionAPI) {
           readFile(paths.stateFile, "utf8").catch(() => "{}"),
         ]);
         return {
-          content: [{ type: "text", text: `${masterPlan}\n\n---\n\nMachine state\n\n\
-${stateJson}` }],
+          content: [{
+            type: "text", text: `${masterPlan}\n\n---\n\nMachine state\n\n\
+${stateJson}`
+          }],
           details: { paths, state: normalizeSessionState({ sessionId: params.sessionId, title: "Takomi Session", ...(JSON.parse(stateJson) as Partial<OrchestratorSessionState>) }) },
         };
       }
@@ -796,242 +920,6 @@ ${stateJson}` }],
         };
       }
 
-      if (params.action === "dispatch_tasks") {
-        if (!state.subagentsEnabled) {
-          return {
-            content: [{ type: "text", text: "Takomi subagents are disabled. Use /takomi subagents on before dispatching board tasks." }],
-            details: { sessionId: params.sessionId, taskIds: params.taskIds },
-            isError: true,
-          };
-        }
-        if (!params.sessionId || !params.taskIds?.length) {
-          return { content: [{ type: "text", text: "sessionId and taskIds are required for dispatch_tasks" }], details: {}, isError: true };
-        }
-        const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
-        const selectedTasks = params.taskIds.map((id) => sessionState.tasks.find((task) => task.id === id));
-        if (selectedTasks.some((task) => !task)) {
-          return {
-            content: [{ type: "text", text: `Some taskIds were not found in session ${params.sessionId}.` }],
-            details: { requestedTaskIds: params.taskIds, availableTaskIds: sessionState.tasks.map((task) => task.id) },
-            isError: true,
-          };
-        }
-        const boardTasks = selectedTasks as OrchestratorTask[];
-        const mode = params.dispatchMode ?? (boardTasks.length === 1 ? "single" : "parallel");
-        const toolTasks = boardTasks.map((task) => ({
-          agent: params.preferredAgent ?? resolveTaskAgent(task),
-          task: task.notes || task.title,
-          workflow: task.workflow,
-          skills: task.skills,
-          model: params.preferredModel ?? task.preferredModel,
-          fallbackModels: task.fallbackModels,
-          thinking: params.preferredThinking ?? task.preferredThinking,
-          conversationId: task.conversationId ?? task.id,
-          checklist: task.checklist,
-        }));
-        if (params.previewOnly || ((state.launchMode ?? activeProfile.launchMode) === "manual" && !params.confirmLaunch)) {
-          return executeTakomiSubagentTool(pi, {
-            ...(mode === "chain" ? { chain: toolTasks } : mode === "parallel" ? { tasks: toolTasks } : toolTasks[0]),
-            previewOnly: true,
-            agentScope: params.agentScope ?? "both",
-            confirmProjectAgents: params.confirmProjectAgents,
-          }, _signal, _onUpdate, ctx);
-        }
-        for (const task of boardTasks) task.status = "in-progress";
-        let nextState = buildSessionState(sessionState.sessionId, sessionState.title, sessionState.tasks, new Date(), {
-          sessionIntent: sessionState.sessionIntent,
-          lifecycle: sessionState.lifecycle,
-        });
-        const paths = await syncTaskArtifacts(ctx.cwd, nextState);
-        const toolResult = await executeTakomiSubagentTool(pi, {
-          ...(mode === "chain" ? { chain: toolTasks } : mode === "parallel" ? { tasks: toolTasks } : toolTasks[0]),
-          confirmLaunch: true,
-          agentScope: params.agentScope ?? "both",
-          confirmProjectAgents: params.confirmProjectAgents,
-        }, _signal, _onUpdate, ctx);
-        const results = (toolResult.details as { results?: TakomiDispatchResult[] }).results ?? [];
-        for (let index = 0; index < boardTasks.length; index++) {
-          const result = results[index];
-          const task = boardTasks[index];
-          if (!result) continue;
-          task.conversationId = result.conversationId;
-          task.notes = appendTaskNote(task.notes, "Model preflight", result.preflight);
-          task.notes = appendTaskNote(task.notes, "Last dispatch output", result.output || result.stderr);
-          if (result.code !== 0) task.status = "blocked";
-          if (result.model) task.preferredModel = result.model;
-          if (result.thinking) task.preferredThinking = result.thinking;
-        }
-        nextState = buildSessionState(sessionState.sessionId, sessionState.title, sessionState.tasks, new Date(), {
-          sessionIntent: sessionState.sessionIntent,
-          lifecycle: sessionState.lifecycle,
-        });
-        await syncTaskArtifacts(ctx.cwd, nextState);
-        return {
-          content: toolResult.content,
-          details: { ...toolResult.details, sessionId: params.sessionId, paths, lifecycle: nextState.lifecycle, mode },
-          isError: results.some((result) => result.code !== 0) || undefined,
-        };
-      }
-
-      if (params.action === "redispatch_task" || params.action === "review_and_redispatch") {
-        if (!state.subagentsEnabled) {
-          return {
-            content: [{ type: "text", text: "Takomi subagents are disabled. Use /takomi subagents on before redispatching." }],
-            details: { sessionId: params.sessionId, taskId: params.taskId },
-            isError: true,
-          };
-        }
-        if (!params.sessionId || !params.taskId) {
-          return { content: [{ type: "text", text: "sessionId and taskId are required for redispatch_task" }], details: {}, isError: true };
-        }
-        const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
-        const task = sessionState.tasks.find((item) => item.id === params.taskId);
-        if (!task) {
-          return { content: [{ type: "text", text: `Task ${params.taskId} not found in session ${params.sessionId}` }], details: {}, isError: true };
-        }
-        const draftChecklist = resolveChecklistState(task.checklist, params.checklist, params.checklistUpdates);
-        const agentName = params.preferredAgent ?? resolveTaskAgent(task);
-        const draftModel = params.preferredModel ?? task.preferredModel;
-        const draftThinking = params.preferredThinking ?? task.preferredThinking;
-        const conversationId = task.conversationId ?? task.id;
-        const launchMode = state.launchMode ?? activeProfile.launchMode ?? "auto";
-        const plan = createTakomiDelegationPlan({
-          source: "runtime-board",
-          sessionId: params.sessionId,
-          launchMode,
-          profile: activeProfile,
-          tasks: [{
-            id: task.id,
-            title: task.title,
-            agent: agentName,
-            task: params.rerunInstructions ?? task.notes ?? task.title,
-            role: task.role,
-            stage: task.stage,
-            workflow: task.workflow,
-            model: draftModel,
-            fallbackModels: task.fallbackModels,
-            thinking: draftThinking,
-            conversationId,
-            checklist: draftChecklist,
-            dispatchPolicy: task.dispatchPolicy,
-            review: params.includeReview,
-          }],
-        });
-        if (params.previewOnly || (launchMode === "manual" && !params.confirmLaunch)) {
-          return {
-            content: [{ type: "text", text: renderTakomiDelegationPlan(plan) }],
-            details: { sessionId: params.sessionId, taskId: task.id, plan },
-          };
-        }
-
-        const agents: TakomiAgentConfig[] = discoverProjectAgents(ctx.cwd);
-        const config = agents.find((agent: TakomiAgentConfig) => agent.name === agentName);
-        if (!config) {
-          return { content: [{ type: "text", text: `Preferred agent '${agentName}' not found.` }], details: { availableAgents: agents.map((agent: TakomiAgentConfig) => agent.name) }, isError: true };
-        }
-
-        task.status = "in-progress";
-        task.checklist = draftChecklist;
-        task.preferredAgent = agentName;
-        task.preferredModel = draftModel;
-        task.preferredThinking = draftThinking;
-        if (params.action === "review_and_redispatch") {
-          task.notes = appendTaskNote(task.notes, "Review feedback", params.notes);
-        } else if (params.notes) {
-          task.notes = params.notes;
-        }
-        let nextState = buildSessionState(
-          sessionState.sessionId,
-          sessionState.title,
-          sessionState.tasks,
-          new Date(),
-          {
-            sessionIntent: sessionState.sessionIntent,
-            lifecycle: sessionState.lifecycle,
-          },
-        );
-        const paths = await syncTaskArtifacts(ctx.cwd, nextState);
-        task.conversationId = conversationId;
-        const runKey = conversationId;
-        const parentRunKey = task.parentTaskId
-          ? (() => {
-              const parentTask = sessionState.tasks.find((item) => item.id === task.parentTaskId);
-              if (parentTask) return parentTask.conversationId ?? parentTask.id;
-              return subagentController.getKnownParentRunKey(task.parentTaskId);
-            })()
-          : undefined;
-
-        const result = await dispatchTakomiSubagent(ctx, {
-          agent: config,
-          task: task.notes || task.title,
-          rootCwd: ctx.cwd,
-          workflow: task.workflow,
-          skills: task.skills,
-          model: task.preferredModel,
-          fallbackModels: task.fallbackModels,
-          thinking: task.preferredThinking,
-          conversationId,
-          checklist: task.checklist,
-          stage: task.stage,
-          taskLabel: `${task.id} - ${task.title}`,
-          parentTaskId: task.parentTaskId,
-          parentRunKey,
-          boardTaskStatus: task.status,
-          source: "runtime-board",
-          rerunInstructions: params.rerunInstructions,
-        }, _signal, {
-          emit: (event) => {
-            void applySubagentRuntimeEvent(event, ctx);
-          },
-        });
-
-        task.notes = appendTaskNote(task.notes, "Model preflight", result.preflight);
-        if (result.model) task.preferredModel = result.model;
-        if (result.warning) {
-          task.notes = appendTaskNote(task.notes, "Model fallback", result.warning);
-          if (ctx.hasUI) ctx.ui.notify(result.warning, "warning");
-        }
-        if (result.thinking) task.preferredThinking = result.thinking;
-
-        if (result.code !== 0) {
-          task.status = "blocked";
-          task.notes = appendTaskNote(task.notes, "Redispatch failure", result.stderr || result.output);
-          nextState = buildSessionState(
-            sessionState.sessionId,
-            sessionState.title,
-            sessionState.tasks,
-            new Date(),
-            {
-              sessionIntent: sessionState.sessionIntent,
-              lifecycle: sessionState.lifecycle,
-            },
-          );
-          await syncTaskArtifacts(ctx.cwd, nextState);
-          return {
-            content: [{ type: "text", text: `Redispatch failed for task ${task.id}.\n\n${result.stderr || result.output || "No output"}` }],
-            details: { sessionId: params.sessionId, task, paths, result },
-            isError: true,
-          };
-        }
-
-        task.notes = appendTaskNote(task.notes, "Last redispatch output", result.output);
-        nextState = buildSessionState(
-          sessionState.sessionId,
-          sessionState.title,
-          sessionState.tasks,
-          new Date(),
-          {
-            sessionIntent: sessionState.sessionIntent,
-            lifecycle: sessionState.lifecycle,
-          },
-        );
-        await syncTaskArtifacts(ctx.cwd, nextState);
-        return {
-          content: [{ type: "text", text: `${result.preflight}\n\n${result.output || `Redispatched task ${task.id} to ${agentName}.`}` }],
-          details: { sessionId: params.sessionId, task, paths, lifecycle: nextState.lifecycle, agent: agentName, conversationId: task.conversationId, action: params.action, result },
-        };
-      }
-
       if (params.action === "expand_stage") {
         if (!params.sessionId || !params.stage || !params.tasks?.length) {
           return { content: [{ type: "text", text: "sessionId, stage, and at least one task are required for expand_stage" }], details: {}, isError: true };
@@ -1051,6 +939,15 @@ ${stateJson}` }],
         );
         nextState = markStageExpanded(nextState, params.stage, params.notes);
         const paths = await writeOrchestratorSession(ctx.cwd, nextState);
+        if (params.masterPlanMarkdown?.trim()) {
+          await writeFile(paths.masterPlan, params.masterPlanMarkdown.trimEnd() + "\n", "utf8");
+        }
+        for (const task of nextState.tasks) {
+          const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
+          if (authored?.trim()) {
+            await writeFile(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored.trimEnd() + "\n", "utf8");
+          }
+        }
         state.activeSessionId = nextState.sessionId;
         persistState();
         syncContextPanelState();
@@ -1080,6 +977,15 @@ ${stateJson}` }],
         },
       );
       const paths = await writeOrchestratorSession(ctx.cwd, nextState);
+      if (params.masterPlanMarkdown?.trim()) {
+        await writeFile(paths.masterPlan, params.masterPlanMarkdown.trimEnd() + "\n", "utf8");
+      }
+      for (const task of nextState.tasks) {
+        const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
+        if (authored?.trim()) {
+          await writeFile(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored.trimEnd() + "\n", "utf8");
+        }
+      }
       state.activeSessionId = nextState.sessionId;
       state.role = "orchestrator";
       state.stage = nextState.lifecycle.genesis.status === "completed" ? "build" : "genesis";
@@ -1173,7 +1079,15 @@ ${stateJson}` }],
       routingNote = "Blank project detected; orchestrator remains in control and must honor Genesis → Design → Build.";
     }
 
-    const routingPolicy = await loadTakomiRoutingPolicy(runtimeCwd);
+    const promptKey = `${effectiveState.role}:${effectiveState.workflow ?? "none"}`;
+    const includeFullWorkflow = Boolean(effectiveState.workflow && effectiveState.lastFullPromptKey !== promptKey);
+    if (includeFullWorkflow) {
+      state.lastFullPromptKey = promptKey;
+      persistState();
+      syncContextPanelState();
+    }
+
+    const routingPolicy = await resolveTakomiRoutingPolicy(runtimeCwd);
     const modelPreflightContext = (() => {
       try {
         const available = typeof (runtimeCtx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } } | undefined)?.modelRegistry?.getAvailable === "function"
@@ -1188,15 +1102,17 @@ ${stateJson}` }],
 
     const parts = [
       "Takomi runtime is active for this turn.",
-      rolePrompt(effectiveState.role),
+      await loadRolePrompt(runtimeCwd, effectiveState.role),
       effectiveState.planMode ? planPrompt() : "",
-      getInjectedPlaybook(effectiveState),
+      await getInjectedPlaybook(runtimeCwd, effectiveState, includeFullWorkflow),
       `Routing note: ${routingNote}`,
-      routingPolicy ? `Project Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy}` : "No project Takomi model routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
+      routingPolicy.text
+        ? `${routingPolicy.source === "bundled" ? "Bundled" : "Project"} Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy.text}`
+        : "No Takomi routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
       modelPreflightContext,
       `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       `Takomi execution gate: ${effectiveState.launchMode === "manual" ? "review" : "auto"}. In review gate mode, show the delegation plan before launching and return to the user after each task with results, verification guidance, and the recommended next step.`,
-      !effectiveState.subagentsEnabled ? "Takomi subagents are disabled for this session. Do not call takomi_subagent, subagent, or redispatch board tasks until the user enables subagents." : "",
+      !effectiveState.subagentsEnabled ? "Takomi subagents are disabled for this session. Do not call takomi_subagent or subagent until the user enables subagents." : "",
       !genesisExists ? "Project foundation is missing or incomplete. Do not skip Genesis unless the user explicitly waives it." : "",
       "Takomi is the default orchestration mindset here. Do not wait for the literal phrase 'use Takomi' before applying lifecycle judgment.",
       "Task fan-out is flexible. Do not force exactly three tasks; decompose Genesis, Design, and Build work to fit the actual scope.",
@@ -1205,7 +1121,7 @@ ${stateJson}` }],
       "Before any Takomi subagent dispatch or model override, use the injected Pi model-registry context and project routing policy. Prefer provider-qualified model IDs. Do not run `pi --list-models` unless the registry context is missing or the user asks for a visible diagnostic.",
       "When useful, state the current Takomi stage and the recommended next stage.",
       effectiveState.stage === "build"
-        ? "For build orchestration, it is valid to dispatch tasks to specialist subagents, review them, and send fixes back to the same agent by reusing its conversation id."
+        ? "For build orchestration, use takomi_subagent to dispatch work to specialist subagents, then record the result on takomi_board; reuse the same conversation id when sending fixes back to the agent."
         : "",
     ].filter(Boolean);
 
