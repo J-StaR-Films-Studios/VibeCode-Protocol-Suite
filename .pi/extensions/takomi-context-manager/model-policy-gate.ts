@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { ContextManagerState } from "./state";
@@ -20,12 +21,33 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function readSettings(cwd: string): Promise<Settings> {
+async function readSettingsFile(filePath: string): Promise<Settings> {
   try {
-    return JSON.parse(await readFile(path.resolve(cwd, ".pi/settings.json"), "utf8")) as Settings;
+    return JSON.parse(await readFile(filePath, "utf8")) as Settings;
   } catch {
     return {};
   }
+}
+
+function mergeSettings(globalSettings: Settings, projectSettings: Settings): Settings {
+  const globalOverrides = asRecord(globalSettings.subagents?.agentOverrides);
+  const projectOverrides = asRecord(projectSettings.subagents?.agentOverrides);
+  return {
+    ...globalSettings,
+    ...projectSettings,
+    takomi: { ...(globalSettings.takomi ?? {}), ...(projectSettings.takomi ?? {}) },
+    subagents: {
+      ...(globalSettings.subagents ?? {}),
+      ...(projectSettings.subagents ?? {}),
+      agentOverrides: { ...globalOverrides, ...projectOverrides },
+    },
+  };
+}
+
+async function readSettings(cwd: string): Promise<Settings> {
+  const globalSettings = await readSettingsFile(path.join(os.homedir(), ".pi", "agent", "settings.json"));
+  const projectSettings = await readSettingsFile(path.resolve(cwd, ".pi/settings.json"));
+  return mergeSettings(globalSettings, projectSettings);
 }
 
 function modelFamily(model: string): string {
