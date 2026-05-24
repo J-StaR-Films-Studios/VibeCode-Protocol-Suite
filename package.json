@@ -1,6 +1,6 @@
 {
   "name": "takomi",
-  "version": "2.1.6",
+  "version": "2.1.14",
   "description": "🎯 Stop wrestling with AI. Start building with purpose. The artisan's toolkit for agent workflows, Codex skills, and original Takomi capabilities like 21st.dev integration.",
   "type": "module",
   "bin": {
@@ -14,7 +14,12 @@
     ".pi/agents",
     ".pi/extensions",
     ".pi/prompts",
-    ".pi/themes"
+    ".pi/themes",
+    ".pi/settings.json",
+    ".pi/takomi-profile.json",
+    ".pi/takomi/context-manager",
+    ".pi/takomi/model-routing.md",
+    ".pi/takomi/policies"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

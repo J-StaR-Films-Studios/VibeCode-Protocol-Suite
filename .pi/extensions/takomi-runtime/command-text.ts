@@ -16,7 +16,7 @@ const ROOT_COMPLETIONS: TakomiCompletion[] = [
   { value: "mode", label: "mode", description: "Set direct, orchestrate, or review mode" },
   { value: "gate", label: "gate", description: "Set auto or review-gated execution" },
   { value: "subagents", label: "subagents", description: "Control subagent usage and view" },
-  { value: "routing", label: "routing", description: "Install/update Takomi model routing policy" },
+  { value: "routing", label: "routing", description: "Show or update Takomi model routing policy" },
 ];
 
 const SUBCOMMAND_COMPLETIONS: Record<string, TakomiCompletion[]> = {
@@ -36,6 +36,12 @@ const SUBCOMMAND_COMPLETIONS: Record<string, TakomiCompletion[]> = {
     { value: "expand", label: "expand", description: "Expand native tool results" },
     { value: "collapse", label: "collapse", description: "Collapse native tool results" },
     { value: "toggle", label: "toggle", description: "Toggle native tool result expansion" },
+  ],
+  routing: [
+    { value: "show", label: "show", description: "Show active routing policy source, path, and contents" },
+    { value: "global", label: "global", description: "Save following policy text globally" },
+    { value: "local", label: "local", description: "Save following policy text as a project override" },
+    { value: "where", label: "where", description: "Show where the active routing policy is loaded from" },
   ],
 };
 
@@ -71,7 +77,9 @@ export function commandHelp(): string {
     "/takomi mode <direct|orchestrate|review>",
     "/takomi gate <auto|review>",
     "/takomi subagents <on|off|status|expand|collapse|toggle>",
-    "/takomi routing <policy text>",
+    "/takomi routing [show|where]",
+    "/takomi routing <policy text>              # updates global policy",
+    "/takomi routing local <policy text>        # project override",
     "/takomi-status",
     "/takomi-reset",
   ].join("\n");

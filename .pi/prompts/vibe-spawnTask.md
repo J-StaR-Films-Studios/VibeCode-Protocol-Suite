@@ -126,8 +126,3 @@ Return a compact summary with:
 - include concrete file paths whenever possible
 - keep scope explicit so the task cannot sprawl
 - give enough detail for handoff, but avoid bloated filler
-
----
-
-## User request:
-$@

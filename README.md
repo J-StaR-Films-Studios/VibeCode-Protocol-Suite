@@ -35,15 +35,21 @@ Useful management commands:
 
 ```bash
 takomi doctor
-takomi sync pi
+takomi sync pi   # refreshes Takomi Pi assets and runs pi update for Pi-managed packages
 takomi sync skills
 takomi install all
 takomi init
 ```
 
-### Subagent execution credit
+### Context Manager
 
-Takomi's Pi-native subagent execution and terminal UI build on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon**. That package provides the underlying Pi extension for delegated subagent runs, including the native subagent result renderer, live progress/status display, single/parallel/chain execution support, session/artifact handling, and related subagent tooling. Takomi adds its own lifecycle orchestration, model-routing policy, workflow metadata, board/checklist context, and agent conventions on top of that foundation.
+Takomi now ships a Pi-native `takomi-context-manager` extension. It reduces prompt bloat with progressive context loading:
+
+- skill names are always visible, while descriptions and full `SKILL.md` files load only when needed
+- `skill_manifest`, `skill_load`, `policy_manifest`, `policy_load`, and `context_report` tools expose context on demand
+- `/takomi routing` remains the source of truth for model-routing policy
+- `takomi_subagent` is guarded by routing-policy context and can recover from wrong-provider model choices
+- `/context-report` shows prompt compaction, loaded skills/policies, blocked actions, model-routing corrections, and duplicate extension diagnostics
 
 
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
@@ -470,6 +476,8 @@ Externally sourced skills in this bundle retain credit to their upstream creator
 - **Gemini CLI**: Custom VibeCode skill for large-context processing with Gemini 3 Pro.
 - **Google Stitch Skills**: From [google-labs-code/stitch-skills](https://github.com/google-labs-code/stitch-skills) — Design-to-code suite including **design-md**, **enhance-prompt**, **stitch-loop**, **react-components**, and **shadcn-ui**.
 - **Jules**: From [sanjay3290/ai-skills](https://github.com/sanjay3290/ai-skills) — delegate coding tasks to Google Jules AI agent.
+- **Subagent Execution**: Built on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon** — providing the underlying Pi extension for delegated subagent runs (result rendering, live progress, single/parallel/chain execution, session/artifact handling, and related subagent tooling), upon which Takomi adds its own lifecycle orchestration, model-routing policy, and workflow metadata.
+- **Git Commit Generation**: From the **[`kilocode`](https://github.com/Kilo-Org/kilocode)** repository by **Kilo-Org** (specifically, [git-commit-generation.md](https://github.com/Kilo-Org/kilocode/blob/main/packages/kilo-docs/pages/code-with-ai/features/git-commit-generation.md)) — enabling automated, high-quality conventional git commit messages based on staged changes.
 
 ## 📄 License
 

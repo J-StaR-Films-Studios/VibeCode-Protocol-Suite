@@ -8,8 +8,9 @@ $theme = Join-Path $RepoRoot '.pi\themes\takomi-noir.json'
 $runtime = Join-Path $extensionsRoot 'takomi-runtime\index.ts'
 $subagents = Join-Path $extensionsRoot 'takomi-subagents\index.ts'
 $oauthRouter = Join-Path $extensionsRoot 'oauth-router\index.ts'
+$contextManager = Join-Path $extensionsRoot 'takomi-context-manager\index.ts'
 
-foreach ($required in @($runtime, $subagents, $oauthRouter, $promptsRoot, $theme)) {
+foreach ($required in @($runtime, $subagents, $oauthRouter, $contextManager, $promptsRoot, $theme)) {
     if (-not (Test-Path $required)) {
         throw "Missing required local Pi asset: $required"
     }
@@ -22,6 +23,7 @@ try {
         --extension $oauthRouter `
         --extension $runtime `
         --extension $subagents `
+        --extension $contextManager `
         --no-prompt-templates `
         --prompt-template $promptsRoot `
         --no-themes `

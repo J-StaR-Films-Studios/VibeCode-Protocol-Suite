@@ -8,6 +8,7 @@ It is intentionally separate from the existing cross-harness assets under `asset
 
 - `extensions/takomi-runtime/` - Pi runtime glue, embedded workflow playbooks, and orchestrator board tools
 - `extensions/takomi-subagents/` - Takomi-facing subagent wrapper over Pi-style execution semantics with resumable conversation IDs
+- `extensions/takomi-context-manager/` - Progressive context loading, skill manifests, policy packs, model-routing gates, and context diagnostics
 - `prompts/` - Pi-native prompt shortcuts
 - `agents/` - Pi-native specialist agent definitions, including a design-stage agent
 
@@ -39,6 +40,7 @@ Inside Pi, use:
 - `/takomi subagents status|expand|collapse|fullscreen|next|prev|toggle` to inspect or reshape the active subagent stack
 - `/takomi-status` to show lifecycle, gate, session, and active subagent state
 - `/takomi-reset` to reset session-local Takomi runtime state
+- `/context-report` to inspect prompt compaction, skill loading, policy gates, model routing corrections, and duplicate extension diagnostics
 - `takomi_board` actions now include stage expansion, task updates, multi-task dispatch, and redispatch support for review loops
 - The old standalone commands (`/takomi-genesis`, `/takomi-design`, `/takomi-build`, `/takomi-kickoff`, `/autoorch`, `/orch`, `/architect`, `/code`, `/review`, and the `/takomi-subagent*` variants) are folded into `/takomi` subcommands so slash autocomplete stays small.
 - prompt shortcuts are suffixed with `-prompt` to avoid collisions with runtime commands, e.g. `/orch-prompt`, `/build-prompt`, `/design-prompt`, `/genesis-prompt`, `/takomi-prompt`, `/prime-prompt`
@@ -67,6 +69,7 @@ Bundled with Takomi now:
 
 - `.pi/extensions/takomi-runtime/`
 - `.pi/extensions/takomi-subagents/`
+- `.pi/extensions/takomi-context-manager/`
 - `.pi/prompts/`
 - `.pi/agents/`
 - `.pi/themes/`
@@ -100,25 +103,28 @@ So when working on packaging, agents should distinguish between:
 - Orchestrator sessions run in hybrid mode:
   - human-readable docs live under `docs/tasks/orchestrator-sessions/<sessionId>/`
   - machine state lives under `.pi/takomi/orchestrator/<sessionId>.json`
-- Task packets can carry `workflow`, `skills`, `preferredModel`, `fallbackModels`, `preferredThinking`, `dispatchPolicy`, `conversationId`, and `checklist` metadata.
-- Board redispatch and direct subagent calls now build a `TakomiDelegationPlan` before launch. In auto mode the plan launches immediately; in manual mode the plan is returned for review until `confirmLaunch=true` is supplied.
+- Task packets can carry `workflow`, `skills`, `preferredModel`, `fallbackModels`, `preferredThinking`, `executionHint`, `conversationId`, and `checklist` metadata.
+- Direct `takomi_subagent` calls build a `TakomiDelegationPlan` before launch. In auto mode the plan launches immediately; in manual mode the plan is returned for review until `confirmLaunch=true` is supplied.
 - The subagent tool supports `conversationId`, so reviewed work can be sent back to the same agent for continuation instead of restarting from scratch.
 - The subagent tool supports Pi-style single, parallel `tasks`, and sequential `chain` modes.
 - The subagent tool supports `agentScope` values of `user`, `project`, and `both`; project-local agents require confirmation by default.
 - The subagent tool also supports per-run `workflow`, `skills`, `model`, `fallbackModels`, `thinking`, and `checklist` overrides.
-- Board redispatch and direct `takomi_subagent` calls now share one launch path, so model preflight, thinking, fallback behavior, default prompts, and persisted session files stay aligned.
-- Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` as the preferred lifecycle-aware interface and renders it with the native Pi-style result surface.
-- Treat raw `subagent` usage as advanced/internal. Normal Takomi lifecycle work should go through `takomi_subagent` or `takomi_board`.
+- `takomi_board` records session/state/markdown artifacts only; it does not run subagents.
+- Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` as the preferred lifecycle-aware execution interface and renders it with the native Pi-style result surface.
+- Treat raw `subagent` usage as advanced/internal. Normal Takomi lifecycle execution should go through `takomi_subagent`, then `takomi_board update_task` should record the outcome.
 - Active Takomi subagent work now streams through the native Pi-style result UI instead of Takomi's older below-editor stack.
 - Use Pi's native result expansion, `Alt+T`, or `/takomi subagents expand` to inspect detailed subagent output.
-- Takomi still tracks active runs internally for status, review continuity, and board synchronization, but it no longer opens a custom subagent fullscreen overlay.
+- Takomi still tracks active runs internally for status and review continuity, but board synchronization is explicit: run with `takomi_subagent`, then update the board.
+- `takomi-context-manager` reduces prompt bloat by replacing the always-on skill description dump with a names-only Skill Index plus progressive `skill_manifest`/`skill_load` tools.
+- `takomi-context-manager` treats `/takomi routing` as the source of truth for model-routing policy via `.pi/settings.json -> takomi.modelRoutingPolicyFile`.
+- `takomi-context-manager` gates `takomi_subagent` when model-routing context has not been loaded, provides the routing policy, and tells the agent to retry.
+- `takomi-context-manager` can correct safe wrong-provider model requests, block or pause on policy violations, and ask the user whether to retry with an approved model or stop.
+- `takomi-context-manager` detects known duplicate global/project Takomi extension paths in `context_report` to help diagnose tool registration conflicts.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default
+  - preserve authored `master_plan.md` and task packet markdown
   - expand a lifecycle stage into additional tasks
-  - update task status and notes
-  - update checklist progress
-  - dispatch approved tasks as single, parallel, or chain subagent run groups
+  - update task status, notes, and checklist progress
   - rewrite JSON machine state
-  - regenerate task docs into `pending/`, `in-progress/`, `completed/`, and `blocked/`
-  - redispatch a task to the same agent with the same `conversationId`
-  - use `review_and_redispatch` for a cleaner review loop
+  - keep task docs organized in `pending/`, `in-progress/`, `completed/`, and `blocked/`
+- `takomi_board` intentionally cannot dispatch or redispatch agents. Use `takomi_subagent` for single, parallel, or chain execution, then call `takomi_board update_task` with the result.

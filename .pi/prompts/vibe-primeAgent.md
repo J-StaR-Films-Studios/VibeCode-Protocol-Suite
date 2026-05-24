@@ -43,9 +43,10 @@ Summarize what appears to be:
 - pending
 - blocked
 
-### 4. Load Relevant Skills
-If the project clearly matches a known skill domain, load that skill before continuing.
-For Next.js work, load `nextjs-standards`.
+### 4. Load Relevant Context Overlays
+First rely on the repo docs, shipped Takomi workflow, and current code as the source of truth.
+If the project clearly matches an installed skill domain and it would add useful detail, load it as enrichment.
+For Next.js work, still apply strong Next.js standards even when `nextjs-standards` is not installed.
 
 ### 5. State Context Aloud
 Acknowledge:
@@ -90,8 +91,3 @@ After priming, continue directly into the user request using the loaded context.
 - name missing docs explicitly
 - preserve verification context for the rest of the session
 - keep the priming summary compact and useful
-
----
-
-## User request:
-$@

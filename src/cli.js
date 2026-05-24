@@ -41,7 +41,7 @@ import {
   isStoreInitialized,
 } from './store.js';
 import { runDoctor } from './doctor.js';
-import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult } from './pi-harness.js';
+import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
 import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
@@ -267,6 +267,8 @@ async function installPiTarget() {
     const result = await installPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
+    console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+    printPiManagedPackageUpdateResult(await updatePiManagedPackages());
     console.log(pc.dim('\nNext: cd <project> && takomi\n'));
   } catch (error) {
     console.log(pc.red('\nPi harness asset install failed.'));
@@ -280,6 +282,8 @@ async function syncPiTarget() {
     const result = await syncPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
+    console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+    printPiManagedPackageUpdateResult(await updatePiManagedPackages());
   } catch (error) {
     console.log(pc.red('\nPi sync failed.'));
     console.log(pc.dim(String(error?.message || error)));
