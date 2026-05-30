@@ -484,7 +484,9 @@ export function registerRouterProvider(pi: ExtensionAPI, runtime: RouterRuntime)
   const config = runtime.getConfig();
   pi.registerProvider(config.providerName, {
     baseUrl: "https://oauth-router.local",
-    apiKey: "OAUTH_ROUTER_DISABLED",
+    // Pi treats all-caps apiKey placeholders as legacy environment-variable references.
+    // Keep this dummy key clearly literal; real upstream credentials are injected in streamSimple.
+    apiKey: "oauth-router-disabled",
     api: "oauth-router-api",
     models: runtime.getProviderModels(),
     streamSimple: (model, context, options) => runtime.stream(model, context, options),
