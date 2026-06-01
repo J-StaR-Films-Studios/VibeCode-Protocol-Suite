@@ -8,7 +8,7 @@ import type {
 import { commandHelp, completions, statusText, workflowPrompt } from "./command-text";
 import type { TakomiSubagentController } from "./subagent-types";
 import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy, type RoutingPolicyInstallScope } from "./routing-policy";
-import { collectTakomiStats, renderTakomiStats } from "../../../src/takomi-stats.js";
+import { collectTakomiStats, renderTakomiStats } from "./takomi-stats.js";
 
 export type TakomiRuntimeCommandState = {
   enabled: boolean;
