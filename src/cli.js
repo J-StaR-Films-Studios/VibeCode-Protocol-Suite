@@ -802,7 +802,25 @@ async function updateProjectResources() {
 program
   .name('takomi')
   .description('Your AI team. Activated. 🎯')
-  .version(packageJson.version);
+  .version(packageJson.version)
+  .addHelpText('after', `
+Primary flow:
+  takomi setup        Set Takomi up once
+  takomi refresh      Update/upgrade/sync everything
+  takomi status       Check what is connected
+  takomi              Launch Takomi in this project
+
+Examples:
+  takomi setup pi     Set up the Pi harness
+  takomi setup skills Install bundled skills
+  takomi setup project
+  takomi refresh      One-command maintenance
+  takomi refresh pi   Refresh only Pi-related pieces
+
+Legacy aliases still work:
+  install -> setup, sync/upgrade -> refresh, init -> setup project,
+  harnesses -> status, update -> refresh project
+`);
 
 program
   .command('setup [target]')
@@ -827,19 +845,19 @@ program
 
 // Per-project setup (legacy alias)
 program
-  .command('init')
+  .command('init', { hidden: true })
   .description('Legacy alias: use "takomi setup project"')
   .action(init);
 
 // Global installer (legacy alias)
 program
-  .command('install [target]')
+  .command('install [target]', { hidden: true })
   .description('Legacy alias: use "takomi setup [target]"')
   .action(setup);
 
 // Re-sync (legacy alias)
 program
-  .command('sync [target]')
+  .command('sync [target]', { hidden: true })
   .description('Legacy alias: use "takomi refresh [target]"')
   .action(refresh);
 
@@ -851,7 +869,7 @@ program
 
 // Show harness status (NEW)
 program
-  .command('harnesses')
+  .command('harnesses', { hidden: true })
   .description('Legacy alias: use "takomi status"')
   .action(harnesses);
 
@@ -861,18 +879,18 @@ program
   .action(() => runDoctor({ version: program.version() }));
 
 program
-  .command('check-update')
+  .command('check-update', { hidden: true })
   .description('Check whether a newer Takomi package is available')
   .action(() => printTakomiUpdateStatus(program.version()));
 
 program
-  .command('upgrade [target]')
+  .command('upgrade [target]', { hidden: true })
   .description('Legacy alias: use "takomi refresh [target]"')
   .action(refresh);
 
 // Update from GitHub (legacy alias)
 program
-  .command('update')
+  .command('update', { hidden: true })
   .description('Legacy alias: use "takomi refresh project"')
   .action(updateProjectResources);
 
