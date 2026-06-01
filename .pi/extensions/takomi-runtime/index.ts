@@ -404,6 +404,39 @@ async function findExistingTaskFile(paths: ReturnType<typeof getSessionPaths>, t
   return undefined;
 }
 
+function markdownPreservationScore(content: string): number {
+  const trimmed = content.trim();
+  if (!trimmed) return 0;
+  const lines = trimmed.split(/\r?\n/);
+  const headingCount = lines.filter((line) => /^#{1,6}\s+/.test(line)).length;
+  const checklistCount = lines.filter((line) => /^\s*- \[[ xX]\]/.test(line)).length;
+  const fencedBlockCount = lines.filter((line) => /^```/.test(line)).length;
+  return trimmed.length + headingCount * 500 + checklistCount * 120 + fencedBlockCount * 80 + Math.min(lines.length, 200) * 10;
+}
+
+function shouldPreserveExistingTaskMarkdown(existing: string, incoming: string): boolean {
+  const existingTrimmed = existing.trim();
+  const incomingTrimmed = incoming.trim();
+  if (!existingTrimmed || !incomingTrimmed) return false;
+  if (existingTrimmed === incomingTrimmed) return true;
+
+  const existingScore = markdownPreservationScore(existingTrimmed);
+  const incomingScore = markdownPreservationScore(incomingTrimmed);
+  const incomingLooksLikeShortPrompt = incomingTrimmed.length < 500 && !/^#{1,6}\s+/m.test(incomingTrimmed);
+
+  return existingScore > incomingScore * 1.5 || incomingLooksLikeShortPrompt;
+}
+
+async function writeTaskMarkdownSafely(filePath: string, incomingMarkdown: string): Promise<boolean> {
+  const incoming = repairTaskMarkdown(incomingMarkdown).trimEnd() + "\n";
+  const existing = await readFile(filePath, "utf8").catch(() => "");
+  if (existing && shouldPreserveExistingTaskMarkdown(existing, incoming)) {
+    return false;
+  }
+  await writeFile(filePath, incoming, "utf8");
+  return true;
+}
+
 async function writeTaskArtifact(paths: ReturnType<typeof getSessionPaths>, state: OrchestratorSessionState, task: OrchestratorTask) {
   const targetPath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
   const existingPath = await findExistingTaskFile(paths, task);
@@ -945,7 +978,7 @@ ${stateJson}`
         for (const task of nextState.tasks) {
           const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
           if (authored?.trim()) {
-            await writeFile(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored.trimEnd() + "\n", "utf8");
+            await writeTaskMarkdownSafely(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored);
           }
         }
         state.activeSessionId = nextState.sessionId;
@@ -983,7 +1016,7 @@ ${stateJson}`
       for (const task of nextState.tasks) {
         const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
         if (authored?.trim()) {
-          await writeFile(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored.trimEnd() + "\n", "utf8");
+          await writeTaskMarkdownSafely(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored);
         }
       }
       state.activeSessionId = nextState.sessionId;
