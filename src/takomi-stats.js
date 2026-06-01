@@ -1,7 +1,18 @@
-import fs from 'fs-extra';
+import { promises as fs } from 'node:fs';
 import os from 'os';
 import path from 'path';
-import pc from 'picocolors';
+
+const colorEnabled = process.env.NO_COLOR !== '1' && process.env.NO_COLOR !== 'true';
+const ansi = (open, close) => (value) => colorEnabled ? `\u001b[${open}m${value}\u001b[${close}m` : String(value);
+const pc = {
+  bold: ansi(1, 22),
+  dim: ansi(2, 22),
+  white: ansi(37, 39),
+  gray: ansi(90, 39),
+  cyan: ansi(36, 39),
+  blue: ansi(34, 39),
+  magenta: ansi(35, 39),
+};
 
 const PRICES = {
   'gpt-5.5': [5.00, 0.50, 30.00],
@@ -21,6 +32,7 @@ const PRICES = {
   'claude-sonnet-4-6': [3.00, 0.30, 15.00],
 };
 
+async function exists(target) { try { await fs.access(target); return true; } catch { return false; } }
 function safeJson(line) { try { return JSON.parse(line); } catch { return null; } }
 function dayOf(ts) { return typeof ts === 'string' && ts.length >= 10 ? ts.slice(0, 10) : 'unknown'; }
 function add(map, key, patch) { const row = map.get(key) || { key, input: 0, cache: 0, output: 0, total: 0, cost: 0, events: 0 }; for (const [k,v] of Object.entries(patch)) row[k] = (row[k] || 0) + (Number(v) || 0); if (!Object.prototype.hasOwnProperty.call(patch, 'events')) row.events += 1; map.set(key, row); }
@@ -66,7 +78,7 @@ function ansiPadStart(s, w) { return ' '.repeat(Math.max(0, w - visLen(s))) + s;
 
 async function files(root, suffix = '.jsonl') {
   const out = [];
-  if (!root || !(await fs.pathExists(root))) return out;
+  if (!root || !(await exists(root))) return out;
   async function walk(dir) {
     for (const ent of await fs.readdir(dir, { withFileTypes: true })) {
       const p = path.join(dir, ent.name);
@@ -92,7 +104,7 @@ async function scanPiSessions(root, source, events) {
 
 async function scanRunHistory(file) {
   const runs = [];
-  if (!(await fs.pathExists(file))) return runs;
+  if (!(await exists(file))) return runs;
   const text = await fs.readFile(file, 'utf8').catch(() => '');
   for (const line of text.split(/\r?\n/)) { const o = safeJson(line); if (o) runs.push(o); }
   return runs;
