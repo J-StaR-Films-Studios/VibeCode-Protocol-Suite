@@ -9,6 +9,7 @@ export type TakomiCompletion = {
 };
 
 const ROOT_COMPLETIONS: TakomiCompletion[] = [
+  { value: "help", label: "help", description: "Show the Takomi command guide" },
   { value: "genesis", label: "genesis", description: "Run the Genesis planning stage" },
   { value: "design", label: "design", description: "Run UI/UX design from approved scope" },
   { value: "build", label: "build", description: "Implement against the agreed UI" },
@@ -37,6 +38,18 @@ const SUBCOMMAND_COMPLETIONS: Record<string, TakomiCompletion[]> = {
     { value: "expand", label: "expand", description: "Expand native tool results" },
     { value: "collapse", label: "collapse", description: "Collapse native tool results" },
     { value: "toggle", label: "toggle", description: "Toggle native tool result expansion" },
+  ],
+  stats: [
+    { value: "overview", label: "overview", description: "Show the full profile-card dashboard" },
+    { value: "daily", label: "daily", description: "Show daily usage rows" },
+    { value: "models", label: "models", description: "Show model usage leaderboard" },
+    { value: "projects", label: "projects", description: "Show project usage leaderboard" },
+    { value: "agents", label: "agents", description: "Show subagent run leaderboard" },
+    { value: "sources", label: "sources", description: "Show global/project source split" },
+    { value: "since 7d", label: "since 7d", description: "Filter stats to the last 7 days" },
+    { value: "since 14d", label: "since 14d", description: "Filter stats to the last 14 days" },
+    { value: "since 4w", label: "since 4w", description: "Filter stats to the last 4 weeks" },
+    { value: "since 3m", label: "since 3m", description: "Filter stats to the last 3 months" },
   ],
   routing: [
     { value: "show", label: "show", description: "Show active routing policy source, path, and contents" },
@@ -71,6 +84,7 @@ function withArgumentPrefix(parent: string, completions: TakomiCompletion[], tok
 export function commandHelp(): string {
   return [
     "Takomi commands:",
+    "/takomi help                           # show this guide",
     "/takomi genesis [prompt]",
     "/takomi design [prompt]",
     "/takomi build [prompt]",
@@ -78,11 +92,12 @@ export function commandHelp(): string {
     "/takomi mode <direct|orchestrate|review>",
     "/takomi gate <auto|review>",
     "/takomi subagents <on|off|status|expand|collapse|toggle>",
-    "/takomi stats                          # token/model/project/subagent dashboard",
+    "/takomi stats [overview|daily|models|projects|agents|sources] [since 7d]",
     "/takomi routing [show|where]",
     "/takomi routing <policy text>              # updates global policy",
     "/takomi routing local <policy text>        # project override",
     "/takomi-status",
+    "/takomi-stats [view] [since 7d]",
     "/takomi-reset",
   ].join("\n");
 }

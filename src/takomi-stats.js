@@ -28,6 +28,33 @@ function cost(model, input, cache, output, additiveCache = true) { const p = PRI
 function fmtTokens(n) { if (n >= 1e9) return `${(n/1e9).toFixed(2)}B`; if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
 function fmtMoney(n) { return `$${(n || 0).toFixed(n > 100 ? 0 : 2)}`; }
 function ms(n) { if (!n) return '-'; const s = Math.round(n/1000); if (s < 60) return `${s}s`; const m = Math.floor(s/60); if (m < 60) return `${m}m ${s%60}s`; const h = Math.floor(m/60); return `${h}h ${m%60}m`; }
+function parseSince(value) {
+  if (!value) return null;
+  const raw = String(value).trim().toLowerCase();
+  const rel = raw.match(/^(\d+)(d|day|days|w|week|weeks|m|month|months)$/);
+  const d = new Date(); d.setHours(0,0,0,0);
+  if (rel) {
+    const n = Number(rel[1]);
+    const unit = rel[2][0];
+    d.setDate(d.getDate() - (unit === 'w' ? n * 7 : unit === 'm' ? n * 30 : n));
+    return d.toISOString().slice(0, 10);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return null;
+}
+function projectKey(file) {
+  const normalized = String(file || '').replace(/\\/g, '/');
+  const marker = '/sessions/';
+  const idx = normalized.indexOf(marker);
+  if (idx >= 0) {
+    const encoded = normalized.slice(idx + marker.length).split('/')[0];
+    return encoded.replace(/^--/, '').replace(/--$/, '').replace(/--/g, '/').replace(/-/g, ' ').trim() || 'global';
+  }
+  const cwdMarker = '/.pi/';
+  const pidx = normalized.indexOf(cwdMarker);
+  if (pidx >= 0) return normalized.slice(0, pidx).split('/').slice(-2).join('/');
+  return 'unknown';
+}
 
 // ── ANSI-aware string helpers ───────────────────────────────────────────────
 // eslint-disable-next-line no-control-regex
@@ -74,20 +101,24 @@ async function scanRunHistory(file) {
 export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
-  const events = [];
-  await scanPiSessions(path.join(home, '.pi', 'agent', 'sessions'), 'pi-global', events);
-  await scanPiSessions(path.join(cwd, '.pi', 'agent', 'sessions'), 'pi-project', events);
-  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', events);
+  const rawEvents = [];
+  await scanPiSessions(path.join(home, '.pi', 'agent', 'sessions'), 'pi-global', rawEvents);
+  await scanPiSessions(path.join(cwd, '.pi', 'agent', 'sessions'), 'pi-project', rawEvents);
+  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents);
+  const sinceDay = parseSince(opts.since);
+  const events = rawEvents
+    .filter(e => !sinceDay || e.day >= sinceDay)
+    .map(e => ({ ...e, project: projectKey(e.file) }));
   const runs = await scanRunHistory(path.join(home, '.pi', 'agent', 'run-history.jsonl'));
-  const byDay = new Map(), byModel = new Map(), bySource = new Map();
+  const byDay = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map();
   let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.length };
   for (const e of events) {
     totals.input += e.input; totals.cache += e.cache; totals.output += e.output; totals.total += e.total; totals.cost += e.cost;
-    add(byDay, e.day, e); add(byModel, e.model, e); add(bySource, e.source, e);
+    add(byDay, e.day, e); add(byModel, e.model, e); add(bySource, e.source, e); add(byProject, e.project, e);
   }
   const byAgent = new Map(); let longestRun = null;
   for (const r of runs) { add(byAgent, r.agent || 'unknown', { total: 0, events: 1 }); if (!longestRun || (+r.duration||0) > (+longestRun.duration||0)) longestRun = r; }
-  return { generatedAt: new Date().toISOString(), cwd, totals, sessions: new Set(events.map(e => e.session)).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set(events.map(e => e.session)).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -232,8 +263,51 @@ function renderTable(title, rows, columns) {
   return lines.join('\n');
 }
 
+function renderFocusedView(stats, opts = {}) {
+  const view = opts.view;
+  const limit = opts.limit || 20;
+  if (!view || view === 'overview') return null;
+  const tables = {
+    models: ['Top Models', stats.byModel, [
+      { width: 26, align: 'left', get: r => pc.white(r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
+    ]],
+    sources: ['Sources', stats.bySource, [
+      { width: 22, align: 'left', get: r => pc.white(r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 14, align: 'right', get: r => pc.dim(r.events + ' events') },
+    ]],
+    projects: ['Top Projects', stats.byProject, [
+      { width: 42, align: 'left', get: r => pc.white(r.key.length > 42 ? '…' + r.key.slice(-41) : r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
+    ]],
+    agents: ['Top Agents', stats.byAgent, [
+      { width: 24, align: 'left', get: r => pc.white(r.key) },
+      { width: 8, align: 'right', get: r => pc.cyan(String(r.events)) },
+      { width: 8, align: 'left', get: () => pc.dim('runs') },
+    ]],
+    daily: ['Daily Usage', [...stats.byDay].reverse(), [
+      { width: 12, align: 'left', get: r => pc.white(r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
+    ]],
+  };
+  const spec = tables[view === 'project' ? 'projects' : view];
+  if (!spec) return null;
+  const [title, rows, cols] = spec;
+  const suffix = stats.since ? pc.dim(`\n  Since: ${stats.since}`) : '';
+  return ['\n' + pc.bold(pc.magenta('Takomi Stats')), suffix, renderTable(title, rows.slice(0, limit), cols), '\n' + pc.dim('Privacy: metadata only · no raw prompts or transcripts')].filter(Boolean).join('\n');
+}
+
 // ── Main Render ─────────────────────────────────────────────────────────────
 export function renderTakomiStats(stats, opts = {}) {
+  const focused = renderFocusedView(stats, opts);
+  if (focused) return focused;
   const W = Math.min(process.stdout.columns || 80, 86);
   const topModel = stats.byModel[0]?.key || 'unknown';
   const peak = stats.byDay.reduce((a,b) => b.total > (a?.total||0) ? b : a, null);
@@ -298,7 +372,7 @@ export function renderTakomiStats(stats, opts = {}) {
 
   // ── Info line ─────────────────────────────────────────────────────────
   lines.push('');
-  const infoText = `Peak: ${peak?.key || '-'}  ·  ${streaks.quietDays} quiet days  ·  ${stats.totals.events.toLocaleString()} events`;
+  const infoText = `Peak: ${peak?.key || '-'}  ·  ${streaks.quietDays} quiet days  ·  ${stats.totals.events.toLocaleString()} events${stats.since ? `  ·  since ${stats.since}` : ''}`;
   lines.push(center(pc.dim(infoText), W));
 
   lines.push('');
@@ -319,6 +393,16 @@ export function renderTakomiStats(stats, opts = {}) {
     { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
     { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
   ]));
+
+  // ── Projects Table ──────────────────────────────────────────────────────
+  if (stats.byProject.length) {
+    lines.push('');
+    lines.push(renderTable('Top Projects', stats.byProject.slice(0, 5), [
+      { width: 34, align: 'left',  get: r => pc.white(r.key.length > 34 ? '…' + r.key.slice(-33) : r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+    ]));
+  }
 
   // ── Sources Table ───────────────────────────────────────────────────────
   lines.push('');

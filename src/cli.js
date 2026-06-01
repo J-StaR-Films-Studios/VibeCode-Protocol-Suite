@@ -845,13 +845,14 @@ program
   .action(status);
 
 program
-  .command('stats')
+  .command('stats [view]')
   .description('Show bundled Takomi/Pi token, model, project, and subagent usage stats')
   .option('--json', 'Print machine-readable JSON')
   .option('--home <path>', 'Override home directory for Pi history scanning')
   .option('--cwd <path>', 'Override project directory for project-local stats')
+  .option('--since <date|range>', 'Filter from YYYY-MM-DD or relative range like 7d, 4w, 3m')
   .option('--limit <n>', 'Rows per section', '8')
-  .action((options) => printTakomiStats({ ...options, limit: Number(options.limit) || 8 }));
+  .action((view, options) => printTakomiStats({ ...options, view, limit: Number(options.limit) || 8 }));
 
 // Per-project setup (legacy alias)
 program
