@@ -257,7 +257,7 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
   });
 
   pi.registerCommand("takomi-stats", {
-    description: "Show bundled Takomi/Pi token, model, project, and subagent usage stats",
+    description: "Show Takomi token, model, project, session, tool, and subagent usage stats",
     getArgumentCompletions: (argumentPrefix: string) => completions(`stats ${argumentPrefix}`).map((completion) => ({
       ...completion,
       value: completion.value.replace(/^stats\s+/, ""),

@@ -846,7 +846,7 @@ program
 
 program
   .command('stats [view]')
-  .description('Show bundled Takomi/Pi token, model, project, and subagent usage stats')
+  .description('Show Takomi token, model, project, session, tool, and subagent usage stats')
   .option('--json', 'Print machine-readable JSON')
   .option('--home <path>', 'Override home directory for Pi history scanning')
   .option('--cwd <path>', 'Override project directory for project-local stats')

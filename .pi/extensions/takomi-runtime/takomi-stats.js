@@ -88,17 +88,45 @@ async function files(root, suffix = '.jsonl') {
   await walk(root); return out;
 }
 
-async function scanPiSessions(root, source, events) {
+async function scanPiSessions(root, source, events, sessionRows = []) {
   for (const file of await files(root)) {
-    let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl');
+    let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '';
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map() };
     const text = await fs.readFile(file, 'utf8').catch(() => '');
     for (const line of text.split(/\r?\n/)) {
       const obj = safeJson(line); if (!obj) continue;
-      if (obj.type === 'session') session = obj.id || session;
+      if (obj.timestamp) { row.start ||= obj.timestamp; row.end = obj.timestamp; }
+      if (obj.type === 'session') { session = obj.id || session; cwd = obj.cwd || cwd; row.key = session; row.session = session; row.cwd = cwd; }
       if (obj.type === 'model_change') { provider = obj.provider || provider; model = obj.modelId || model; }
-      const u = obj.type === 'message' && obj.message && obj.message.usage;
-      if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, input: +u.input||0, cache: +u.cacheRead||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, true) });
+      if (obj.type === 'custom' && obj.customType === 'takomi-runtime-state' && obj.data) {
+        const role = obj.data.role || 'unknown';
+        const stage = obj.data.stage || 'unknown';
+        const workflow = obj.data.workflow || 'unknown';
+        row.roles.set(role, (row.roles.get(role) || 0) + 1);
+        row.stages.set(stage, (row.stages.get(stage) || 0) + 1);
+        row.workflows.set(workflow, (row.workflows.get(workflow) || 0) + 1);
+        events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'role', role, stage, workflow, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+      }
+      const msg = obj.type === 'message' && obj.message ? obj.message : null;
+      if (msg) {
+        row.messages += 1;
+        if (msg.role === 'user') row.turns += 1;
+        for (const part of msg.content || []) {
+          if (!part || part.type !== 'toolCall') continue;
+          const name = part.name || 'unknown';
+          row.toolCalls += 1;
+          if (name === 'takomi_subagent') {
+            const args = part.arguments || {};
+            const count = Array.isArray(args.tasks) ? args.tasks.length : Array.isArray(args.chain) ? args.chain.length : 1;
+            row.subagentCalls += count;
+          }
+          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+        }
+      }
+      const u = msg && msg.usage;
+      if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: +u.input||0, cache: +u.cacheRead||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, true) });
     }
+    if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
   }
 }
 
@@ -113,24 +141,33 @@ async function scanRunHistory(file) {
 export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
-  const rawEvents = [];
-  await scanPiSessions(path.join(home, '.pi', 'agent', 'sessions'), 'pi-global', rawEvents);
-  await scanPiSessions(path.join(cwd, '.pi', 'agent', 'sessions'), 'pi-project', rawEvents);
-  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents);
+  const rawEvents = [], rawSessions = [];
+  await scanPiSessions(path.join(home, '.pi', 'agent', 'sessions'), 'pi-global', rawEvents, rawSessions);
+  await scanPiSessions(path.join(cwd, '.pi', 'agent', 'sessions'), 'pi-project', rawEvents, rawSessions);
+  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions);
   const sinceDay = parseSince(opts.since);
-  const events = rawEvents
-    .filter(e => !sinceDay || e.day >= sinceDay)
-    .map(e => ({ ...e, project: projectKey(e.file) }));
+  const events = rawEvents.filter(e => !sinceDay || e.day >= sinceDay);
+  const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
   const runs = await scanRunHistory(path.join(home, '.pi', 'agent', 'run-history.jsonl'));
-  const byDay = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map();
-  let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.length };
+  const byDay = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
+  let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
+  for (const s of sessionRows) { totals.toolCalls += s.toolCalls; totals.turns += s.turns; }
   for (const e of events) {
+    if (e.kind === 'tool') { add(byTool, e.tool || 'unknown', { total: 0, events: 1 }); continue; }
+    if (e.kind === 'role') {
+      add(byRole, e.role || 'unknown', { total: 0, events: 1 });
+      add(byStage, e.stage || 'unknown', { total: 0, events: 1 });
+      add(byWorkflow, e.workflow || 'unknown', { total: 0, events: 1 });
+      continue;
+    }
     totals.input += e.input; totals.cache += e.cache; totals.output += e.output; totals.total += e.total; totals.cost += e.cost;
     add(byDay, e.day, e); add(byModel, e.model, e); add(bySource, e.source, e); add(byProject, e.project, e);
   }
   const byAgent = new Map(); let longestRun = null;
   for (const r of runs) { add(byAgent, r.agent || 'unknown', { total: 0, events: 1 }); if (!longestRun || (+r.duration||0) > (+longestRun.duration||0)) longestRun = r; }
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set(events.map(e => e.session)).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  const topSessions = [...sessionRows].sort((a,b)=>b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
+  const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, topSessions, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -275,6 +312,12 @@ function renderTable(title, rows, columns) {
   return lines.join('\n');
 }
 
+function sessionLabel(row, width = 36) {
+  const project = row.project || row.cwd || row.key || 'unknown';
+  return project.length > width ? '…' + project.slice(-(width - 1)) : project;
+}
+function sessionDay(row) { return dayOf(row.start || row.end).slice(5) || '??-??'; }
+
 function renderFocusedView(stats, opts = {}) {
   const view = opts.view;
   const limit = opts.limit || 20;
@@ -297,10 +340,28 @@ function renderFocusedView(stats, opts = {}) {
       { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
       { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
     ]],
-    agents: ['Top Agents', stats.byAgent, [
+    agents: ['Main Agent Roles', stats.byRole, [
+      { width: 24, align: 'left', get: r => pc.white(r.key) },
+      { width: 8, align: 'right', get: r => pc.cyan(String(r.events)) },
+      { width: 12, align: 'left', get: () => pc.dim('state hits') },
+    ]],
+    subagents: ['Top Subagents', stats.byAgent, [
       { width: 24, align: 'left', get: r => pc.white(r.key) },
       { width: 8, align: 'right', get: r => pc.cyan(String(r.events)) },
       { width: 8, align: 'left', get: () => pc.dim('runs') },
+    ]],
+    tools: ['Top Tools', stats.byTool, [
+      { width: 28, align: 'left', get: r => pc.white(r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(String(r.events)) },
+      { width: 8, align: 'left', get: () => pc.dim('calls') },
+    ]],
+    sessions: ['Longest Main Sessions', stats.topSessions, [
+      { width: 6, align: 'left', get: r => pc.dim(sessionDay(r)) },
+      { width: 34, align: 'left', get: r => pc.white(sessionLabel(r, 34)) },
+      { width: 8, align: 'right', get: r => pc.cyan(String(r.turns)) },
+      { width: 8, align: 'left', get: () => pc.dim('turns') },
+      { width: 8, align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
+      { width: 8, align: 'left', get: () => pc.dim('tools') },
     ]],
     daily: ['Daily Usage', [...stats.byDay].reverse(), [
       { width: 12, align: 'left', get: r => pc.white(r.key) },
@@ -342,7 +403,7 @@ export function renderTakomiStats(stats, opts = {}) {
     statCard(fmtTokens(stats.totals.cache), 'Cache Tokens'),
     statCard(fmtMoney(stats.totals.cost), 'Est. Cost'),
     statCard(String(stats.sessions), 'Sessions'),
-    statCard(String(stats.runs.length), 'Agent Runs'),
+    statCard(String(stats.totals.turns), 'Main Turns'),
   ];
 
   const cardW = Math.floor((W - 4) / cards1.length);
@@ -373,7 +434,7 @@ export function renderTakomiStats(stats, opts = {}) {
   const cards2 = [
     statCard(peak ? fmtTokens(peak.total) : '-', 'Peak Day'),
     statCard(topModel, 'Top Model'),
-    statCard(ms(stats.longestRun?.duration), 'Longest Run'),
+    statCard(String(stats.totals.toolCalls), 'Tool Calls'),
     statCard(`${streaks.current} days`, 'Current Streak'),
     statCard(`${streaks.longest} days`, 'Longest Streak'),
   ];
@@ -416,6 +477,39 @@ export function renderTakomiStats(stats, opts = {}) {
     ]));
   }
 
+  // ── Main Agent Roles Table ──────────────────────────────────────────────
+  if (stats.byRole.length) {
+    lines.push('');
+    lines.push(renderTable('Main Agent Roles', stats.byRole.slice(0, modelLimit), [
+      { width: 20, align: 'left',  get: r => pc.white(r.key) },
+      { width: 8,  align: 'right', get: r => pc.cyan(String(r.events)) },
+      { width: 10, align: 'left',  get: r => pc.dim('state hits') },
+    ]));
+  }
+
+  // ── Main Session Table ──────────────────────────────────────────────────
+  if (stats.topSessions.length) {
+    lines.push('');
+    lines.push(renderTable('Longest Main Sessions', stats.topSessions.slice(0, 5), [
+      { width: 6,  align: 'left',  get: r => pc.dim(sessionDay(r)) },
+      { width: 32, align: 'left',  get: r => pc.white(sessionLabel(r, 32)) },
+      { width: 8,  align: 'right', get: r => pc.cyan(String(r.turns)) },
+      { width: 8,  align: 'left',  get: r => pc.dim('turns') },
+      { width: 8,  align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
+      { width: 6,  align: 'left',  get: r => pc.dim('tools') },
+    ]));
+  }
+
+  // ── Tools Table ─────────────────────────────────────────────────────────
+  if (stats.byTool.length) {
+    lines.push('');
+    lines.push(renderTable('Top Tools', stats.byTool.slice(0, modelLimit), [
+      { width: 24, align: 'left',  get: r => pc.white(r.key) },
+      { width: 8,  align: 'right', get: r => pc.cyan(String(r.events)) },
+      { width: 6,  align: 'left',  get: r => pc.dim('calls') },
+    ]));
+  }
+
   // ── Sources Table ───────────────────────────────────────────────────────
   lines.push('');
   lines.push(renderTable('Sources', stats.bySource, [
@@ -424,10 +518,10 @@ export function renderTakomiStats(stats, opts = {}) {
     { width: 14, align: 'right', get: r => pc.dim(r.events + ' events') },
   ]));
 
-  // ── Agents Table ────────────────────────────────────────────────────────
+  // ── Subagents Table ─────────────────────────────────────────────────────
   if (stats.byAgent.length) {
     lines.push('');
-    lines.push(renderTable('Top Agents', stats.byAgent.slice(0, modelLimit), [
+    lines.push(renderTable('Top Subagents', stats.byAgent.slice(0, modelLimit), [
       { width: 20, align: 'left',  get: r => pc.white(r.key) },
       { width: 8,  align: 'right', get: r => pc.cyan(String(r.events)) },
       { width: 6,  align: 'left',  get: r => pc.dim('runs') },
