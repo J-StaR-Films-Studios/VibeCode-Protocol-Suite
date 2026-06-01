@@ -307,6 +307,58 @@ async function syncAllTargets() {
   await syncSkillsTarget();
 }
 
+async function setup(target) {
+  await install(target);
+}
+
+async function refresh(target = 'all') {
+  const normalizedTarget = target || 'all';
+
+  if (normalizedTarget === 'project') {
+    await updateProjectResources();
+    return;
+  }
+
+  await upgrade(normalizedTarget);
+}
+
+async function upgrade(target = 'all') {
+  const normalizedTarget = target || 'all';
+  const supportedTargets = new Set(['all', 'pi', 'skills', 'cli']);
+
+  if (!supportedTargets.has(normalizedTarget)) {
+    console.log(pc.yellow(`Unsupported upgrade target: ${normalizedTarget}`));
+    console.log(pc.dim('Supported targets: all, cli, pi, skills'));
+    console.log(pc.dim('Use plain "takomi upgrade" for the one-command upgrade path.\n'));
+    return;
+  }
+
+  console.log(pc.magenta('⬆ Takomi One-Command Upgrade\n'));
+
+  const upgradeExitCode = upgradeTakomiPackage();
+  if (upgradeExitCode !== 0) {
+    process.exitCode = upgradeExitCode;
+    return;
+  }
+
+  if (normalizedTarget === 'cli') {
+    return;
+  }
+
+  if (normalizedTarget === 'pi') {
+    await installPiTarget();
+    return;
+  }
+
+  if (normalizedTarget === 'skills') {
+    await installSkillsTarget();
+    return;
+  }
+
+  await installAllTargets();
+  console.log(pc.magenta('\n✨ Fully upgraded. Next: run `takomi` from your project.\n'));
+}
+
 function printUnsupportedInstallTarget(target) {
   console.log(pc.yellow(`Unsupported install target: ${target}`));
   console.log(pc.dim('Supported targets right now: pi, skills, all'));
@@ -674,6 +726,75 @@ async function harnesses() {
   }
 }
 
+async function status() {
+  await harnesses();
+}
+
+async function updateProjectResources() {
+  console.log(pc.magenta('📡 Updating your toolkit from GitHub...\n'));
+
+  const storeExists = await isStoreInitialized();
+
+  const response = await prompts([
+    {
+      type: 'multiselect',
+      name: 'components',
+      message: 'What components do you want to update from GitHub?',
+      choices: [
+        { title: '.agent (Workflows & Skills)', value: 'agent', selected: true },
+        { title: 'Agent YAMLs', value: 'yamls' },
+        { title: 'Legacy Protocols', value: 'legacy' },
+        ...(storeExists ? [{ title: 'Global Store', value: 'global', description: 'Update ~/.takomi/' }] : []),
+      ],
+      hint: '- Space to select. Return to submit'
+    }
+  ]);
+
+  if (!response.components || response.components.length === 0) return;
+
+  const destRoot = process.cwd();
+
+  if (response.components.includes('agent')) {
+    const agentDest = path.join(destRoot, '.agent');
+    await updateWorkflows(path.join(agentDest, 'workflows'));
+    await updateSkills(path.join(agentDest, 'skills'));
+  }
+
+  if (response.components.includes('yamls')) {
+    await updateAgentYamls(path.join(destRoot, 'Takomi-Agents'));
+  }
+
+  if (response.components.includes('legacy')) {
+    await updateLegacyManual(path.join(destRoot, 'Legacy-Protocols'));
+  }
+
+  // Update global store if selected
+  if (response.components.includes('global')) {
+    console.log(pc.cyan('\n📡 Updating global store from package assets...\n'));
+    const skills = await populateSkills('all');
+    const workflows = await populateWorkflows('all');
+    const yamls = await populateAgentYamls();
+    console.log(pc.green(`  ✔ ${skills.length} skills, ${workflows.length} workflows, ${yamls.length} YAMLs updated`));
+
+    // Auto-sync to linked harnesses
+    const manifest = await getManifest();
+    if (manifest.linkedHarnesses.length > 0) {
+      const detected = detectHarnesses();
+      const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
+      if (linked.length > 0) {
+        console.log(pc.cyan('\n📡 Auto-syncing to linked harnesses...\n'));
+        await syncToAllHarnesses(linked, STORE_PATH);
+      }
+    }
+
+    manifest.installed.skills = await getStoreSkills();
+    manifest.installed.workflows = await getStoreWorkflows();
+    await writeManifest(manifest);
+  }
+
+  console.log(pc.magenta('\n✨ Your toolkit is fresh and ready to ship.'));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
@@ -683,23 +804,44 @@ program
   .description('Your AI team. Activated. 🎯')
   .version(packageJson.version);
 
-// Per-project setup (backward compatible)
+program
+  .command('setup [target]')
+  .description('Set up Takomi: guided setup, or setup pi|skills|project|all')
+  .action(async (target) => {
+    if (target === 'project') {
+      await init();
+      return;
+    }
+    await setup(target);
+  });
+
+program
+  .command('refresh [target]')
+  .description('One-command refresh: update Takomi plus Pi/assets/skills, or refresh pi|skills|project|all')
+  .action(refresh);
+
+program
+  .command('status')
+  .description('Show connected IDEs and Takomi toolkit status')
+  .action(status);
+
+// Per-project setup (legacy alias)
 program
   .command('init')
-  .description('Drop Takomi into this project')
+  .description('Legacy alias: use "takomi setup project"')
   .action(init);
 
-// Global installer (NEW)
+// Global installer (legacy alias)
 program
   .command('install [target]')
-  .description('Build your global command center or run a target-specific installer')
-  .action(install);
+  .description('Legacy alias: use "takomi setup [target]"')
+  .action(setup);
 
-// Re-sync (NEW)
+// Re-sync (legacy alias)
 program
   .command('sync [target]')
-  .description('Push updates to all connected IDEs or sync a target-specific install')
-  .action(sync);
+  .description('Legacy alias: use "takomi refresh [target]"')
+  .action(refresh);
 
 // Add remote skills (NEW)
 program
@@ -710,7 +852,7 @@ program
 // Show harness status (NEW)
 program
   .command('harnesses')
-  .description('See your toolkit status and connected IDEs')
+  .description('Legacy alias: use "takomi status"')
   .action(harnesses);
 
 program
@@ -724,80 +866,15 @@ program
   .action(() => printTakomiUpdateStatus(program.version()));
 
 program
-  .command('upgrade')
-  .description('Manually update the global Takomi CLI package from npm')
-  .action(() => {
-    process.exitCode = upgradeTakomiPackage();
-  });
+  .command('upgrade [target]')
+  .description('Legacy alias: use "takomi refresh [target]"')
+  .action(refresh);
 
-// Update from GitHub (EXISTING — enhanced)
+// Update from GitHub (legacy alias)
 program
   .command('update')
-  .description('Pull fresh resources from GitHub')
-  .action(async () => {
-    console.log(pc.magenta('📡 Updating your toolkit from GitHub...\n'));
-
-    const storeExists = await isStoreInitialized();
-
-    const response = await prompts([
-      {
-        type: 'multiselect',
-        name: 'components',
-        message: 'What components do you want to update from GitHub?',
-        choices: [
-          { title: '.agent (Workflows & Skills)', value: 'agent', selected: true },
-          { title: 'Agent YAMLs', value: 'yamls' },
-          { title: 'Legacy Protocols', value: 'legacy' },
-          ...(storeExists ? [{ title: 'Global Store', value: 'global', description: 'Update ~/.takomi/' }] : []),
-        ],
-        hint: '- Space to select. Return to submit'
-      }
-    ]);
-
-    if (!response.components || response.components.length === 0) return;
-
-    const destRoot = process.cwd();
-
-    if (response.components.includes('agent')) {
-      const agentDest = path.join(destRoot, '.agent');
-      await updateWorkflows(path.join(agentDest, 'workflows'));
-      await updateSkills(path.join(agentDest, 'skills'));
-    }
-
-    if (response.components.includes('yamls')) {
-      await updateAgentYamls(path.join(destRoot, 'Takomi-Agents'));
-    }
-
-    if (response.components.includes('legacy')) {
-      await updateLegacyManual(path.join(destRoot, 'Legacy-Protocols'));
-    }
-
-    // Update global store if selected
-    if (response.components.includes('global')) {
-      console.log(pc.cyan('\n📡 Updating global store from package assets...\n'));
-      const skills = await populateSkills('all');
-      const workflows = await populateWorkflows('all');
-      const yamls = await populateAgentYamls();
-      console.log(pc.green(`  ✔ ${skills.length} skills, ${workflows.length} workflows, ${yamls.length} YAMLs updated`));
-
-      // Auto-sync to linked harnesses
-      const manifest = await getManifest();
-      if (manifest.linkedHarnesses.length > 0) {
-        const detected = detectHarnesses();
-        const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
-        if (linked.length > 0) {
-          console.log(pc.cyan('\n📡 Auto-syncing to linked harnesses...\n'));
-          await syncToAllHarnesses(linked, STORE_PATH);
-        }
-      }
-
-      manifest.installed.skills = await getStoreSkills();
-      manifest.installed.workflows = await getStoreWorkflows();
-      await writeManifest(manifest);
-    }
-
-    console.log(pc.magenta('\n✨ Your toolkit is fresh and ready to ship.'));
-  });
+  .description('Legacy alias: use "takomi refresh project"')
+  .action(updateProjectResources);
 
 if (process.argv.length <= 2) {
   notifyIfTakomiUpdateAvailable(program.version());

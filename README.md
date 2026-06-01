@@ -20,7 +20,7 @@
 
 ```bash
 npm install -g takomi
-takomi install pi
+takomi setup pi
 cd my-project
 takomi
 ```
@@ -28,18 +28,20 @@ takomi
 Optional global skills:
 
 ```bash
-takomi install skills
+takomi setup skills
 ```
 
 Useful management commands:
 
 ```bash
+takomi refresh   # one-command update: Takomi + Pi/assets/skills
+takomi status
 takomi doctor
-takomi sync pi   # refreshes Takomi Pi assets and runs pi update for Pi-managed packages
-takomi sync skills
-takomi install all
-takomi init
+takomi setup all
+takomi setup project
 ```
+
+Legacy commands like `takomi install pi`, `takomi sync pi`, `takomi upgrade`, and `takomi init` still work, but the simpler mental model is: **setup once, refresh when stale, run `takomi` to use it.**
 
 ### Context Manager
 
@@ -173,12 +175,16 @@ Takomi v2.0 introduces the **Global Skills Router** — install skills once, and
 
 | Command | What It Does |
 |---|---|
-| `takomi install` | One-time setup — detects your IDEs, creates your toolkit, syncs everything |
-| `takomi sync` | Push updates from `~/.takomi/` to all linked harnesses |
+| `takomi` | Launch Takomi in the current project |
+| `takomi setup` | One-time guided setup — detects IDEs, creates your toolkit, syncs everything |
+| `takomi setup pi\|skills\|project\|all` | Targeted setup without memorizing installer internals |
+| `takomi refresh` | One-command update for Takomi CLI, Pi/assets, and skills |
+| `takomi refresh pi\|skills\|project\|all` | Targeted refresh when you need it |
 | `takomi add <url>` | Pull skills from any GitHub repo into your global store |
-| `takomi harnesses` | See what's connected and your toolkit status |
-| `takomi init` | Project-specific setup (works alongside global) |
-| `takomi update` | Refresh resources from GitHub (global store supported) |
+| `takomi status` | See what's connected and your toolkit status |
+| `takomi doctor` | Run detailed diagnostics |
+
+Legacy aliases remain supported: `install` → `setup`, `sync`/`upgrade` → `refresh`, `init` → `setup project`, `harnesses` → `status`, `update` → `refresh project`.
 
 ### Example: Add Remote Skills
 
@@ -187,10 +193,10 @@ Takomi v2.0 introduces the **Global Skills Router** — install skills once, and
 pnpm dlx takomi add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 
 # See what's connected
-pnpm dlx takomi harnesses
+pnpm dlx takomi status
 
-# Push updates everywhere
-pnpm dlx takomi sync
+# Refresh everything
+pnpm dlx takomi refresh
 ```
 
 ### KiloCode YAML Auto-Sync
