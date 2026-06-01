@@ -8,6 +8,7 @@ import type {
 import { commandHelp, completions, statusText, workflowPrompt } from "./command-text";
 import type { TakomiSubagentController } from "./subagent-types";
 import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy, type RoutingPolicyInstallScope } from "./routing-policy";
+import { collectTakomiStats, renderTakomiStats } from "../../../src/takomi-stats.js";
 
 export type TakomiRuntimeCommandState = {
   enabled: boolean;
@@ -227,6 +228,15 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
       if (subcommand === "gate") return handleGate(ctx, rest[0]);
       if (subcommand === "routing" || subcommand === "route" || subcommand === "models") return handleRouting(ctx, tail);
       if (subcommand === "subagents" || subcommand === "subagent") return handleSubagents(ctx, rest[0]);
+      if (subcommand === "stats") {
+        try {
+          const stats = await collectTakomiStats({ cwd: ctx.cwd });
+          ctx.ui.notify(renderTakomiStats(stats, { limit: 8 }), "info");
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
       if (subcommand === "status") {
         ctx.ui.notify(statusText(options.getState(), options.subagentController), "info");
         return;
@@ -240,6 +250,18 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
     description: "Show Takomi lifecycle, gate, session, and subagent status",
     handler: async (_args, ctx) => {
       ctx.ui.notify(statusText(options.getState(), options.subagentController), "info");
+    },
+  });
+
+  pi.registerCommand("takomi-stats", {
+    description: "Show bundled Takomi/Pi token, model, project, and subagent usage stats",
+    handler: async (_args, ctx) => {
+      try {
+        const stats = await collectTakomiStats({ cwd: ctx.cwd });
+        ctx.ui.notify(renderTakomiStats(stats, { limit: 8 }), "info");
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      }
     },
   });
 

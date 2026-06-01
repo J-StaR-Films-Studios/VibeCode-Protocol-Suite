@@ -16,6 +16,7 @@ const ROOT_COMPLETIONS: TakomiCompletion[] = [
   { value: "mode", label: "mode", description: "Set direct, orchestrate, or review mode" },
   { value: "gate", label: "gate", description: "Set auto or review-gated execution" },
   { value: "subagents", label: "subagents", description: "Control subagent usage and view" },
+  { value: "stats", label: "stats", description: "Show token, model, project, and subagent usage stats" },
   { value: "routing", label: "routing", description: "Show or update Takomi model routing policy" },
 ];
 
@@ -77,6 +78,7 @@ export function commandHelp(): string {
     "/takomi mode <direct|orchestrate|review>",
     "/takomi gate <auto|review>",
     "/takomi subagents <on|off|status|expand|collapse|toggle>",
+    "/takomi stats                          # token/model/project/subagent dashboard",
     "/takomi routing [show|where]",
     "/takomi routing <policy text>              # updates global policy",
     "/takomi routing local <policy text>        # project override",

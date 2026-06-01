@@ -45,6 +45,7 @@ import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, pri
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
 import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
+import { printTakomiStats } from './takomi-stats.js';
 
 const packageJson = await fs.readJson(PATHS.packageJson);
 const program = new Command();
@@ -842,6 +843,15 @@ program
   .command('status')
   .description('Show connected IDEs and Takomi toolkit status')
   .action(status);
+
+program
+  .command('stats')
+  .description('Show bundled Takomi/Pi token, model, project, and subagent usage stats')
+  .option('--json', 'Print machine-readable JSON')
+  .option('--home <path>', 'Override home directory for Pi history scanning')
+  .option('--cwd <path>', 'Override project directory for project-local stats')
+  .option('--limit <n>', 'Rows per section', '8')
+  .action((options) => printTakomiStats({ ...options, limit: Number(options.limit) || 8 }));
 
 // Per-project setup (legacy alias)
 program
