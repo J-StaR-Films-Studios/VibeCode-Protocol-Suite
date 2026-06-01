@@ -210,7 +210,7 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
     handler: async (args, ctx) => {
       const [subcommand = "", ...rest] = args.trim().split(/\s+/).filter(Boolean);
       const tail = rest.join(" ");
-      if (!subcommand) {
+      if (!subcommand || subcommand === "help" || subcommand === "?" || subcommand === "commands") {
         await options.updateState(ctx, () => {
           options.getState().enabled = true;
         }, commandHelp());
@@ -230,8 +230,11 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
       if (subcommand === "subagents" || subcommand === "subagent") return handleSubagents(ctx, rest[0]);
       if (subcommand === "stats") {
         try {
-          const stats = await collectTakomiStats({ cwd: ctx.cwd });
-          ctx.ui.notify(renderTakomiStats(stats, { limit: 8 }), "info");
+          const view = rest[0];
+          const sinceIndex = rest.findIndex((token) => token === "--since" || token === "since");
+          const since = sinceIndex >= 0 ? rest[sinceIndex + 1] : undefined;
+          const stats = await collectTakomiStats({ cwd: ctx.cwd, since });
+          ctx.ui.notify(renderTakomiStats(stats, { limit: 8, view }), "info");
         } catch (error) {
           ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
         }
@@ -255,10 +258,18 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
 
   pi.registerCommand("takomi-stats", {
     description: "Show bundled Takomi/Pi token, model, project, and subagent usage stats",
-    handler: async (_args, ctx) => {
+    getArgumentCompletions: (argumentPrefix: string) => completions(`stats ${argumentPrefix}`).map((completion) => ({
+      ...completion,
+      value: completion.value.replace(/^stats\s+/, ""),
+    })),
+    handler: async (args, ctx) => {
       try {
-        const stats = await collectTakomiStats({ cwd: ctx.cwd });
-        ctx.ui.notify(renderTakomiStats(stats, { limit: 8 }), "info");
+        const parts = args.trim().split(/\s+/).filter(Boolean);
+        const view = parts[0];
+        const sinceIndex = parts.findIndex((token) => token === "--since" || token === "since");
+        const since = sinceIndex >= 0 ? parts[sinceIndex + 1] : undefined;
+        const stats = await collectTakomiStats({ cwd: ctx.cwd, since });
+        ctx.ui.notify(renderTakomiStats(stats, { limit: 8, view }), "info");
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
