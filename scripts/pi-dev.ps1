@@ -9,8 +9,9 @@ $runtime = Join-Path $extensionsRoot 'takomi-runtime\index.ts'
 $subagents = Join-Path $extensionsRoot 'takomi-subagents\index.ts'
 $oauthRouter = Join-Path $extensionsRoot 'oauth-router\index.ts'
 $contextManager = Join-Path $extensionsRoot 'takomi-context-manager\index.ts'
+$notifySound = Join-Path $extensionsRoot 'notify-sound\index.ts'
 
-foreach ($required in @($runtime, $subagents, $oauthRouter, $contextManager, $promptsRoot, $theme)) {
+foreach ($required in @($runtime, $subagents, $oauthRouter, $contextManager, $notifySound, $promptsRoot, $theme)) {
     if (-not (Test-Path $required)) {
         throw "Missing required local Pi asset: $required"
     }
@@ -24,6 +25,7 @@ try {
         --extension $runtime `
         --extension $subagents `
         --extension $contextManager `
+        --extension $notifySound `
         --no-prompt-templates `
         --prompt-template $promptsRoot `
         --no-themes `

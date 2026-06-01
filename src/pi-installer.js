@@ -173,6 +173,7 @@ export async function validatePiHarnessInstall() {
     subagents: await fs.pathExists(path.join(targets.extensions, 'takomi-subagents')),
     contextManager: await fs.pathExists(path.join(targets.extensions, 'takomi-context-manager')),
     oauthRouter: await fs.pathExists(path.join(targets.extensions, 'oauth-router')),
+    notifySound: await fs.pathExists(path.join(targets.extensions, 'notify-sound')),
     prompts: await fs.pathExists(targets.prompts),
     agents: await fs.pathExists(targets.agents),
     themes: await fs.pathExists(targets.themes),
@@ -187,7 +188,7 @@ export function printPiInstallSummary(result, validation) {
   console.log(pc.green('\n✔ Installed Takomi Pi harness assets'));
   console.log(pc.white(`  Root:       ${result.targets.root}`));
   console.log(pc.white(`  Manifest:   ${PI_MANIFEST_PATH}`));
-  console.log(pc.white(`  Extensions: ${validation.runtime && validation.subagents && validation.contextManager && validation.oauthRouter ? 'ok' : 'check needed'}`));
+  console.log(pc.white(`  Extensions: ${validation.runtime && validation.subagents && validation.contextManager && validation.oauthRouter && validation.notifySound ? 'ok' : 'check needed'}`));
   console.log(pc.white(`  Prompts:    ${validation.prompts ? 'ok' : 'missing'}`));
   console.log(pc.white(`  Agents:     ${validation.agents ? 'ok' : 'missing'}`));
   console.log(pc.white(`  Themes:     ${validation.themes ? 'ok' : 'missing'}`));

@@ -108,6 +108,11 @@ $directoryLinks = @(
         Source = Join-Path $repoPiRoot 'extensions\takomi-subagents'
     },
     @{
+        Label = 'notify-sound'
+        Destination = Join-Path $globalAgentExtensions 'notify-sound'
+        Source = Join-Path $repoPiRoot 'extensions\notify-sound'
+    },
+    @{
         Label = 'oauth-router'
         Destination = Join-Path $globalAgentExtensions 'oauth-router'
         Source = Join-Path $repoPiRoot 'extensions\oauth-router'

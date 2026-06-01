@@ -18,3 +18,7 @@ pi-session-*.html
 .pi/takomi/context-manager/
 docs/OtherChats/
 .antigravitycli/
+.pi/notify-sound.json
+.pi/notify-sound.ps1
+.pi/notify-sound.vbs
+.pi/notify-sound.wav
