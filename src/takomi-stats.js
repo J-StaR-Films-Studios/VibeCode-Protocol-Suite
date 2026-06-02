@@ -88,10 +88,10 @@ async function files(root, suffix = '.jsonl') {
   await walk(root); return out;
 }
 
-async function scanPiSessions(root, source, events, sessionRows = []) {
+async function scanPiSessions(root, source, events, sessionRows = [], taskRows = []) {
   for (const file of await files(root)) {
-    let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '';
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map() };
+    let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null;
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0 };
     const text = await fs.readFile(file, 'utf8').catch(() => '');
     for (const line of text.split(/\r?\n/)) {
       const obj = safeJson(line); if (!obj) continue;
@@ -110,11 +110,20 @@ async function scanPiSessions(root, source, events, sessionRows = []) {
       const msg = obj.type === 'message' && obj.message ? obj.message : null;
       if (msg) {
         row.messages += 1;
-        if (msg.role === 'user') row.turns += 1;
+        const ts = obj.timestamp || msg.timestamp || '';
+        if (msg.role === 'user') {
+          if (currentTask?.end && currentTask.end !== currentTask.start) taskRows.push(currentTask);
+          row.turns += 1;
+          const textPart = (msg.content || []).find(p => p?.type === 'text')?.text || '';
+          currentTask = { source, file, session, project: projectKey(file), cwd, start: ts, end: ts, provider, model, turns: 1, toolCalls: 0, title: String(textPart).replace(/\s+/g, ' ').trim() };
+        } else if (currentTask && ts) {
+          currentTask.end = ts;
+        }
         for (const part of msg.content || []) {
           if (!part || part.type !== 'toolCall') continue;
           const name = part.name || 'unknown';
           row.toolCalls += 1;
+          if (currentTask) currentTask.toolCalls += 1;
           if (name === 'takomi_subagent') {
             const args = part.arguments || {};
             const count = Array.isArray(args.tasks) ? args.tasks.length : Array.isArray(args.chain) ? args.chain.length : 1;
@@ -126,6 +135,8 @@ async function scanPiSessions(root, source, events, sessionRows = []) {
       const u = msg && msg.usage;
       if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: +u.input||0, cache: +u.cacheRead||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, true) });
     }
+    if (currentTask?.end && currentTask.end !== currentTask.start) taskRows.push(currentTask);
+    row.activeMs = taskRows.filter(t => t.file === file).reduce((sum, t) => sum + taskDuration(t), 0);
     if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
   }
 }
@@ -141,13 +152,16 @@ async function scanRunHistory(file) {
 export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
-  const rawEvents = [], rawSessions = [];
-  await scanPiSessions(path.join(home, '.pi', 'agent', 'sessions'), 'pi-global', rawEvents, rawSessions);
-  await scanPiSessions(path.join(cwd, '.pi', 'agent', 'sessions'), 'pi-project', rawEvents, rawSessions);
-  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions);
+  const rawEvents = [], rawSessions = [], rawTasks = [];
+  const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
+  const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
+  await scanPiSessions(globalSessions, 'pi-global', rawEvents, rawSessions, rawTasks);
+  if (projectSessions !== globalSessions) await scanPiSessions(projectSessions, 'pi-project', rawEvents, rawSessions, rawTasks);
+  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions, rawTasks);
   const sinceDay = parseSince(opts.since);
   const events = rawEvents.filter(e => !sinceDay || e.day >= sinceDay);
   const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
+  const taskRows = rawTasks.filter(t => !sinceDay || dayOf(t.end || t.start) >= sinceDay);
   const runs = await scanRunHistory(path.join(home, '.pi', 'agent', 'run-history.jsonl'));
   const byDay = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
   let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
@@ -165,9 +179,10 @@ export async function collectTakomiStats(opts = {}) {
   }
   const byAgent = new Map(); let longestRun = null;
   for (const r of runs) { add(byAgent, r.agent || 'unknown', { total: 0, events: 1 }); if (!longestRun || (+r.duration||0) > (+longestRun.duration||0)) longestRun = r; }
-  const topSessions = [...sessionRows].sort((a,b)=>b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
+  const topSessions = [...sessionRows].sort((a,b)=>(b.activeMs||0)-(a.activeMs||0) || b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
+  const topTasks = [...taskRows].sort((a,b)=>taskDuration(b)-taskDuration(a) || b.toolCalls-a.toolCalls).slice(0, 20);
   const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, topSessions, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -291,8 +306,8 @@ function center(text, width) {
   return ' '.repeat(pad) + text;
 }
 
-function statCard(value, label) {
-  return { value: String(value), label };
+function statCard(value, label, color = pc.white) {
+  return { value: String(value), label, color };
 }
 
 // ── Table Helper ────────────────────────────────────────────────────────────
@@ -317,11 +332,58 @@ function sessionLabel(row, width = 36) {
   return project.length > width ? '…' + project.slice(-(width - 1)) : project;
 }
 function sessionDay(row) { return dayOf(row.start || row.end).slice(5) || '??-??'; }
+function sessionDuration(row) {
+  return row?.activeMs || 0;
+}
+function taskDuration(row) {
+  const start = Date.parse(row?.start || '');
+  const end = Date.parse(row?.end || '');
+  return Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : 0;
+}
+function taskLabel(row, width = 34) {
+  const label = row?.title || row?.project || row?.session || 'unknown';
+  return label.length > width ? label.slice(0, width - 1) + '…' : label;
+}
+function runLabel(run, width = 28) {
+  const label = run ? `${run.agent || 'unknown'}: ${run.task || ''}`.trim() : '-';
+  return label.length > width ? label.slice(0, width - 1) + '…' : label;
+}
+function indentWrap(text, width = 76, indent = '      ') {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    if ((line + ' ' + word).trim().length > width && line) { lines.push(line); line = word; }
+    else line = (line + ' ' + word).trim();
+  }
+  if (line) lines.push(line);
+  return lines.map((l, i) => (i ? indent : '') + l).join('\n');
+}
+function renderFullList(title, rows, renderRow, limit = 20) {
+  const lines = ['\n' + pc.bold(pc.magenta('Takomi Stats')), renderTable(title, [], [{ width: 74 }])];
+  rows.slice(0, limit).forEach((row, i) => lines.push(renderRow(row, i)));
+  lines.push('\n' + pc.dim('Privacy: metadata only · no raw prompts or transcripts'));
+  return lines.join('\n');
+}
 
 function renderFocusedView(stats, opts = {}) {
   const view = opts.view;
   const limit = opts.limit || 20;
   if (!view || view === 'overview') return null;
+  if (view === 'projects-full' || view === 'project-full') return renderFullList('Top Projects — Full Names', stats.byProject, (r, i) => [
+    `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.key)}`,
+    `      ${pc.cyan(fmtTokens(r.total))}  ${pc.dim(fmtMoney(r.cost))}  ${pc.dim(r.events + ' calls')}`,
+  ].join('\n'), limit);
+  if (view === 'sessions-full' || view === 'session-full') return renderFullList('Longest Active Sessions — Full Names', stats.topSessions, (r, i) => [
+    `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.project || r.cwd || r.key || 'unknown')}`,
+    `      ${pc.cyan(ms(sessionDuration(r)))}  ${pc.dim(r.turns + ' turns')}  ${pc.dim(r.toolCalls + ' tools')}`,
+    `      ${pc.dim(r.file || '')}`,
+  ].join('\n'), limit);
+  if (view === 'tasks-full' || view === 'task-full') return renderFullList('Longest Tasks — Full Prompts', stats.topTasks || [], (r, i) => [
+    `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.cyan(ms(taskDuration(r)))}  ${pc.magenta(r.toolCalls + ' tools')}  ${pc.dim(dayOf(r.start))}`,
+    `      ${pc.white(indentWrap(r.title || r.project || r.session || 'unknown'))}`,
+    `      ${pc.dim(r.project || '')}`,
+  ].join('\n'), limit);
   const tables = {
     models: ['Top Models', stats.byModel, [
       { width: 26, align: 'left', get: r => pc.white(r.key) },
@@ -355,13 +417,20 @@ function renderFocusedView(stats, opts = {}) {
       { width: 10, align: 'right', get: r => pc.cyan(String(r.events)) },
       { width: 8, align: 'left', get: () => pc.dim('calls') },
     ]],
-    sessions: ['Longest Main Sessions', stats.topSessions, [
+    sessions: ['Longest Active Sessions', stats.topSessions, [
       { width: 6, align: 'left', get: r => pc.dim(sessionDay(r)) },
-      { width: 34, align: 'left', get: r => pc.white(sessionLabel(r, 34)) },
+      { width: 30, align: 'left', get: r => pc.white(sessionLabel(r, 30)) },
+      { width: 9, align: 'right', get: r => pc.cyan(ms(sessionDuration(r))) },
       { width: 8, align: 'right', get: r => pc.cyan(String(r.turns)) },
       { width: 8, align: 'left', get: () => pc.dim('turns') },
       { width: 8, align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
       { width: 8, align: 'left', get: () => pc.dim('tools') },
+    ]],
+    tasks: ['Longest Tasks', stats.topTasks || [], [
+      { width: 6, align: 'left', get: r => pc.dim(dayOf(r.start).slice(5)) },
+      { width: 9, align: 'right', get: r => pc.cyan(ms(taskDuration(r))) },
+      { width: 11, align: 'right', get: r => pc.magenta(`${r.toolCalls} tools`) },
+      { width: 36, align: 'left', get: r => pc.white(taskLabel(r, 36)) },
     ]],
     daily: ['Daily Usage', [...stats.byDay].reverse(), [
       { width: 12, align: 'left', get: r => pc.white(r.key) },
@@ -385,6 +454,8 @@ export function renderTakomiStats(stats, opts = {}) {
   const topModel = stats.byModel[0]?.key || 'unknown';
   const peak = stats.byDay.reduce((a,b) => b.total > (a?.total||0) ? b : a, null);
   const streaks = calcStreaks(stats.byDay);
+  const longestSession = stats.topSessions[0] || null;
+  const longestTask = stats.topTasks?.[0] || null;
   const lines = [];
 
   // ── Header ────────────────────────────────────────────────────────────
@@ -415,8 +486,9 @@ export function renderTakomiStats(stats, opts = {}) {
     for (const c of cards) {
       const vPad = Math.max(0, Math.floor((cardW - c.value.length) / 2));
       const lPad = Math.max(0, Math.floor((cardW - c.label.length) / 2));
-      const vContent = ' '.repeat(vPad) + pc.bold(pc.white(c.value));
-      const lContent = ' '.repeat(lPad) + pc.dim(c.label);
+      const color = c.color || pc.white;
+      const vContent = ' '.repeat(vPad) + pc.bold(color(c.value));
+      const lContent = ' '.repeat(lPad) + pc.dim(color(c.label));
       // Pad to cardW visible chars
       vStr += ansiPadEnd(vContent, cardW);
       lStr += ansiPadEnd(lContent, cardW);
@@ -442,6 +514,19 @@ export function renderTakomiStats(stats, opts = {}) {
   const [v2, l2] = buildCardLines(cards2);
   lines.push(v2);
   lines.push(l2);
+
+  // ── Duration Cards ────────────────────────────────────────────────────
+  lines.push('');
+  const cards3 = [
+    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Active Session', pc.cyan),
+    statCard(longestSession ? String(longestSession.turns) : '-', 'Turns in Session', pc.cyan),
+    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Task', pc.magenta),
+    statCard(longestTask ? String(longestTask.toolCalls) : '-', 'Tools in Task', pc.magenta),
+    statCard(stats.mostSubagentsSession ? String(stats.mostSubagentsSession.subagentCalls) : '0', 'Max Subagents', pc.blue),
+  ];
+  const [v3, l3] = buildCardLines(cards3);
+  lines.push(v3);
+  lines.push(l3);
 
   // ── Info line ─────────────────────────────────────────────────────────
   lines.push('');
@@ -490,13 +575,35 @@ export function renderTakomiStats(stats, opts = {}) {
   // ── Main Session Table ──────────────────────────────────────────────────
   if (stats.topSessions.length) {
     lines.push('');
-    lines.push(renderTable('Longest Main Sessions', stats.topSessions.slice(0, 5), [
+    lines.push(renderTable('Longest Active Sessions', stats.topSessions.slice(0, 5), [
       { width: 6,  align: 'left',  get: r => pc.dim(sessionDay(r)) },
-      { width: 32, align: 'left',  get: r => pc.white(sessionLabel(r, 32)) },
+      { width: 28, align: 'left',  get: r => pc.white(sessionLabel(r, 28)) },
+      { width: 9,  align: 'right', get: r => pc.cyan(ms(sessionDuration(r))) },
       { width: 8,  align: 'right', get: r => pc.cyan(String(r.turns)) },
       { width: 8,  align: 'left',  get: r => pc.dim('turns') },
       { width: 8,  align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
       { width: 6,  align: 'left',  get: r => pc.dim('tools') },
+    ]));
+  }
+
+  // ── Longest Tasks ──────────────────────────────────────────────────────
+  if (stats.topTasks?.length) {
+    lines.push('');
+    lines.push(renderTable('Longest Tasks', stats.topTasks.slice(0, 5), [
+      { width: 6,  align: 'left',  get: r => pc.dim(dayOf(r.start).slice(5)) },
+      { width: 9,  align: 'right', get: r => pc.cyan(ms(taskDuration(r))) },
+      { width: 11, align: 'right', get: r => pc.magenta(`${r.toolCalls} tools`) },
+      { width: 34, align: 'left',  get: r => pc.white(taskLabel(r, 34)) },
+    ]));
+  }
+
+  // ── Longest Subagent Run ───────────────────────────────────────────────
+  if (stats.longestRun) {
+    lines.push('');
+    lines.push(renderTable('Longest Subagent Run', [stats.longestRun], [
+      { width: 22, align: 'left',  get: r => pc.white(r.agent || 'unknown') },
+      { width: 10, align: 'right', get: r => pc.cyan(ms(+r.duration || 0)) },
+      { width: 30, align: 'left',  get: r => pc.dim(runLabel(r, 30)) },
     ]));
   }
 

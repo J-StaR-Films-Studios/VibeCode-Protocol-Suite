@@ -306,8 +306,8 @@ function center(text, width) {
   return ' '.repeat(pad) + text;
 }
 
-function statCard(value, label) {
-  return { value: String(value), label };
+function statCard(value, label, color = pc.white) {
+  return { value: String(value), label, color };
 }
 
 // ── Table Helper ────────────────────────────────────────────────────────────
@@ -348,11 +348,42 @@ function runLabel(run, width = 28) {
   const label = run ? `${run.agent || 'unknown'}: ${run.task || ''}`.trim() : '-';
   return label.length > width ? label.slice(0, width - 1) + '…' : label;
 }
+function indentWrap(text, width = 76, indent = '      ') {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    if ((line + ' ' + word).trim().length > width && line) { lines.push(line); line = word; }
+    else line = (line + ' ' + word).trim();
+  }
+  if (line) lines.push(line);
+  return lines.map((l, i) => (i ? indent : '') + l).join('\n');
+}
+function renderFullList(title, rows, renderRow, limit = 20) {
+  const lines = ['\n' + pc.bold(pc.magenta('Takomi Stats')), renderTable(title, [], [{ width: 74 }])];
+  rows.slice(0, limit).forEach((row, i) => lines.push(renderRow(row, i)));
+  lines.push('\n' + pc.dim('Privacy: metadata only · no raw prompts or transcripts'));
+  return lines.join('\n');
+}
 
 function renderFocusedView(stats, opts = {}) {
   const view = opts.view;
   const limit = opts.limit || 20;
   if (!view || view === 'overview') return null;
+  if (view === 'projects-full' || view === 'project-full') return renderFullList('Top Projects — Full Names', stats.byProject, (r, i) => [
+    `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.key)}`,
+    `      ${pc.cyan(fmtTokens(r.total))}  ${pc.dim(fmtMoney(r.cost))}  ${pc.dim(r.events + ' calls')}`,
+  ].join('\n'), limit);
+  if (view === 'sessions-full' || view === 'session-full') return renderFullList('Longest Active Sessions — Full Names', stats.topSessions, (r, i) => [
+    `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.project || r.cwd || r.key || 'unknown')}`,
+    `      ${pc.cyan(ms(sessionDuration(r)))}  ${pc.dim(r.turns + ' turns')}  ${pc.dim(r.toolCalls + ' tools')}`,
+    `      ${pc.dim(r.file || '')}`,
+  ].join('\n'), limit);
+  if (view === 'tasks-full' || view === 'task-full') return renderFullList('Longest Tasks — Full Prompts', stats.topTasks || [], (r, i) => [
+    `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.cyan(ms(taskDuration(r)))}  ${pc.magenta(r.toolCalls + ' tools')}  ${pc.dim(dayOf(r.start))}`,
+    `      ${pc.white(indentWrap(r.title || r.project || r.session || 'unknown'))}`,
+    `      ${pc.dim(r.project || '')}`,
+  ].join('\n'), limit);
   const tables = {
     models: ['Top Models', stats.byModel, [
       { width: 26, align: 'left', get: r => pc.white(r.key) },
@@ -398,7 +429,7 @@ function renderFocusedView(stats, opts = {}) {
     tasks: ['Longest Tasks', stats.topTasks || [], [
       { width: 6, align: 'left', get: r => pc.dim(dayOf(r.start).slice(5)) },
       { width: 9, align: 'right', get: r => pc.cyan(ms(taskDuration(r))) },
-      { width: 8, align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
+      { width: 11, align: 'right', get: r => pc.magenta(`${r.toolCalls} tools`) },
       { width: 36, align: 'left', get: r => pc.white(taskLabel(r, 36)) },
     ]],
     daily: ['Daily Usage', [...stats.byDay].reverse(), [
@@ -455,8 +486,9 @@ export function renderTakomiStats(stats, opts = {}) {
     for (const c of cards) {
       const vPad = Math.max(0, Math.floor((cardW - c.value.length) / 2));
       const lPad = Math.max(0, Math.floor((cardW - c.label.length) / 2));
-      const vContent = ' '.repeat(vPad) + pc.bold(pc.white(c.value));
-      const lContent = ' '.repeat(lPad) + pc.dim(c.label);
+      const color = c.color || pc.white;
+      const vContent = ' '.repeat(vPad) + pc.bold(color(c.value));
+      const lContent = ' '.repeat(lPad) + pc.dim(color(c.label));
       // Pad to cardW visible chars
       vStr += ansiPadEnd(vContent, cardW);
       lStr += ansiPadEnd(lContent, cardW);
@@ -486,11 +518,11 @@ export function renderTakomiStats(stats, opts = {}) {
   // ── Duration Cards ────────────────────────────────────────────────────
   lines.push('');
   const cards3 = [
-    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Longest Session'),
-    statCard(longestSession ? String(longestSession.turns) : '-', 'Session Turns'),
-    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Task'),
-    statCard(longestTask ? String(longestTask.toolCalls) : '-', 'Task Tools'),
-    statCard(stats.mostSubagentsSession ? String(stats.mostSubagentsSession.subagentCalls) : '0', 'Most Subagents'),
+    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Active Session', pc.cyan),
+    statCard(longestSession ? String(longestSession.turns) : '-', 'Turns in Session', pc.cyan),
+    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Task', pc.magenta),
+    statCard(longestTask ? String(longestTask.toolCalls) : '-', 'Tools in Task', pc.magenta),
+    statCard(stats.mostSubagentsSession ? String(stats.mostSubagentsSession.subagentCalls) : '0', 'Max Subagents', pc.blue),
   ];
   const [v3, l3] = buildCardLines(cards3);
   lines.push(v3);
@@ -560,7 +592,7 @@ export function renderTakomiStats(stats, opts = {}) {
     lines.push(renderTable('Longest Tasks', stats.topTasks.slice(0, 5), [
       { width: 6,  align: 'left',  get: r => pc.dim(dayOf(r.start).slice(5)) },
       { width: 9,  align: 'right', get: r => pc.cyan(ms(taskDuration(r))) },
-      { width: 8,  align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
+      { width: 11, align: 'right', get: r => pc.magenta(`${r.toolCalls} tools`) },
       { width: 34, align: 'left',  get: r => pc.white(taskLabel(r, 34)) },
     ]));
   }
