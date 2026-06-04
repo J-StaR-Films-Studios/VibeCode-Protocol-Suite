@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { platform } from "node:os";
+import { homedir, platform } from "node:os";
 import { spawn } from "node:child_process";
 
 type NotifySoundConfig = {
@@ -10,10 +10,11 @@ type NotifySoundConfig = {
 
 type NotifyMethod = "auto" | "wav";
 
-const CONFIG_PATH = join(process.cwd(), ".pi", "notify-sound.json");
-const WAV_PATH = join(process.cwd(), ".pi", "notify-sound.wav");
-const PS1_PATH = join(process.cwd(), ".pi", "notify-sound.ps1");
-const VBS_PATH = join(process.cwd(), ".pi", "notify-sound.vbs");
+const GLOBAL_NOTIFY_DIR = join(homedir(), ".pi", "agent", "notify-sound");
+const CONFIG_PATH = join(GLOBAL_NOTIFY_DIR, "notify-sound.json");
+const WAV_PATH = join(GLOBAL_NOTIFY_DIR, "notify-sound.wav");
+const PS1_PATH = join(GLOBAL_NOTIFY_DIR, "notify-sound.ps1");
+const VBS_PATH = join(GLOBAL_NOTIFY_DIR, "notify-sound.vbs");
 const STALE_AGENT_START_MS = 24 * 60 * 60 * 1000;
 
 let config: NotifySoundConfig = { enabled: true };
