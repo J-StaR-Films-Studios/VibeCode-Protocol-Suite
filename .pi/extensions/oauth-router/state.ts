@@ -1,6 +1,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import { STATE_PATH, writeJsonFile } from "./config.ts";
-import type { RouterAccountState, RouterRuntimeState, RoutingPolicyName } from "./types.ts";
+import type {
+  RouterAccountState,
+  RouterProviderUsageSnapshot,
+  RouterRuntimeState,
+  RouterUsageSample,
+  RouterUsageSummary,
+  RouterUsageWindowSummary,
+  RoutingPolicyName,
+} from "./types.ts";
+import type { AssistantMessage } from "@mariozechner/pi-ai";
+
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const USAGE_RETENTION_MS = WEEK_MS + 24 * 60 * 60 * 1000;
 
 const DEFAULT_STATE: RouterRuntimeState = {
   version: 1,
@@ -10,22 +23,103 @@ const DEFAULT_STATE: RouterRuntimeState = {
   accounts: {},
 };
 
+function finiteNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function optionalFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeUsageSample(input: Partial<RouterUsageSample>): RouterUsageSample | undefined {
+  const at = finiteNumber(input.at, 0);
+  if (!at) return undefined;
+  return {
+    at,
+    model: typeof input.model === "string" && input.model ? input.model : "unknown",
+    status: optionalFiniteNumber(input.status),
+    input: finiteNumber(input.input),
+    output: finiteNumber(input.output),
+    cacheRead: finiteNumber(input.cacheRead),
+    cacheWrite: finiteNumber(input.cacheWrite),
+    totalTokens: finiteNumber(input.totalTokens),
+    costTotal: finiteNumber(input.costTotal),
+  };
+}
+
+function normalizeUsageSamples(input: unknown): RouterUsageSample[] {
+  if (!Array.isArray(input)) return [];
+  const cutoff = Date.now() - USAGE_RETENTION_MS;
+  return input
+    .map((sample) => normalizeUsageSample(sample as Partial<RouterUsageSample>))
+    .filter((sample): sample is RouterUsageSample => Boolean(sample))
+    .filter((sample) => sample.at >= cutoff)
+    .sort((a, b) => a.at - b.at);
+}
+
+function normalizeProviderUsage(input: unknown): RouterProviderUsageSnapshot | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const snapshot = input as Partial<RouterProviderUsageSnapshot>;
+  const fetchedAt = optionalFiniteNumber(snapshot.fetchedAt);
+  if (!fetchedAt) return undefined;
+  const source =
+    snapshot.source === "token-claims" || snapshot.source === "provider" || snapshot.source === "local" || snapshot.source === "unavailable"
+      ? snapshot.source
+      : "unavailable";
+  return {
+    ...snapshot,
+    fetchedAt,
+    source,
+  };
+}
+
 function normalizeAccountState(accountId: string, input?: Partial<RouterAccountState>): RouterAccountState {
   return {
     accountId,
     authHealth: input?.authHealth === "invalid" ? "invalid" : "ok",
-    cooldownUntil: Number.isFinite(input?.cooldownUntil) ? input?.cooldownUntil : undefined,
-    penaltyUntil: Number.isFinite(input?.penaltyUntil) ? input?.penaltyUntil : undefined,
-    lastUsedAt: Number.isFinite(input?.lastUsedAt) ? input?.lastUsedAt : undefined,
-    lastTriedAt: Number.isFinite(input?.lastTriedAt) ? input?.lastTriedAt : undefined,
+    cooldownUntil: optionalFiniteNumber(input?.cooldownUntil),
+    penaltyUntil: optionalFiniteNumber(input?.penaltyUntil),
+    lastUsedAt: optionalFiniteNumber(input?.lastUsedAt),
+    lastTriedAt: optionalFiniteNumber(input?.lastTriedAt),
     lastModel: typeof input?.lastModel === "string" ? input.lastModel : undefined,
-    lastStatus: Number.isFinite(input?.lastStatus) ? input?.lastStatus : undefined,
+    lastStatus: optionalFiniteNumber(input?.lastStatus),
     lastError: typeof input?.lastError === "string" ? input.lastError : undefined,
-    failures: Number.isFinite(input?.failures) ? input!.failures! : 0,
-    rateLimitCount: Number.isFinite(input?.rateLimitCount) ? input!.rateLimitCount! : 0,
-    authFailureCount: Number.isFinite(input?.authFailureCount) ? input!.authFailureCount! : 0,
-    successCount: Number.isFinite(input?.successCount) ? input!.successCount! : 0,
+    failures: finiteNumber(input?.failures),
+    rateLimitCount: finiteNumber(input?.rateLimitCount),
+    authFailureCount: finiteNumber(input?.authFailureCount),
+    successCount: finiteNumber(input?.successCount),
+    usageSamples: normalizeUsageSamples(input?.usageSamples),
+    providerUsage: normalizeProviderUsage(input?.providerUsage),
   };
+}
+
+function usageFromMessage(usage: AssistantMessage["usage"]): Omit<RouterUsageSample, "at" | "model" | "status"> {
+  return {
+    input: finiteNumber(usage?.input),
+    output: finiteNumber(usage?.output),
+    cacheRead: finiteNumber(usage?.cacheRead),
+    cacheWrite: finiteNumber(usage?.cacheWrite),
+    totalTokens: finiteNumber(usage?.totalTokens),
+    costTotal: finiteNumber(usage?.cost?.total),
+  };
+}
+
+function summarizeWindow(label: RouterUsageWindowSummary["label"], samples: RouterUsageSample[], windowMs: number, until = Date.now()): RouterUsageWindowSummary {
+  const since = until - windowMs;
+  const selected = samples.filter((sample) => sample.at >= since && sample.at <= until);
+  return selected.reduce<RouterUsageWindowSummary>(
+    (summary, sample) => ({
+      ...summary,
+      requests: summary.requests + 1,
+      input: summary.input + sample.input,
+      output: summary.output + sample.output,
+      cacheRead: summary.cacheRead + sample.cacheRead,
+      cacheWrite: summary.cacheWrite + sample.cacheWrite,
+      totalTokens: summary.totalTokens + sample.totalTokens,
+      costTotal: summary.costTotal + sample.costTotal,
+    }),
+    { label, since, until, requests: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, costTotal: 0 },
+  );
 }
 
 export class RouterStateStore {
@@ -128,6 +222,45 @@ export class RouterStateStore {
     account.penaltyUntil = undefined;
     account.failures = 0;
     account.successCount += 1;
+    this.save();
+  }
+
+  recordUsage(accountId: string, modelId: string, usage: AssistantMessage["usage"], status?: number) {
+    const account = this.ensureAccount(accountId);
+    const cutoff = Date.now() - USAGE_RETENTION_MS;
+    account.usageSamples = [
+      ...account.usageSamples.filter((sample) => sample.at >= cutoff),
+      {
+        at: Date.now(),
+        model: modelId,
+        status,
+        ...usageFromMessage(usage),
+      },
+    ];
+    this.save();
+  }
+
+  getUsageSummary(accountId: string): RouterUsageSummary {
+    const account = this.ensureAccount(accountId);
+    const until = Date.now();
+    return {
+      accountId,
+      fiveHour: summarizeWindow("5h", account.usageSamples, FIVE_HOURS_MS, until),
+      weekly: summarizeWindow("weekly", account.usageSamples, WEEK_MS, until),
+      provider: account.providerUsage,
+    };
+  }
+
+  setProviderUsage(accountId: string, snapshot: RouterProviderUsageSnapshot) {
+    const account = this.ensureAccount(accountId);
+    account.providerUsage = snapshot;
+    this.save();
+  }
+
+  resetUsage(accountId: string) {
+    const account = this.ensureAccount(accountId);
+    account.usageSamples = [];
+    account.providerUsage = undefined;
     this.save();
   }
 

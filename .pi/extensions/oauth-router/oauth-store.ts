@@ -103,6 +103,16 @@ export class RouterAccountStore {
     this.save();
   }
 
+  rename(id: string, label: string) {
+    const account = this.get(id);
+    if (!account) throw new Error(`Unknown account: ${id}`);
+    const nextLabel = label.trim();
+    if (!nextLabel) throw new Error("Account label cannot be empty");
+    account.label = nextLabel;
+    account.updatedAt = Date.now();
+    this.update(account);
+  }
+
   setEnabled(id: string, enabled: boolean) {
     const account = this.get(id);
     if (!account) throw new Error(`Unknown account: ${id}`);
