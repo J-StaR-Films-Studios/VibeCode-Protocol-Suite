@@ -102,6 +102,11 @@ function normalizeAccountState(accountId: string, input?: Partial<RouterAccountS
   };
 }
 
+function isAbortLikeError(message?: string): boolean {
+  const lower = (message ?? "").toLowerCase();
+  return lower.includes("abort") || lower.includes("cancelled") || lower.includes("canceled");
+}
+
 function usageFromMessage(usage: AssistantMessage["usage"]): Omit<RouterUsageSample, "at" | "model" | "status"> {
   return {
     input: finiteNumber(usage?.input),
@@ -337,6 +342,20 @@ export class RouterStateStore {
       account.cooldownUntil = undefined;
       account.penaltyUntil = undefined;
       account.lastError = undefined;
+    });
+  }
+
+  clearAbortHealth(accountIds: string[]) {
+    this.mutate(() => {
+      for (const accountId of accountIds) {
+        const account = this.ensureAccountInMemory(accountId);
+        if (!isAbortLikeError(account.lastError)) continue;
+        account.authHealth = "ok";
+        account.cooldownUntil = undefined;
+        account.penaltyUntil = undefined;
+        account.lastError = undefined;
+        account.lastStatus = undefined;
+      }
     });
   }
 }
