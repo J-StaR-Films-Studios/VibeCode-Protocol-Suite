@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import { renderTakomiSubagentCall, renderTakomiSubagentResult } from "./native-render";
-import { createTakomiPiSubagentsEngine } from "./pi-subagents-engine";
+import { executeTakomiSubagentTool } from "./tool-runner";
 
 const ChecklistItemSchema = Type.Object({
   text: Type.String(),
@@ -50,7 +50,6 @@ const SubagentParameters = Type.Object({
 });
 
 function registerSubagentTool(pi: ExtensionAPI): void {
-  const engine = createTakomiPiSubagentsEngine(pi);
   pi.registerTool({
     name: "takomi_subagent",
     label: "Takomi",
@@ -63,8 +62,8 @@ function registerSubagentTool(pi: ExtensionAPI): void {
       "If review sends work back to the same agent, reuse the same conversationId for continuity.",
     ],
     parameters: SubagentParameters,
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      return engine.execute(toolCallId, params, signal, onUpdate as any, ctx);
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      return executeTakomiSubagentTool(pi, params, signal, onUpdate as any, ctx);
     },
     renderCall: renderTakomiSubagentCall,
     renderResult: renderTakomiSubagentResult,

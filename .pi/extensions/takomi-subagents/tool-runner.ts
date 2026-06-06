@@ -58,6 +58,16 @@ function textResult<TDetails extends Record<string, unknown>>(text: string, deta
   return { content: [{ type: "text" as const, text }], details, isError };
 }
 
+function rawContentText(raw: unknown): string {
+  const content = (raw as { content?: unknown } | undefined)?.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => part && typeof part === "object" && "text" in part ? String((part as { text?: unknown }).text ?? "") : "")
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
 async function mapWithConcurrencyLimit<TIn, TOut>(
   items: TIn[],
   concurrency: number,
@@ -176,18 +186,20 @@ export async function executeTakomiSubagentTool(
       checklist: item.checklist,
     }, signal, undefined as any, ctx);
     const single = raw?.details?.results?.[0] ?? {};
+    const displayText = rawContentText(raw);
+    const messageText = single.messages?.map((message: any) => message?.content?.map((part: any) => part?.type === "text" ? part.text : "").filter(Boolean).join("\n")).filter(Boolean).join("\n\n") ?? "";
     const result: TakomiDispatchResult = {
       agent: single.agent ?? config.name,
       task: item.task,
       workflow: item.workflow,
       model: single.model ?? item.model,
-      warning: single.warning,
+      warning: single.skillsWarning ?? single.warning,
       thinking: item.thinking,
-      conversationId: single.conversationId ?? item.conversationId ?? `${config.name}-${Date.now()}`,
-      code: single.exitCode ?? 1,
-      output: single.messages?.map((message: any) => message?.content?.map((part: any) => part?.type === "text" ? part.text : "").filter(Boolean).join("\n")).filter(Boolean).join("\n\n") ?? "",
-      stderr: single.stderr ?? "",
-      preflight: raw?.content?.[0]?.text ?? "",
+      conversationId: item.conversationId ?? raw?.details?.runId ?? `${config.name}-${Date.now()}`,
+      code: typeof single.exitCode === "number" ? single.exitCode : raw?.isError ? 1 : 0,
+      output: single.finalOutput || messageText || displayText,
+      stderr: single.error ?? "",
+      preflight: displayText,
       sessionFile: single.sessionFile,
     };
     live.finish(index, result);

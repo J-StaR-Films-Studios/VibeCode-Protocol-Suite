@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { STATE_PATH, writeJsonFile } from "./config.ts";
+import { STATE_PATH, withJsonFileLock, writeJsonFile } from "./config.ts";
 import type {
   RouterAccountState,
   RouterProviderUsageSnapshot,
@@ -57,6 +57,12 @@ function normalizeUsageSamples(input: unknown): RouterUsageSample[] {
     .sort((a, b) => a.at - b.at);
 }
 
+function stripQuotaRaw(window: RouterProviderUsageSnapshot["fiveHour"]): RouterProviderUsageSnapshot["fiveHour"] {
+  if (!window) return undefined;
+  const { raw: _raw, ...safeWindow } = window;
+  return safeWindow;
+}
+
 function normalizeProviderUsage(input: unknown): RouterProviderUsageSnapshot | undefined {
   if (!input || typeof input !== "object") return undefined;
   const snapshot = input as Partial<RouterProviderUsageSnapshot>;
@@ -66,10 +72,13 @@ function normalizeProviderUsage(input: unknown): RouterProviderUsageSnapshot | u
     snapshot.source === "token-claims" || snapshot.source === "provider" || snapshot.source === "local" || snapshot.source === "unavailable"
       ? snapshot.source
       : "unavailable";
+  const { raw: _raw, ...safeSnapshot } = snapshot;
   return {
-    ...snapshot,
+    ...safeSnapshot,
     fetchedAt,
     source,
+    fiveHour: stripQuotaRaw(snapshot.fiveHour),
+    weekly: stripQuotaRaw(snapshot.weekly),
   };
 }
 
@@ -160,21 +169,40 @@ export class RouterStateStore {
     writeJsonFile(STATE_PATH, this.data, true);
   }
 
+  private mutate<T>(fn: () => T): T {
+    return withJsonFileLock(STATE_PATH, () => {
+      this.data = this.load(this.data.policy);
+      const result = fn();
+      this.save();
+      return result;
+    });
+  }
+
+  private ensureAccountInMemory(accountId: string): RouterAccountState {
+    if (!this.data.accounts[accountId]) {
+      this.data.accounts[accountId] = normalizeAccountState(accountId);
+    }
+    return this.data.accounts[accountId]!;
+  }
+
   snapshot(): RouterRuntimeState {
     return JSON.parse(JSON.stringify(this.data)) as RouterRuntimeState;
   }
 
   getPolicy(defaultPolicy: RoutingPolicyName): RoutingPolicyName {
     if (this.data.policy !== "round-robin" && this.data.policy !== "weighted-round-robin") {
-      this.data.policy = defaultPolicy;
-      this.save();
+      return this.mutate(() => {
+        this.data.policy = defaultPolicy;
+        return this.data.policy;
+      });
     }
     return this.data.policy;
   }
 
   setPolicy(policy: RoutingPolicyName) {
-    this.data.policy = policy;
-    this.save();
+    this.mutate(() => {
+      this.data.policy = policy;
+    });
   }
 
   getCursor(policy: RoutingPolicyName): number {
@@ -182,62 +210,63 @@ export class RouterStateStore {
   }
 
   advanceCursor(policy: RoutingPolicyName, next: number) {
-    if (policy === "weighted-round-robin") {
-      this.data.weightedCursor = next;
-    } else {
-      this.data.rrCursor = next;
-    }
-    this.save();
+    this.mutate(() => {
+      if (policy === "weighted-round-robin") {
+        this.data.weightedCursor = next;
+      } else {
+        this.data.rrCursor = next;
+      }
+    });
   }
 
   ensureAccount(accountId: string): RouterAccountState {
-    if (!this.data.accounts[accountId]) {
-      this.data.accounts[accountId] = normalizeAccountState(accountId);
-      this.save();
-    }
-    return this.data.accounts[accountId]!;
+    return this.mutate(() => this.ensureAccountInMemory(accountId));
   }
 
   pruneAccountIds(validIds: string[]) {
-    const valid = new Set(validIds);
-    for (const id of Object.keys(this.data.accounts)) {
-      if (!valid.has(id)) delete this.data.accounts[id];
-    }
-    this.save();
+    this.mutate(() => {
+      const valid = new Set(validIds);
+      for (const id of Object.keys(this.data.accounts)) {
+        if (!valid.has(id)) delete this.data.accounts[id];
+      }
+    });
   }
 
   markAttempt(accountId: string, modelId: string) {
-    const account = this.ensureAccount(accountId);
-    account.lastTriedAt = Date.now();
-    account.lastModel = modelId;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.lastTriedAt = Date.now();
+      account.lastModel = modelId;
+    });
   }
 
   markSuccess(accountId: string, status?: number) {
-    const account = this.ensureAccount(accountId);
-    account.authHealth = "ok";
-    account.lastUsedAt = Date.now();
-    account.lastStatus = status;
-    account.lastError = undefined;
-    account.penaltyUntil = undefined;
-    account.failures = 0;
-    account.successCount += 1;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.authHealth = "ok";
+      account.lastUsedAt = Date.now();
+      account.lastStatus = status;
+      account.lastError = undefined;
+      account.penaltyUntil = undefined;
+      account.failures = 0;
+      account.successCount += 1;
+    });
   }
 
   recordUsage(accountId: string, modelId: string, usage: AssistantMessage["usage"], status?: number) {
-    const account = this.ensureAccount(accountId);
-    const cutoff = Date.now() - USAGE_RETENTION_MS;
-    account.usageSamples = [
-      ...account.usageSamples.filter((sample) => sample.at >= cutoff),
-      {
-        at: Date.now(),
-        model: modelId,
-        status,
-        ...usageFromMessage(usage),
-      },
-    ];
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      const cutoff = Date.now() - USAGE_RETENTION_MS;
+      account.usageSamples = [
+        ...account.usageSamples.filter((sample) => sample.at >= cutoff),
+        {
+          at: Date.now(),
+          model: modelId,
+          status,
+          ...usageFromMessage(usage),
+        },
+      ];
+    });
   }
 
   getUsageSummary(accountId: string): RouterUsageSummary {
@@ -252,56 +281,62 @@ export class RouterStateStore {
   }
 
   setProviderUsage(accountId: string, snapshot: RouterProviderUsageSnapshot) {
-    const account = this.ensureAccount(accountId);
-    account.providerUsage = snapshot;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.providerUsage = snapshot;
+    });
   }
 
   resetUsage(accountId: string) {
-    const account = this.ensureAccount(accountId);
-    account.usageSamples = [];
-    account.providerUsage = undefined;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.usageSamples = [];
+      account.providerUsage = undefined;
+    });
   }
 
   markRateLimit(accountId: string, retryAfterMs: number, status = 429, message = "Rate limited") {
-    const account = this.ensureAccount(accountId);
-    const now = Date.now();
-    account.lastStatus = status;
-    account.lastError = message;
-    account.cooldownUntil = now + Math.max(1_000, retryAfterMs);
-    account.failures += 1;
-    account.rateLimitCount += 1;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      const now = Date.now();
+      account.lastStatus = status;
+      account.lastError = message;
+      account.cooldownUntil = now + Math.max(1_000, retryAfterMs);
+      account.failures += 1;
+      account.rateLimitCount += 1;
+    });
   }
 
   markAuthFailure(accountId: string, status = 401, message = "Authentication failed") {
-    const account = this.ensureAccount(accountId);
-    account.authHealth = "invalid";
-    account.lastStatus = status;
-    account.lastError = message;
-    account.failures += 1;
-    account.authFailureCount += 1;
-    account.cooldownUntil = undefined;
-    account.penaltyUntil = undefined;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.authHealth = "invalid";
+      account.lastStatus = status;
+      account.lastError = message;
+      account.failures += 1;
+      account.authFailureCount += 1;
+      account.cooldownUntil = undefined;
+      account.penaltyUntil = undefined;
+    });
   }
 
   markTransientFailure(accountId: string, penaltyMs: number, status = 500, message = "Transient upstream failure") {
-    const account = this.ensureAccount(accountId);
-    account.lastStatus = status;
-    account.lastError = message;
-    account.penaltyUntil = Date.now() + Math.max(1_000, penaltyMs);
-    account.failures += 1;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.lastStatus = status;
+      account.lastError = message;
+      account.penaltyUntil = Date.now() + Math.max(1_000, penaltyMs);
+      account.failures += 1;
+    });
   }
 
   clearHealth(accountId: string) {
-    const account = this.ensureAccount(accountId);
-    account.authHealth = "ok";
-    account.cooldownUntil = undefined;
-    account.penaltyUntil = undefined;
-    account.lastError = undefined;
-    this.save();
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.authHealth = "ok";
+      account.cooldownUntil = undefined;
+      account.penaltyUntil = undefined;
+      account.lastError = undefined;
+    });
   }
 }
