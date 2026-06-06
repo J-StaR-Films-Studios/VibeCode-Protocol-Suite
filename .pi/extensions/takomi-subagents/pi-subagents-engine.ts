@@ -108,6 +108,16 @@ function modelWithThinking(model: string | undefined, thinking: string | undefin
   return `${model}:${level}`;
 }
 
+function safeConversationSlug(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "conversation";
+}
+
+function stableConversationSessionDir(rootCwd: string, tasks: TakomiSubagentToolTask[]): string | undefined {
+  const ids = tasks.map((task) => task.conversationId).filter((id): id is string => Boolean(id));
+  if (!ids.length) return undefined;
+  return path.join(rootCwd, ".pi", "takomi", "subagent-conversations", safeConversationSlug(ids.join("__")));
+}
+
 function defaultChildExtensions(): string[] {
   // Child runs must not auto-load every user/project extension because this repo
   // currently has both global and project Takomi extensions, which causes tool
@@ -151,6 +161,7 @@ function mapSingleTask(task: TakomiSubagentToolTask, names: Set<string>) {
     task: buildTakomiTaskPrompt({ ...task, agent: resolvedAgent }),
     cwd: task.cwd,
     model: modelWithThinking(task.model, task.thinking),
+    skill: task.skills?.length ? task.skills : undefined,
   };
 }
 
@@ -167,6 +178,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
     async: false,
     clarify: false,
     includeProgress: true,
+    sessionDir: stableConversationSessionDir(rootCwd, tasks),
   };
 
   if (mode === "single") {
@@ -178,6 +190,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
       task: mapped.task,
       cwd: task.cwd ? path.resolve(rootCwd, task.cwd) : rootCwd,
       model: mapped.model,
+      skill: mapped.skill,
     };
   }
 
@@ -197,6 +210,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
         task: mapped.task,
         cwd: task.cwd,
         model: mapped.model,
+        skill: mapped.skill,
       };
     }),
   };

@@ -2,7 +2,7 @@ import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import type { TakomiSubagentToolParams } from "./tool-runner";
-import type { Details } from "./pi-subagents-internal";
+import { renderNativeSubagentResult, type Details } from "./pi-subagents-internal";
 
 type ToolResult = AgentToolResult<Details>;
 
@@ -30,8 +30,11 @@ export function renderTakomiSubagentCall(params: TakomiSubagentToolParams, theme
   );
 }
 
-export function renderTakomiSubagentResult(result: ToolResult, _options: { expanded?: boolean; isPartial?: boolean }, theme: Theme, _context: any) {
-  const status = (result as any)?.error ? "failed" : "completed";
+export function renderTakomiSubagentResult(result: ToolResult, options: { expanded?: boolean; isPartial?: boolean }, theme: Theme, context: any): any {
+  const native = renderNativeSubagentResult(result, options, theme, context);
+  if (native) return native;
+
+  const status = (result as any)?.isError ? "failed" : "completed";
   const text = typeof (result as any)?.content === "string"
     ? (result as any).content
     : Array.isArray((result as any)?.content)

@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import type { OAuthCredentials } from "@mariozechner/pi-ai";
-import { getOAuthProvider } from "@mariozechner/pi-ai/oauth";
+import type { OAuthCredentials, OAuthSelectPrompt } from "@earendil-works/pi-ai/oauth";
+import { getOAuthProvider } from "@earendil-works/pi-ai/oauth";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { RouterProviderQuotaWindow, RouterProviderUsageSnapshot, RouterUpstreamConfig, StoredRouterAccount } from "./types.ts";
 
@@ -52,6 +52,17 @@ async function promptRequired(ctx: ExtensionContext, message: string, placeholde
   return response;
 }
 
+async function selectOAuthOption(ctx: ExtensionContext, prompt: OAuthSelectPrompt): Promise<string | undefined> {
+  if (!prompt.options.length) return undefined;
+  if (!ctx.hasUI) return prompt.options[0]?.id;
+
+  const labels = prompt.options.map((option) => `${option.id} — ${option.label}`);
+  const choice = await ctx.ui.select(prompt.message, labels);
+  if (!choice) return undefined;
+  const id = choice.split(" — ")[0]?.trim();
+  return prompt.options.find((option) => option.id === id)?.id;
+}
+
 export async function createAccountFromUpstream(
   upstream: RouterUpstreamConfig,
   label: string,
@@ -92,12 +103,21 @@ export async function createAccountFromUpstream(
       ctx.ui.notify(`${provider.name}: ${info.instructions ?? "Finish login in your browser."}`, "info");
       ctx.ui.notify(info.url, "info");
     },
+    onDeviceCode(info) {
+      openUrlInBrowser(info.verificationUri);
+      ctx.ui.notify(`${provider.name}: device code ${info.userCode}`, "info");
+      ctx.ui.notify(`Open ${info.verificationUri} and enter code ${info.userCode}`, "info");
+    },
     onPrompt(prompt) {
       return promptRequired(ctx, prompt.message, prompt.placeholder);
     },
     onProgress(message) {
       ctx.ui.notify(message, "info");
     },
+    onSelect(prompt) {
+      return selectOAuthOption(ctx, prompt);
+    },
+    signal: ctx.signal,
   });
 
   const normalized = normalizeCredentials(credentials);
