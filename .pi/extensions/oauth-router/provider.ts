@@ -82,6 +82,12 @@ function createErrorMessage({ model, message, stopReason = "error" }: RouterErro
   };
 }
 
+function isAbortLike(message?: string, signal?: AbortSignal, stopReason?: string): boolean {
+  if (signal?.aborted || stopReason === "aborted") return true;
+  const lower = (message ?? "").toLowerCase();
+  return lower.includes("abort") || lower.includes("cancelled") || lower.includes("canceled");
+}
+
 function classifyFailure(
   status: number | undefined,
   headers: Record<string, string>,
@@ -408,7 +414,17 @@ export class RouterRuntime {
 
     for await (const event of inner) {
       if (event.type === "error") {
-        const failure = classifyFailure(responseStatus, responseHeaders, event.error.errorMessage || "Upstream request failed", this.config);
+        const message = event.error.errorMessage || "Upstream request failed";
+        if (isAbortLike(message, options?.signal, event.error.stopReason)) {
+          outerStream.push({
+            ...event,
+            reason: "aborted",
+            error: { ...event.error, stopReason: "aborted", errorMessage: message },
+          });
+          return { completed: true, emittedMeaningfulOutput };
+        }
+
+        const failure = classifyFailure(responseStatus, responseHeaders, message, this.config);
         this.markFailure(selection.account.id, failure);
 
         if (!emittedMeaningfulOutput) {
@@ -455,6 +471,7 @@ export class RouterRuntime {
 
   stream(model: Model<Api>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream {
     this.reloadConfig();
+    this.state.clearAbortHealth(this.accounts.list().map((account) => account.id));
     const outer = createAssistantMessageEventStream();
 
     (async () => {
@@ -464,6 +481,12 @@ export class RouterRuntime {
 
       try {
         while (true) {
+          if (options?.signal?.aborted) {
+            outer.push({ type: "error", reason: "aborted", error: createErrorMessage({ model, message: "Request was aborted", stopReason: "aborted" }) });
+            outer.end();
+            return;
+          }
+
           const eligible = this.getEligibleAccounts(model.id, tried);
           const policy = this.getPolicy();
           const cursor = this.state.getCursor(policy);
@@ -487,6 +510,11 @@ export class RouterRuntime {
             selection = await this.prepareSelection(picked.selected, model, options);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            if (isAbortLike(message, options?.signal)) {
+              outer.push({ type: "error", reason: "aborted", error: createErrorMessage({ model, message, stopReason: "aborted" }) });
+              outer.end();
+              return;
+            }
             lastFailure = { kind: "auth", status: 401, message };
             this.markFailure(picked.selected.account.id, lastFailure);
             continue;
@@ -508,7 +536,8 @@ export class RouterRuntime {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        outer.push({ type: "error", reason: "error", error: createErrorMessage({ model, message }) });
+        const aborted = isAbortLike(message, options?.signal);
+        outer.push({ type: "error", reason: aborted ? "aborted" : "error", error: createErrorMessage({ model, message, stopReason: aborted ? "aborted" : "error" }) });
         outer.end();
       }
     })();
