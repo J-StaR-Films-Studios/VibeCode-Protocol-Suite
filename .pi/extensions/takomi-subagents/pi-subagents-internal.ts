@@ -9,7 +9,11 @@
 const dynamicImport = async <T = any>(specifier: string): Promise<T> => import(specifier) as Promise<T>;
 const spec = (path: string) => `pi-subagents/${path}.ts`;
 
+let cachedInternals: any | null = null;
+
 export async function loadPiSubagentsInternals() {
+  if (cachedInternals) return cachedInternals;
+
   const [executorModule, agentsModule, sharedTypesModule, renderModule] = await Promise.all([
     dynamicImport(spec("src/runs/foreground/subagent-executor")),
     dynamicImport(spec("src/agents/agents")),
@@ -17,14 +21,21 @@ export async function loadPiSubagentsInternals() {
     dynamicImport(spec("src/tui/render")),
   ]);
 
-  return {
+  cachedInternals = {
     createSubagentExecutor: executorModule.createSubagentExecutor,
     discoverPiAgents: agentsModule.discoverAgents,
     DEFAULT_ARTIFACT_CONFIG: sharedTypesModule.DEFAULT_ARTIFACT_CONFIG,
     TEMP_ARTIFACTS_DIR: sharedTypesModule.TEMP_ARTIFACTS_DIR,
     renderSubagentResult: renderModule.renderSubagentResult,
-    syncResultAnimation: renderModule.syncResultAnimation,
+    clearLegacyResultAnimationTimer: renderModule.clearLegacyResultAnimationTimer,
   };
+  return cachedInternals;
+}
+
+export function renderNativeSubagentResult(result: unknown, options: unknown, theme: unknown, context: unknown): unknown | undefined {
+  if (!cachedInternals?.renderSubagentResult) return undefined;
+  cachedInternals.clearLegacyResultAnimationTimer?.(context);
+  return cachedInternals.renderSubagentResult(result, options, theme);
 }
 
 export type SubagentParamsLike = any;

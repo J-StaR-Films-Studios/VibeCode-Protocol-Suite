@@ -46,7 +46,7 @@
     "commander": "^13.1.0",
     "figlet": "^1.8.0",
     "fs-extra": "^11.3.0",
-    "pi-subagents": "0.24.0",
+    "pi-subagents": "0.28.0",
     "picocolors": "^1.1.1",
     "prompts": "^2.4.2"
   },
@@ -55,6 +55,10 @@
   },
   "homepage": "https://github.com/JStaRFilms/VibeCode-Protocol-Suite#readme",
   "devDependencies": {
+    "@earendil-works/pi-agent-core": "^0.78.1",
+    "@earendil-works/pi-ai": "^0.78.1",
+    "@earendil-works/pi-coding-agent": "^0.78.1",
+    "@earendil-works/pi-tui": "^0.78.1",
     "@mariozechner/pi-ai": "^0.70.2",
     "@mariozechner/pi-coding-agent": "^0.70.2",
     "@types/node": "^25.5.2",
