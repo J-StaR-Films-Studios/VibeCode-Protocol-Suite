@@ -24,6 +24,11 @@ export interface RouterModelConfig {
   };
 }
 
+export interface RouterProviderUsageProbeConfig {
+  enabled?: boolean;
+  endpoints?: string[];
+}
+
 export interface RouterUpstreamConfig {
   id: string;
   label: string;
@@ -35,6 +40,7 @@ export interface RouterUpstreamConfig {
   enabled: boolean;
   modelIds: string[];
   headers?: Record<string, string>;
+  usageProbe?: RouterProviderUsageProbeConfig;
 }
 
 export interface RouterConfig {
@@ -68,6 +74,68 @@ export interface RouterCredentialStore {
   accounts: StoredRouterAccount[];
 }
 
+export interface RouterUsageSample {
+  at: number;
+  model: string;
+  status?: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  costTotal: number;
+}
+
+export interface RouterUsageWindowSummary {
+  label: "5h" | "weekly";
+  since: number;
+  until: number;
+  requests: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  costTotal: number;
+}
+
+export interface RouterProviderQuotaWindow {
+  label: string;
+  used?: number;
+  limit?: number;
+  remaining?: number;
+  percentRemaining?: number;
+  resetAt?: number;
+  raw?: Record<string, unknown>;
+}
+
+export interface RouterProviderUsageSnapshot {
+  fetchedAt: number;
+  source: "token-claims" | "provider" | "local" | "unavailable";
+  accountId?: string;
+  planType?: string;
+  email?: string;
+  subject?: string;
+  issuer?: string;
+  audience?: string | string[];
+  expires?: number;
+  fiveHour?: RouterProviderQuotaWindow;
+  weekly?: RouterProviderQuotaWindow;
+  endpoint?: string;
+  status?: number;
+  rateLimitHeaders?: Record<string, string>;
+  raw?: unknown;
+  claimKeys?: string[];
+  message?: string;
+}
+
+export interface RouterUsageSummary {
+  accountId: string;
+  fiveHour: RouterUsageWindowSummary;
+  weekly: RouterUsageWindowSummary;
+  provider?: RouterProviderUsageSnapshot;
+}
+
 export interface RouterAccountState {
   accountId: string;
   authHealth: AuthHealth;
@@ -82,6 +150,8 @@ export interface RouterAccountState {
   rateLimitCount: number;
   authFailureCount: number;
   successCount: number;
+  usageSamples: RouterUsageSample[];
+  providerUsage?: RouterProviderUsageSnapshot;
 }
 
 export interface RouterRuntimeState {

@@ -96,6 +96,16 @@ const DEFAULT_UPSTREAMS: RouterUpstreamConfig[] = [
     oauthProviderId: "openai-codex",
     enabled: true,
     modelIds: ["gpt-5.1", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5"],
+    usageProbe: {
+      enabled: true,
+      endpoints: [
+        "/wham/usage",
+        "/codex/usage",
+        "/codex/limits",
+        "/codex/rate_limits",
+        "/codex/subscription",
+      ],
+    },
   },
 ];
 
@@ -160,7 +170,12 @@ function mergeUpstreamConfigs(candidateUpstreams: RouterUpstreamConfig[] | undef
     }
 
     const modelIds = Array.from(new Set([...(previous.modelIds ?? []), ...(upstream.modelIds ?? [])]));
-    merged.set(upstream.id, { ...previous, ...deepClone(upstream), id: upstream.id, modelIds });
+    const usageProbe = {
+      ...(previous.usageProbe ?? {}),
+      ...(upstream.usageProbe ?? {}),
+      endpoints: Array.from(new Set([...(previous.usageProbe?.endpoints ?? []), ...(upstream.usageProbe?.endpoints ?? [])])),
+    };
+    merged.set(upstream.id, { ...previous, ...deepClone(upstream), id: upstream.id, modelIds, usageProbe });
   }
   return Array.from(merged.values());
 }

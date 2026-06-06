@@ -13,7 +13,7 @@ import {
 } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadRouterConfig } from "./config.ts";
-import { refreshAccountCredentials, getApiKeyForAccount } from "./oauth-flow.ts";
+import { refreshAccountCredentials, getApiKeyForAccount, refreshProviderUsageSnapshot } from "./oauth-flow.ts";
 import { RouterAccountStore } from "./oauth-store.ts";
 import { chooseEligibleAccount } from "./policies.ts";
 import { RouterStateStore } from "./state.ts";
@@ -182,6 +182,10 @@ export class RouterRuntime {
     this.state.pruneAccountIds(this.accounts.list().map((account) => account.id));
   }
 
+  renameAccount(id: string, label: string) {
+    this.accounts.rename(id, label);
+  }
+
   setEnabled(id: string, enabled: boolean) {
     this.accounts.setEnabled(id, enabled);
     if (enabled) this.state.clearHealth(id);
@@ -189,6 +193,38 @@ export class RouterRuntime {
 
   setWeight(id: string, weight: number) {
     this.accounts.setWeight(id, weight);
+  }
+
+  clearAccountHealth(id: string) {
+    this.state.clearHealth(id);
+  }
+
+  getUsageSummaries() {
+    this.reloadConfig();
+    return this.accounts.list().map((account) => this.state.getUsageSummary(account.id));
+  }
+
+  getUsageSummary(id: string) {
+    this.reloadConfig();
+    if (!this.accounts.get(id)) throw new Error(`Unknown account: ${id}`);
+    return this.state.getUsageSummary(id);
+  }
+
+  async refreshUsageSnapshot(id: string) {
+    this.reloadConfig();
+    const account = this.accounts.get(id);
+    if (!account) throw new Error(`Unknown account: ${id}`);
+    const upstream = this.getUpstream(account.upstreamId);
+    if (!upstream) throw new Error(`Unknown upstream for account ${id}: ${account.upstreamId}`);
+    const snapshot = await refreshProviderUsageSnapshot(account, upstream);
+    this.state.setProviderUsage(id, snapshot);
+    return snapshot;
+  }
+
+  resetUsage(id: string) {
+    this.reloadConfig();
+    if (!this.accounts.get(id)) throw new Error(`Unknown account: ${id}`);
+    this.state.resetUsage(id);
   }
 
   setPolicy(policy: RoutingPolicyName) {
@@ -400,6 +436,7 @@ export class RouterRuntime {
           for (const pending of buffered) outerStream.push(pending);
           buffered.length = 0;
         }
+        this.state.recordUsage(selection.account.id, selection.modelConfig.id, event.message.usage, responseStatus ?? 200);
         this.state.markSuccess(selection.account.id, responseStatus ?? 200);
         return { completed: true, emittedMeaningfulOutput };
       }
