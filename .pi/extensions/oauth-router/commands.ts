@@ -256,7 +256,6 @@ export function formatUsageRawReport(runtime: RouterRuntime, accountId?: string)
       formatUsageWindow(summary.fiveHour),
       formatUsageWindow(summary.weekly),
       ...formatProviderRaw(summary),
-      summary.provider?.raw ? `raw:\n${JSON.stringify(summary.provider.raw, null, 2)}` : undefined,
     ].filter((line): line is string => Boolean(line)).join("\n");
   });
   return ["# oauth-router usage raw", "", ...rows].join("\n");

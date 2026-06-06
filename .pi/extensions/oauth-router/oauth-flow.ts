@@ -253,14 +253,13 @@ function quotaFromRecord(label: string, record: Record<string, unknown>): Router
     remaining,
     percentRemaining: percentRemaining !== undefined ? percentRemaining : limit && remaining !== undefined ? (remaining / limit) * 100 : undefined,
     resetAt,
-    raw: Object.fromEntries(Object.entries(record).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))),
   };
 }
 
 function mergeQuota(previous: RouterProviderQuotaWindow | undefined, next: RouterProviderQuotaWindow | undefined): RouterProviderQuotaWindow | undefined {
   if (!previous) return next;
   if (!next) return previous;
-  return { ...previous, ...next, raw: { ...(previous.raw ?? {}), ...(next.raw ?? {}) } };
+  return { ...previous, ...next };
 }
 
 function extractProviderUsage(json: unknown): Pick<RouterProviderUsageSnapshot, "planType" | "fiveHour" | "weekly"> {
@@ -360,7 +359,6 @@ export async function refreshProviderUsageSnapshot(account: StoredRouterAccount,
           endpoint: url,
           status: response.status,
           rateLimitHeaders: lastHeaders,
-          raw: json,
           message: extracted.fiveHour || extracted.weekly
             ? "Provider-side quota metadata was extracted from an authenticated ChatGPT/Codex endpoint."
             : "Provider endpoint responded, but no 5h/weekly quota windows were found; token identity metadata is shown.",

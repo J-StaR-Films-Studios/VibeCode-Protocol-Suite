@@ -335,6 +335,22 @@ function getCompletionGateError(task: Pick<OrchestratorTask, "id" | "title" | "c
   ].join("\n");
 }
 
+function assertSafeSessionId(sessionId: string): void {
+  if (!/^orch-\d{8}-\d{6}$/.test(sessionId)) {
+    throw new Error(`Invalid Takomi sessionId '${sessionId}'. Expected canonical format orch-YYYYMMDD-HHMMSS.`);
+  }
+}
+
+function assertSafeTaskId(taskId: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(taskId)) {
+    throw new Error(`Invalid Takomi task id '${taskId}'. Use only letters, numbers, '_' or '-' and do not include path separators.`);
+  }
+}
+
+function assertSafeTasks(tasks: OrchestratorTask[]): void {
+  for (const task of tasks) assertSafeTaskId(task.id);
+}
+
 function getTaskFolder(paths: ReturnType<typeof getSessionPaths>, status: OrchestratorTask["status"]) {
   switch (status) {
     case "in-progress":
@@ -375,6 +391,7 @@ async function hasGenesisArtifacts(cwd: string): Promise<boolean> {
 }
 
 async function loadSessionState(cwd: string, sessionId: string): Promise<{ state: OrchestratorSessionState; paths: ReturnType<typeof getSessionPaths> }> {
+  assertSafeSessionId(sessionId);
   const paths = getSessionPaths(cwd, sessionId);
   const raw = await readFile(paths.stateFile, "utf8");
   const parsed = JSON.parse(raw) as Partial<OrchestratorSessionState>;
@@ -452,6 +469,8 @@ async function writeTaskArtifact(paths: ReturnType<typeof getSessionPaths>, stat
 
 async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState) {
   const normalizedState = normalizeSessionState(session);
+  assertSafeSessionId(normalizedState.sessionId);
+  assertSafeTasks(normalizedState.tasks);
   const paths = getSessionPaths(cwd, normalizedState.sessionId);
   await mkdir(paths.pending, { recursive: true });
   await mkdir(paths.inProgress, { recursive: true });
@@ -527,6 +546,7 @@ async function materializeTasksFromInput(
   const nextTasks = [...currentTasks];
 
   for (const task of incoming) {
+    if (task.id) assertSafeTaskId(task.id);
     const stage = task.stage ?? stageOverride;
     const defaults = getProfileDefaults(activeProfile, task.role, stage);
     const fallbackModels = [
@@ -880,6 +900,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         if (!params.sessionId) {
           return { content: [{ type: "text", text: "sessionId is required for show_session" }], details: {}, isError: true };
         }
+        assertSafeSessionId(params.sessionId);
         const paths = getSessionPaths(ctx.cwd, params.sessionId);
         const [masterPlan, stateJson] = await Promise.all([
           readFile(paths.masterPlan, "utf8").catch(() => "Master plan not found."),
@@ -898,6 +919,7 @@ ${stateJson}`
         if (!params.sessionId || !params.taskId) {
           return { content: [{ type: "text", text: "sessionId and taskId are required for update_task" }], details: {}, isError: true };
         }
+        assertSafeTaskId(params.taskId);
         const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
         const idx = sessionState.tasks.findIndex((task) => task.id === params.taskId);
         if (idx === -1) {
@@ -992,6 +1014,7 @@ ${stateJson}`
       }
 
       const sessionId = params.sessionId || createSessionId();
+      assertSafeSessionId(sessionId);
       const title = params.title || "Takomi Session";
       const baseState = params.tasks?.length
         ? buildSessionState(sessionId, title, [], new Date())
@@ -1081,11 +1104,11 @@ ${stateJson}`
     return { action: "continue" };
   });
 
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", async (event, ctx) => {
     if (!state.enabled) return;
 
     let effectiveState = cloneState(state);
-    const runtimeCwd = typeof (event as { cwd?: string }).cwd === "string" ? (event as { cwd?: string }).cwd as string : process.cwd();
+    const runtimeCwd = ctx.cwd;
     const genesisExists = await hasGenesisArtifacts(runtimeCwd);
     const route = decideRoute(event.prompt);
     if (state.autoOrch && shouldAutoRoute(event.prompt)) {
@@ -1123,8 +1146,8 @@ ${stateJson}`
     const routingPolicy = await resolveTakomiRoutingPolicy(runtimeCwd);
     const modelPreflightContext = (() => {
       try {
-        const available = typeof (runtimeCtx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } } | undefined)?.modelRegistry?.getAvailable === "function"
-          ? (runtimeCtx as { modelRegistry: { getAvailable: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry.getAvailable()
+        const available = typeof (ctx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry?.getAvailable === "function"
+          ? (ctx as { modelRegistry: { getAvailable: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry.getAvailable()
           : [];
         if (!available.length) return "";
         return `Available model context from Pi registry: ${available.map((m) => `${m.provider ? `${m.provider}/` : ""}${m.id ?? m.name ?? "unknown"}`).slice(0, 80).join(", ")}`;
@@ -1160,6 +1183,15 @@ ${stateJson}`
 
     return {
       systemPrompt: `${event.systemPrompt}\n\n${parts.join("\n\n")}`,
+    };
+  });
+
+  pi.on("tool_call", async (event) => {
+    if (event.toolName !== "takomi_subagent") return;
+    if (state.subagentsEnabled) return;
+    return {
+      block: true,
+      reason: "Takomi subagents are disabled for this session. Run /takomi subagents on before calling takomi_subagent.",
     };
   });
 
