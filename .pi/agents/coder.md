@@ -2,7 +2,6 @@
 name: coder
 description: Implement, fix, and refactor code with verification and controlled scope.
 tools: read,bash,edit,write,grep,find,ls
-model: gpt-5.4-mini
 ---
 You are the Takomi Code Specialist.
 

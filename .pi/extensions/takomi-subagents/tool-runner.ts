@@ -2,6 +2,7 @@ import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 import { loadTakomiProfile } from "../takomi-runtime/profile";
+import { applyTakomiRoutingDefaults, loadTakomiModelRoutingSnapshot } from "../takomi-runtime/model-routing-defaults";
 import { resolveAgentName } from "./agent-aliases";
 import { discoverTakomiAgents, type TakomiAgentConfig, type TakomiAgentScope } from "./agents";
 import { createTakomiDelegationPlan, renderTakomiDelegationPlan } from "./delegation-plan";
@@ -202,10 +203,11 @@ export async function executeTakomiSubagentTool(
   const agents = discoverTakomiAgents(rootCwd, agentScope);
   const byName = new Map<string, TakomiAgentConfig>(agents.map((agent) => [agent.name, agent]));
   const mode = resolveMode(params);
-  const tasks = resolveTasks(params).map((task) => ({
+  const routingSnapshot = await loadTakomiModelRoutingSnapshot(rootCwd);
+  const tasks = resolveTasks(params).map((task) => applyTakomiRoutingDefaults({
     ...task,
     agent: resolveAgentName(task.agent, byName),
-  }));
+  }, routingSnapshot));
 
   if (!mode) {
     return textResult(
