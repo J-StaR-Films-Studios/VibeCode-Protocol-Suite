@@ -22,6 +22,15 @@ export type RoutingPolicyInstallResult = {
   detectedDefaults: string[];
 };
 
+export type RoutingPolicyPreviewResult = {
+  scope: RoutingPolicyInstallScope;
+  policy: string;
+  policyPath: string;
+  settingsPath: string;
+  detectedDefaults: string[];
+  overrides: JsonObject;
+};
+
 export type RoutingPolicyInstallScope = "global" | "project";
 export type RoutingPolicySource = "project" | "global" | "bundled" | "missing";
 
@@ -64,9 +73,19 @@ function normalizeForSettings(filePath: string): string {
   return filePath.replaceAll(path.sep, "/");
 }
 
+function extractPreferredProvider(policy: string): string | undefined {
+  const match = policy.match(/(?:preferred|default)\s+(?:provider|router)(?:\s*\/\s*(?:provider|router))?\s*:\s*([a-z0-9-]+)/i)
+    ?? policy.match(/use\s+([a-z0-9-]+)\s+as\s+(?:the\s+)?(?:provider|router)/i);
+  return match?.[1];
+}
+
 function findExplicitProviderModel(policy: string, family: RegExp): string | undefined {
   const refs = policy.match(/[a-z0-9-]+\/[a-z0-9._-]+/gi) ?? [];
   return refs.find((ref) => family.test(ref));
+}
+
+function providerModel(preferredProvider: string | undefined, model: string): string | undefined {
+  return preferredProvider ? `${preferredProvider}/${model}` : undefined;
 }
 
 function withOptionalModel(model: string | undefined, thinking: string, extra: JsonObject = {}): JsonObject {
@@ -80,32 +99,29 @@ function deriveSubagentDefaults(policy: string): { overrides: JsonObject; detect
   const hasMini = /gpt[- ]?5\.4\s*mini/.test(lower);
   if (!has55 && !has54 && !hasMini) return { overrides: {}, detected: [] };
 
-  // Keep generated settings provider-agnostic. Only write concrete provider IDs
-  // when the pasted policy explicitly contains provider-qualified models such as
-  // `oauth-router/gpt-5.5`. Otherwise write thinking defaults only and let the
-  // active model registry/user policy resolve concrete providers at runtime.
-  const model55 = findExplicitProviderModel(policy, /gpt[-_.]?5\.5/i);
-  const model54 = findExplicitProviderModel(policy, /gpt[-_.]?5\.4(?![-_.]?mini)/i);
-  const modelMini = findExplicitProviderModel(policy, /gpt[-_.]?5\.4[-_.]?mini/i);
+  // Keep generated settings provider-agnostic unless the policy explicitly
+  // declares provider-qualified models or a preferred provider/router header.
+  const preferredProvider = extractPreferredProvider(policy);
+  const model55 = findExplicitProviderModel(policy, /gpt[-_.]?5\.5/i) ?? providerModel(preferredProvider, "gpt-5.5");
+  const model54 = findExplicitProviderModel(policy, /gpt[-_.]?5\.4(?![-_.]?mini)/i) ?? providerModel(preferredProvider, "gpt-5.4");
+  const modelMini = findExplicitProviderModel(policy, /gpt[-_.]?5\.4[-_.]?mini/i) ?? providerModel(preferredProvider, "gpt-5.4-mini");
   const overrides: JsonObject = {};
   const detected: string[] = [];
 
   if (has55) {
-    overrides.oracle = withOptionalModel(model55, "high");
+    overrides.orchestrator = withOptionalModel(model55, "high");
+    overrides.architect = withOptionalModel(model55, "high");
     overrides.reviewer = withOptionalModel(model55, "high");
-    overrides.planner = withOptionalModel(model55, "medium");
-    detected.push(model55 ? `oracle/reviewer → ${model55} high` : "oracle/reviewer → GPT-5.5 high intent", model55 ? `planner → ${model55} medium` : "planner → GPT-5.5 medium intent");
+    detected.push(model55 ? `orchestrator/architect/reviewer → ${model55} high` : "orchestrator/architect/reviewer → GPT-5.5 high intent");
   }
   if (has54) {
-    overrides.worker = withOptionalModel(model54, "high", model55 ? { fallbackModels: [`${model55}:low`] } : {});
-    overrides.contextBuilder = withOptionalModel(model54, "high");
-    overrides["context-builder"] = withOptionalModel(model54, "high");
-    detected.push(model54 ? `worker/context-builder → ${model54} high` : "worker/context-builder → GPT-5.4 high intent");
+    overrides.general = withOptionalModel(model54, "high", model55 ? { fallbackModels: [`${model55}:low`] } : {});
+    overrides.coder = withOptionalModel(model54, "high", model55 ? { fallbackModels: [`${model55}:low`] } : {});
+    overrides.designer = withOptionalModel(model54, "high", model55 ? { fallbackModels: [`${model55}:low`] } : {});
+    detected.push(model54 ? `general/coder/designer → ${model54} high` : "general/coder/designer → GPT-5.4 high intent");
   }
   if (hasMini) {
-    overrides.scout = withOptionalModel(modelMini, "high");
-    overrides.delegate = withOptionalModel(modelMini, "high");
-    detected.push(modelMini ? `scout/delegate → ${modelMini} high` : "scout/delegate → GPT-5.4 Mini high intent");
+    detected.push(modelMini ? `GPT-5.4 Mini available for explicit small-task overrides: ${modelMini}` : "GPT-5.4 Mini available as small-task intent only");
   }
   return { overrides, detected };
 }
@@ -161,7 +177,7 @@ export async function resolveTakomiRoutingPolicy(cwd: string): Promise<ResolvedR
   return { source: "missing" };
 }
 
-export async function installTakomiRoutingPolicy(cwd: string, input: string, options: { scope?: RoutingPolicyInstallScope } = {}): Promise<RoutingPolicyInstallResult> {
+export function previewTakomiRoutingPolicy(cwd: string, input: string, options: { scope?: RoutingPolicyInstallScope } = {}): RoutingPolicyPreviewResult {
   const policy = extractQuotedPolicy(input);
   if (!policy) throw new Error("No routing policy text found. Paste the policy after /takomi routing or inside triple quotes.");
 
@@ -172,6 +188,13 @@ export async function installTakomiRoutingPolicy(cwd: string, input: string, opt
   const settingsPath = scope === "project"
     ? path.join(cwd, PROJECT_PI_SETTINGS_RELATIVE)
     : GLOBAL_PI_SETTINGS_PATH;
+  const { overrides, detected } = deriveSubagentDefaults(policy);
+  return { scope, policy, policyPath, settingsPath, detectedDefaults: detected, overrides };
+}
+
+export async function installTakomiRoutingPolicy(cwd: string, input: string, options: { scope?: RoutingPolicyInstallScope } = {}): Promise<RoutingPolicyInstallResult> {
+  const preview = previewTakomiRoutingPolicy(cwd, input, options);
+  const { scope, policy, policyPath, settingsPath, overrides, detectedDefaults } = preview;
   await mkdir(path.dirname(policyPath), { recursive: true });
   await mkdir(path.dirname(settingsPath), { recursive: true });
   await writeFile(policyPath, `# Takomi Model Routing Policy\n\n${policy}\n`, "utf8");
@@ -183,7 +206,6 @@ export async function installTakomiRoutingPolicy(cwd: string, input: string, opt
     : normalizeForSettings(GLOBAL_TAKOMI_ROUTING_POLICY_PATH);
   settings.takomi = takomi;
 
-  const { overrides, detected } = deriveSubagentDefaults(policy);
   if (Object.keys(overrides).length > 0) {
     const subagents = asObject(settings.subagents);
     const existingOverrides = asObject(subagents.agentOverrides);
@@ -192,7 +214,22 @@ export async function installTakomiRoutingPolicy(cwd: string, input: string, opt
   }
 
   await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  return { policyPath, settingsPath, settingsUpdated: true, detectedDefaults: detected };
+  return { policyPath, settingsPath, settingsUpdated: true, detectedDefaults };
+}
+
+export function renderRoutingPolicyPreview(preview: RoutingPolicyPreviewResult): string {
+  const overrideLines = Object.entries(preview.overrides).map(([role, value]) => `- ${role}: ${JSON.stringify(value)}`);
+  return [
+    `Scope: ${preview.scope}`,
+    `Policy path: ${preview.policyPath}`,
+    `Settings path: ${preview.settingsPath}`,
+    "",
+    preview.detectedDefaults.length ? "Detected routing defaults:" : "Detected routing defaults: none",
+    ...preview.detectedDefaults.map((item) => `- ${item}`),
+    "",
+    overrideLines.length ? "Settings overrides to write:" : "Settings overrides to write: none",
+    ...overrideLines,
+  ].join("\n");
 }
 
 export async function loadTakomiRoutingPolicy(cwd: string): Promise<string | undefined> {

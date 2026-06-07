@@ -80,10 +80,22 @@ function isModelLike(value: string): boolean {
     || lower.includes("lmstudio/");
 }
 
+function extractPreferredProvider(text: string): string | undefined {
+  const match = text.match(/(?:preferred|default)\s+(?:provider|router)(?:\s*\/\s*(?:provider|router))?\s*:\s*([a-z0-9-]+)/i)
+    ?? text.match(/use\s+([a-z0-9-]+)\s+as\s+(?:the\s+)?(?:provider|router)/i);
+  return match?.[1];
+}
+
 function collectModelsFromPolicy(text: string): string[] {
-  // Only explicit provider-qualified model IDs are executable policy approvals.
-  // Providerless names such as "GPT-5.5" are intent labels, not a provider choice.
-  return unique((text.match(/[a-z0-9-]+\/[a-z0-9._-]+/gi) ?? []).filter(isModelLike));
+  // Providerless names such as "GPT-5.5" are intent labels unless the policy
+  // declares a preferred provider/router header.
+  const explicit = (text.match(/[a-z0-9-]+\/[a-z0-9._-]+/gi) ?? []).filter(isModelLike);
+  const preferredProvider = extractPreferredProvider(text);
+  const inferred: string[] = [];
+  if (preferredProvider && /gpt[- ]?5\.5/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.5`);
+  if (preferredProvider && /gpt[- ]?5\.4(?!\s*mini)/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.4`);
+  if (preferredProvider && /gpt[- ]?5\.4\s*mini/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.4-mini`);
+  return unique([...explicit, ...inferred]);
 }
 
 async function loadSnapshot(cwd: string): Promise<ModelPolicySnapshot> {

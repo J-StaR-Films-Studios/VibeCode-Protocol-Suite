@@ -119,13 +119,23 @@ function isModelLike(value: string): boolean {
     || lower.includes("lmstudio/");
 }
 
+function extractPreferredProvider(text: string): string | undefined {
+  const match = text.match(/(?:preferred|default)\s+(?:provider|router)(?:\s*\/\s*(?:provider|router))?\s*:\s*([a-z0-9-]+)/i)
+    ?? text.match(/use\s+([a-z0-9-]+)\s+as\s+(?:the\s+)?(?:provider|router)/i);
+  return match?.[1];
+}
+
 function collectModelsFromPolicy(text: string): string[] {
   // Provider-agnostic policy text like "GPT-5.5" expresses routing intent, not
-  // a concrete provider. Only provider-qualified IDs belong in the executable
-  // approved-model set; otherwise users without oauth-router would inherit a
-  // provider they never configured.
+  // a concrete provider. A preferred provider/router header intentionally binds
+  // those intent labels to executable provider-qualified IDs.
   const explicit = (text.match(/[a-z0-9-]+\/[a-z0-9._-]+/gi) ?? []).filter(isModelLike);
-  return unique(explicit.map((model) => stripThinkingSuffix(model).baseModel));
+  const preferredProvider = extractPreferredProvider(text);
+  const inferred: string[] = [];
+  if (preferredProvider && /gpt[- ]?5\.5/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.5`);
+  if (preferredProvider && /gpt[- ]?5\.4(?!\s*mini)/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.4`);
+  if (preferredProvider && /gpt[- ]?5\.4\s*mini/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.4-mini`);
+  return unique([...explicit, ...inferred].map((model) => stripThinkingSuffix(model).baseModel));
 }
 
 function readPolicyTextSync(filePath: string): string | undefined {
