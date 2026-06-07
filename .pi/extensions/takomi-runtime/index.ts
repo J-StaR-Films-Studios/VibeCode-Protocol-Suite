@@ -56,7 +56,7 @@ import {
   getProfileDefaults,
   loadTakomiProfile,
 } from "./profile";
-import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy } from "./routing-policy";
+import { installTakomiRoutingPolicy, previewTakomiRoutingPolicy, renderRoutingPolicyPreview, resolveTakomiRoutingPolicy } from "./routing-policy";
 
 type TakomiState = {
   enabled: boolean;
@@ -800,6 +800,47 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "takomi_apply_routing_policy",
+    label: "Takomi Routing",
+    description: "Apply a Takomi model-routing policy after deterministic extraction and active-model review.",
+    promptSnippet: "Save reviewed Takomi model routing policy text to the active global or project policy file.",
+    promptGuidelines: [
+      "Use takomi_apply_routing_policy only after reviewing the deterministic extraction against the original routing policy text.",
+      "Do not call takomi_apply_routing_policy if the policy is ambiguous, invents providers, or maps to non-Takomi roles.",
+    ],
+    parameters: Type.Object({
+      policyText: Type.String({ description: "Original routing policy text to save" }),
+      scope: Type.Optional(StringEnum(["global", "project"] as const)),
+      reviewNotes: Type.Optional(Type.String({ description: "Brief notes from the active-model review" })),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const scope = params.scope ?? "global";
+      const preview = previewTakomiRoutingPolicy(ctx.cwd, params.policyText, { scope });
+      const result = await installTakomiRoutingPolicy(ctx.cwd, params.policyText, { scope });
+      const scopeNote = scope === "global"
+        ? "This global policy applies unless a project-local override exists."
+        : "This project-local policy overrides the global policy for the current project.";
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `Takomi routing policy saved (${scope}).`,
+            "",
+            `Policy: ${result.policyPath}`,
+            `Settings: ${result.settingsPath}`,
+            "",
+            renderRoutingPolicyPreview(preview),
+            params.reviewNotes ? `\nReview notes:\n${params.reviewNotes}` : "",
+            "",
+            scopeNote,
+          ].filter(Boolean).join("\n"),
+        }],
+        details: { result, preview, reviewNotes: params.reviewNotes },
+      };
+    },
+  });
+
+  pi.registerTool({
     name: "takomi_workflow",
     label: "Takomi Workflow",
     description: "Return embedded Takomi workflow playbooks for genesis, design, and build.",
@@ -1067,11 +1108,28 @@ ${stateJson}`
     if (routingUpdateMatch) {
       state.enabled = true;
       try {
-        const result = await installTakomiRoutingPolicy(runtimeCtx?.cwd ?? process.cwd(), text);
-        const detected = result.detectedDefaults.length ? `\n\nDetected defaults:\n- ${result.detectedDefaults.join("\n- ")}` : "\n\nNo model names were auto-detected; saved policy only.";
-        return { action: "transform", text: `Takomi routing policy has been updated.\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}\n\nAcknowledge the update briefly and explain that future Takomi turns will load this policy.` };
+        const cwd = runtimeCtx?.cwd ?? process.cwd();
+        const preview = previewTakomiRoutingPolicy(cwd, text, { scope: "global" });
+        return { action: "transform", text: [
+          "Review this Takomi routing policy extraction before it is saved.",
+          "",
+          "Rules:",
+          "- Do not invent providers or model IDs not grounded in the policy.",
+          "- Providerless names like GPT-5.5 are routing intent unless a preferred provider/router is declared.",
+          "- Valid Takomi roles are: general, orchestrator, architect, designer, coder, reviewer.",
+          "- If the extraction is correct and safe, call takomi_apply_routing_policy with scope=global and the exact original policy text.",
+          "- If it is ambiguous or wrong, explain what the user should clarify and do not call the tool.",
+          "",
+          "Deterministic extraction:",
+          renderRoutingPolicyPreview(preview),
+          "",
+          "Original policy text:",
+          "```",
+          preview.policy,
+          "```",
+        ].join("\n") };
       } catch (error) {
-        return { action: "transform", text: `Takomi routing policy update failed: ${error instanceof Error ? error.message : String(error)}` };
+        return { action: "transform", text: `Takomi routing policy review failed: ${error instanceof Error ? error.message : String(error)}` };
       }
     }
 
