@@ -64,6 +64,15 @@ function normalizeForSettings(filePath: string): string {
   return filePath.replaceAll(path.sep, "/");
 }
 
+function findExplicitProviderModel(policy: string, family: RegExp): string | undefined {
+  const refs = policy.match(/[a-z0-9-]+\/[a-z0-9._-]+/gi) ?? [];
+  return refs.find((ref) => family.test(ref));
+}
+
+function withOptionalModel(model: string | undefined, thinking: string, extra: JsonObject = {}): JsonObject {
+  return model ? { model, thinking, ...extra } : { thinking, ...extra };
+}
+
 function deriveSubagentDefaults(policy: string): { overrides: JsonObject; detected: string[] } {
   const lower = policy.toLowerCase();
   const has55 = /gpt[- ]?5\.5/.test(lower);
@@ -71,28 +80,32 @@ function deriveSubagentDefaults(policy: string): { overrides: JsonObject; detect
   const hasMini = /gpt[- ]?5\.4\s*mini/.test(lower);
   if (!has55 && !has54 && !hasMini) return { overrides: {}, detected: [] };
 
-  const model55 = "oauth-router/gpt-5.5";
-  const model54 = "oauth-router/gpt-5.4";
-  const modelMini = "oauth-router/gpt-5.4-mini";
+  // Keep generated settings provider-agnostic. Only write concrete provider IDs
+  // when the pasted policy explicitly contains provider-qualified models such as
+  // `oauth-router/gpt-5.5`. Otherwise write thinking defaults only and let the
+  // active model registry/user policy resolve concrete providers at runtime.
+  const model55 = findExplicitProviderModel(policy, /gpt[-_.]?5\.5/i);
+  const model54 = findExplicitProviderModel(policy, /gpt[-_.]?5\.4(?![-_.]?mini)/i);
+  const modelMini = findExplicitProviderModel(policy, /gpt[-_.]?5\.4[-_.]?mini/i);
   const overrides: JsonObject = {};
   const detected: string[] = [];
 
   if (has55) {
-    overrides.oracle = { model: model55, thinking: "high" };
-    overrides.reviewer = { model: model55, thinking: "high" };
-    overrides.planner = { model: model55, thinking: "medium" };
-    detected.push("oracle/reviewer → GPT-5.5 high", "planner → GPT-5.5 medium");
+    overrides.oracle = withOptionalModel(model55, "high");
+    overrides.reviewer = withOptionalModel(model55, "high");
+    overrides.planner = withOptionalModel(model55, "medium");
+    detected.push(model55 ? `oracle/reviewer → ${model55} high` : "oracle/reviewer → GPT-5.5 high intent", model55 ? `planner → ${model55} medium` : "planner → GPT-5.5 medium intent");
   }
   if (has54) {
-    overrides.worker = { model: model54, thinking: "high", fallbackModels: has55 ? [`${model55}:low`] : undefined };
-    overrides.contextBuilder = { model: model54, thinking: "high" };
-    overrides["context-builder"] = { model: model54, thinking: "high" };
-    detected.push("worker/context-builder → GPT-5.4 high");
+    overrides.worker = withOptionalModel(model54, "high", model55 ? { fallbackModels: [`${model55}:low`] } : {});
+    overrides.contextBuilder = withOptionalModel(model54, "high");
+    overrides["context-builder"] = withOptionalModel(model54, "high");
+    detected.push(model54 ? `worker/context-builder → ${model54} high` : "worker/context-builder → GPT-5.4 high intent");
   }
   if (hasMini) {
-    overrides.scout = { model: modelMini, thinking: "high" };
-    overrides.delegate = { model: modelMini, thinking: "high" };
-    detected.push("scout/delegate → GPT-5.4 Mini high");
+    overrides.scout = withOptionalModel(modelMini, "high");
+    overrides.delegate = withOptionalModel(modelMini, "high");
+    detected.push(modelMini ? `scout/delegate → ${modelMini} high` : "scout/delegate → GPT-5.4 Mini high intent");
   }
   return { overrides, detected };
 }

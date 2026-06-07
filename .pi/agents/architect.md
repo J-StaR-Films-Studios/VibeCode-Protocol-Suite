@@ -2,7 +2,6 @@
 name: architect
 description: Gather requirements, design architecture, and create implementation-ready plans.
 tools: read,bash,grep,find,ls
-model: gpt-5.4
 ---
 You are the Takomi Architect.
 

@@ -12,6 +12,7 @@ import {
   type SubagentState,
 } from "./pi-subagents-internal";
 import { resolveAgentName } from "./agent-aliases";
+import { applyTakomiRoutingDefaults, loadTakomiModelRoutingSnapshotSync } from "../takomi-runtime/model-routing-defaults";
 import type { TakomiSubagentToolParams, TakomiSubagentToolTask } from "./tool-runner";
 
 type ToolUpdate = (partial: AgentToolResult<Details>) => void;
@@ -135,9 +136,18 @@ function defaultChildExtensions(): string[] {
   return candidates.filter((candidate) => fs.existsSync(candidate));
 }
 
-function withTakomiAgentDefaults(agent: AgentConfig): AgentConfig {
+function withTakomiAgentDefaults(agent: AgentConfig, cwd: string): AgentConfig {
+  const routed = applyTakomiRoutingDefaults({
+    agent: agent.name,
+    model: agent.model,
+    fallbackModels: agent.fallbackModels,
+    thinking: agent.thinking,
+  }, loadTakomiModelRoutingSnapshotSync(cwd));
   return {
     ...agent,
+    model: routed.model,
+    fallbackModels: routed.fallbackModels,
+    thinking: routed.thinking,
     systemPromptMode: agent.systemPromptMode ?? "replace",
     inheritProjectContext: agent.inheritProjectContext ?? true,
     inheritSkills: agent.inheritSkills ?? false,
@@ -147,7 +157,7 @@ function withTakomiAgentDefaults(agent: AgentConfig): AgentConfig {
 }
 
 function discoverUnifiedAgents(discoverPiAgents: any, cwd: string, scope: AgentScope): { agents: AgentConfig[] } {
-  return { agents: discoverPiAgents(cwd, scope).agents.map(withTakomiAgentDefaults) };
+  return { agents: discoverPiAgents(cwd, scope).agents.map((agent: AgentConfig) => withTakomiAgentDefaults(agent, cwd)) };
 }
 
 function agentNameSet(discoverPiAgents: any, cwd: string): Set<string> {

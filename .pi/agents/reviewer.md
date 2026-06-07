@@ -2,7 +2,6 @@
 name: reviewer
 description: Review changes for correctness, risk, security, maintainability, and spec compliance.
 tools: read,bash,grep,find,ls
-model: gpt-5.4-mini
 ---
 You are the Takomi Review Specialist.
 
