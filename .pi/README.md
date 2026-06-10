@@ -45,6 +45,7 @@ Inside Pi, use:
 - The old standalone commands (`/takomi-genesis`, `/takomi-design`, `/takomi-build`, `/takomi-kickoff`, `/autoorch`, `/orch`, `/architect`, `/code`, `/review`, and the `/takomi-subagent*` variants) are folded into `/takomi` subcommands so slash autocomplete stays small.
 - prompt shortcuts are suffixed with `-prompt` to avoid collisions with runtime commands, e.g. `/orch-prompt`, `/build-prompt`, `/design-prompt`, `/genesis-prompt`, `/takomi-prompt`, `/prime-prompt`
 - a project-local theme is available at `.pi/themes/takomi-noir.json`; select `takomi-noir` in `/settings` to use the Takomi UI palette
+- optional Pi feature packs are managed by `takomi setup pi` or `takomi setup pi-features` and refreshed by `takomi refresh`; current defaults install Takomi Interview (`npm:@juicesharp/rpiv-ask-user-question`) while Takomi Todo (`npm:@juicesharp/rpiv-todo`), Browser QA (`npm:pi-chrome`), and Doc Preview (`npm:pi-markdown-preview`) stay opt-in
 - additional workflow prompts are available as direct slash commands:
   - `/vibe-primeAgent`
   - `/vibe-spawnTask`

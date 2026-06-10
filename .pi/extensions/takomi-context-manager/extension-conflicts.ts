@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ContextManagerState } from "./state";
 
 type KnownTakomiExtension = {
   toolName: string;
@@ -43,9 +43,20 @@ export async function detectDuplicateTakomiExtensions(cwd: string): Promise<Arra
   return warnings;
 }
 
-export function renderDuplicateExtensionGuidance(warnings: Array<{ toolName: string; paths: string[] }>): string[] {
+function isTakomiSourceRepo(cwd: string): boolean {
+  return [
+    path.join(cwd, "package.json"),
+    path.join(cwd, "scripts", "pi-dev.ps1"),
+    path.join(cwd, ".pi", "extensions", "takomi-runtime", "index.ts"),
+  ].every((filePath) => existsSync(filePath));
+}
+
+export function renderDuplicateExtensionGuidance(warnings: Array<{ toolName: string; paths: string[] }>, cwd?: string): string[] {
   if (warnings.length === 0) return ["- Duplicate Takomi extensions: none detected"];
-  const lines = ["- Duplicate Takomi extensions detected:"];
+  const sourceRepo = cwd ? isTakomiSourceRepo(cwd) : false;
+  const lines = [sourceRepo
+    ? "- Duplicate Takomi extensions detected (expected when running normal Pi inside the Takomi source repo):"
+    : "- Duplicate Takomi extensions detected:"];
   for (const warning of warnings) {
     lines.push(`  - ${warning.toolName}`);
     for (const filePath of warning.paths) lines.push(`    - ${filePath}`);
