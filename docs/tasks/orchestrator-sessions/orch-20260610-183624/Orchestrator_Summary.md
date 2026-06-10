@@ -11,4 +11,4 @@
 
 Takomi session validation: WARNINGS
 - [WARNING] json-prose-field (03): Task JSON contains substantial prose in notes; prefer authored markdown for long-form content.
-- [WARNING] stage-in-progress-without-task: Stage build is in-progress but has no in-progress task.
+- [WARNING] json-prose-field (04): Task JSON contains substantial prose in notes; prefer authored markdown for long-form content.

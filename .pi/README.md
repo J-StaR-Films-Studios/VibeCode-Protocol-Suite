@@ -129,3 +129,12 @@ So when working on packaging, agents should distinguish between:
   - rewrite JSON machine state
   - keep task docs organized in `pending/`, `in-progress/`, `completed/`, and `blocked/`
 - `takomi_board` intentionally cannot dispatch or redispatch agents. Use `takomi_subagent` for single, parallel, or chain execution, then call `takomi_board update_task` with the result.
+
+## Attribution Notes
+
+- Pi-native Takomi runs on [Pi](https://github.com/earendil-works/pi) / `@earendil-works/pi-coding-agent`, authored by Mario Zechner and Earendil Works.
+- Takomi subagent execution builds on [`pi-subagents`](https://github.com/nicobailon/pi-subagents) by Nico Bailon, with Takomi adding lifecycle orchestration, board/state artifacts, model-routing policy, and review-loop conventions.
+- Optional Takomi Interview and Todo feature packs integrate [`@juicesharp/rpiv-ask-user-question`](https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-ask-user-question) and [`@juicesharp/rpiv-todo`](https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-todo) by juicesharp.
+- Optional Browser QA can use [`pi-chrome`](https://github.com/tianrendong/pi-chrome) by tianrendong.
+- Optional Doc Preview can use [`pi-markdown-preview`](https://github.com/omaclaren/pi-markdown-preview) by omaclaren.
+- [`context-mode`](https://github.com/mksglu/context-mode) by Mert Koseoğlu is credited as external research/power-user context tooling; it is not a Takomi default bundle.
