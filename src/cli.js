@@ -33,6 +33,8 @@ import {
   initGlobalStore,
   getManifest,
   writeManifest,
+  buildStoreSkillsReconcilePlan,
+  buildStoreWorkflowsReconcilePlan,
   populateSkills,
   populateWorkflows,
   populateAgentYamls,
@@ -62,6 +64,7 @@ import {
   listBundledSkillNames,
   SKILL_CATEGORIES,
 } from './skills-catalog.js';
+import { promptSkillCategoryTui } from './skills-selection-tui.js';
 import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
 import { printTakomiStats } from './takomi-stats.js';
 
@@ -236,6 +239,13 @@ function formatCoreSkillsSummary() {
 }
 
 async function promptCustomSkillSelection(initialSelected = [], options = {}) {
+  const tuiSelection = await promptSkillCategoryTui({
+    initialSelected,
+    title: options.title || 'Custom Skills Selection',
+  });
+  if (Array.isArray(tuiSelection)) return tuiSelection;
+  if (tuiSelection === null) return null;
+
   const initialSet = new Set(initialSelected);
   const uncategorized = await getUncategorizedSkills();
   const categoryChoices = SKILL_CATEGORIES.map((category) => ({
@@ -366,11 +376,11 @@ async function promptSkillsInstallSelection() {
   } else if (response.mode === 'none') {
     selectedSkills = [];
   } else if (response.mode === 'present-custom') {
-    const customSelection = await promptCustomSkillSelection(installed, { selectAllForNewCategories: true });
+    const customSelection = await promptCustomSkillSelection(installed, { selectAllForNewCategories: true, title: 'Present Custom Skills' });
     if (!customSelection) return null;
     selectedSkills = customSelection;
   } else if (response.mode === 'custom') {
-    const customSelection = await promptCustomSkillSelection([], { selectAllForNewCategories: true });
+    const customSelection = await promptCustomSkillSelection([], { selectAllForNewCategories: true, title: 'Custom Skills Selection' });
     if (!customSelection) return null;
     selectedSkills = customSelection;
   }
@@ -631,6 +641,11 @@ async function install(target) {
   if (!harnessResponse.harnesses || harnessResponse.harnesses.length === 0) return;
 
   const selectedHarnesses = detected.filter(h => harnessResponse.harnesses.includes(h.id));
+  const existingStoreManifest = await getManifest();
+  const existingStoreOwnedSkills = Object.keys(existingStoreManifest.bundledOwned?.skills || {});
+  const existingStoreOwnedWorkflows = Object.keys(existingStoreManifest.bundledOwned?.workflows || {});
+  const hasExistingStoreSkills = existingStoreOwnedSkills.length > 0;
+  const hasExistingStoreWorkflows = existingStoreOwnedWorkflows.length > 0;
 
   // 3. Ask what to install
   const contentResponse = await prompts([
@@ -652,13 +667,15 @@ async function install(target) {
       name: 'skillMode',
       message: 'Which skill pack?',
       choices: [
+        ...(hasExistingStoreSkills ? [{ title: 'Leave As Is (Recommended)', value: 'leave-as-is', description: `Keep ${existingStoreOwnedSkills.length} Takomi-managed store skill${existingStoreOwnedSkills.length === 1 ? '' : 's'} unchanged.` }] : []),
+        ...(hasExistingStoreSkills ? [{ title: 'Present Custom', value: 'present-custom', description: 'Review current Takomi-managed store skills and adjust selections.' }] : []),
         { title: 'Core (Recommended defaults)', value: 'core', description: 'takomi, sync-docs, ai-sdk, git-commit-generation...' },
         { title: `All (${(await getSkills()).length} skills)`, value: 'all' },
         { title: 'Custom selection', value: 'custom' },
       ],
     },
     {
-      type: (prev, values) => values.skillMode === 'custom' ? 'multiselect' : null,
+      type: null,
       name: 'selectedSkills',
       message: 'Select skills:',
       choices: async () => {
@@ -673,6 +690,7 @@ async function install(target) {
       name: 'workflowMode',
       message: 'Which workflow pack?',
       choices: [
+        ...(hasExistingStoreWorkflows ? [{ title: 'Leave As Is (Recommended)', value: 'leave-as-is', description: `Keep ${existingStoreOwnedWorkflows.length} Takomi-managed workflow${existingStoreOwnedWorkflows.length === 1 ? '' : 's'} unchanged.` }] : []),
         { title: 'Core (16 essentials)', value: 'core', description: 'vibe-build, mode-architect...' },
         { title: `All (${(await getWorkflows()).length} workflows)`, value: 'all' },
         { title: 'All (Exclude Legacy)', value: 'no-legacy' },
@@ -700,19 +718,73 @@ async function install(target) {
 
     // 5. Populate store from package assets
     if (contentResponse.content.includes('skills')) {
-      const skillMode = contentResponse.skillMode === 'custom'
-        ? contentResponse.selectedSkills
-        : contentResponse.skillMode;
-      const skills = await populateSkills(skillMode);
-      console.log(pc.green(`  ✔ ${skills.length} skills loaded into store`));
+      let skillMode = contentResponse.skillMode;
+      if (contentResponse.skillMode === 'leave-as-is') {
+        console.log(pc.green(`  ✔ Left ${existingStoreOwnedSkills.length} Takomi-managed store skill${existingStoreOwnedSkills.length === 1 ? '' : 's'} unchanged`));
+      } else {
+        if (contentResponse.skillMode === 'present-custom') {
+          const customSelection = await promptCustomSkillSelection(existingStoreOwnedSkills, { selectAllForNewCategories: true, title: 'Present Global Store Custom Skills' });
+          if (!customSelection) return;
+          skillMode = customSelection;
+        } else if (contentResponse.skillMode === 'custom') {
+          const customSelection = await promptCustomSkillSelection([], { selectAllForNewCategories: true, title: 'Global Store Custom Skills' });
+          if (!customSelection) return;
+          skillMode = customSelection;
+        }
+
+        const plan = await buildStoreSkillsReconcilePlan(skillMode);
+        if (plan.toRemove.length > 0) {
+          console.log(pc.yellow('\nTakomi will remove deselected Takomi-managed skills from the global store only:'));
+          for (const skill of plan.toRemove) console.log(pc.dim(`  - ${skill}`));
+          console.log(pc.dim('\nManual/imported store skills and modified Takomi skills are preserved.'));
+          const confirmStorePrune = await prompts({
+            type: 'confirm',
+            name: 'confirm',
+            message: `Remove ${plan.toRemove.length} Takomi-managed store skill${plan.toRemove.length === 1 ? '' : 's'}?`,
+            initial: false,
+          });
+          if (!confirmStorePrune.confirm) {
+            console.log(pc.green('  ✔ Left global store skills unchanged'));
+            skillMode = null;
+          }
+        }
+
+        if (skillMode) {
+          const skills = await populateSkills(skillMode);
+          console.log(pc.green(`  ✔ ${skills.length} skills loaded into store`));
+        }
+      }
     }
 
     if (contentResponse.content.includes('workflows')) {
-      const workflowMode = contentResponse.workflowMode === 'custom'
+      let workflowMode = contentResponse.workflowMode === 'custom'
         ? contentResponse.selectedWorkflows
         : contentResponse.workflowMode;
-      const workflows = await populateWorkflows(workflowMode);
-      console.log(pc.green(`  ✔ ${workflows.length} workflows loaded into store`));
+      if (contentResponse.workflowMode === 'leave-as-is') {
+        console.log(pc.green(`  ✔ Left ${existingStoreOwnedWorkflows.length} Takomi-managed workflow${existingStoreOwnedWorkflows.length === 1 ? '' : 's'} unchanged`));
+      } else {
+        const plan = await buildStoreWorkflowsReconcilePlan(workflowMode);
+        if (plan.toRemove.length > 0) {
+          console.log(pc.yellow('\nTakomi will remove deselected Takomi-managed workflows from the global store only:'));
+          for (const workflow of plan.toRemove) console.log(pc.dim(`  - ${workflow}`));
+          console.log(pc.dim('\nManual/imported store workflows and modified Takomi workflows are preserved.'));
+          const confirmWorkflowPrune = await prompts({
+            type: 'confirm',
+            name: 'confirm',
+            message: `Remove ${plan.toRemove.length} Takomi-managed workflow${plan.toRemove.length === 1 ? '' : 's'}?`,
+            initial: false,
+          });
+          if (!confirmWorkflowPrune.confirm) {
+            console.log(pc.green('  ✔ Left global store workflows unchanged'));
+            workflowMode = null;
+          }
+        }
+
+        if (workflowMode) {
+          const workflows = await populateWorkflows(workflowMode);
+          console.log(pc.green(`  ✔ ${workflows.length} workflows loaded into store`));
+        }
+      }
     }
 
     if (contentResponse.content.includes('yamls')) {
@@ -722,13 +794,21 @@ async function install(target) {
 
     // 6. Sync store to all selected harnesses
     console.log(pc.cyan('\n📡 Syncing to harnesses...\n'));
-    await syncToAllHarnesses(selectedHarnesses, STORE_PATH);
+    let manifest = await getManifest();
+    const syncSummary = await syncToAllHarnesses(selectedHarnesses, STORE_PATH, {
+      useOwnership: true,
+      owned: manifest.harnessOwned,
+    });
 
     // 7. Update manifest
-    const manifest = await getManifest();
+    manifest = await getManifest();
     manifest.linkedHarnesses = selectedHarnesses.map(h => h.id);
     manifest.installed.skills = await getStoreSkills();
     manifest.installed.workflows = await getStoreWorkflows();
+    manifest.harnessOwned = manifest.harnessOwned || {};
+    for (const harness of selectedHarnesses) {
+      manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
+    }
     await writeManifest(manifest);
 
     // 8. Summary
@@ -799,10 +879,17 @@ async function sync(target) {
   const selectedHarnesses = detected.filter(h => response.harnesses.includes(h.id));
 
   console.log(pc.cyan('\n📡 Syncing from global store...\n'));
-  await syncToAllHarnesses(selectedHarnesses, STORE_PATH);
+  const syncSummary = await syncToAllHarnesses(selectedHarnesses, STORE_PATH, {
+    useOwnership: true,
+    owned: manifest.harnessOwned,
+  });
 
   // Update manifest with current harnesses
   manifest.linkedHarnesses = [...new Set([...manifest.linkedHarnesses, ...response.harnesses])];
+  manifest.harnessOwned = manifest.harnessOwned || {};
+  for (const harness of selectedHarnesses) {
+    manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
+  }
   await writeManifest(manifest);
 
   const skills = await getStoreSkills();
