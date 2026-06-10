@@ -52,11 +52,16 @@ export type ContextPanelState = {
   fileChanges: FileChange[];
   toolUses: ToolUseCount;
   sessionStart: number;
+  activeMs: number;
+  lastActivityAt: number;
   lastToolAt: number;
   runtime: ContextRuntimeState;
+  scrollOffset: number;
 };
 
 type ToolCallInput = Record<string, unknown>;
+
+const ACTIVE_GAP_THRESHOLD_MS = 15 * 60 * 1000;
 
 type BoardCounts = {
   completed: number;
@@ -70,8 +75,11 @@ function createEmptyState(sessionStart = Date.now(), runtime: ContextRuntimeStat
     fileChanges: [],
     toolUses: {},
     sessionStart,
+    activeMs: 0,
+    lastActivityAt: sessionStart,
     lastToolAt: 0,
     runtime,
+    scrollOffset: 0,
   };
 }
 
@@ -156,6 +164,16 @@ function toTimestampMs(entry: { timestamp?: unknown; message?: { timestamp?: unk
   return undefined;
 }
 
+function calculateActiveMs(timestamps: number[]): number {
+  const sorted = [...new Set(timestamps.filter((value) => Number.isFinite(value)))].sort((a, b) => a - b);
+  let activeMs = 0;
+  for (let i = 1; i < sorted.length; i += 1) {
+    const delta = sorted[i] - sorted[i - 1];
+    if (delta > 0 && delta <= ACTIVE_GAP_THRESHOLD_MS) activeMs += delta;
+  }
+  return activeMs;
+}
+
 function formatDisplayPath(filePath: string, cwd?: string): string {
   const normalized = filePath.replace(/^@/, "");
   const absolute = path.isAbsolute(normalized) ? normalized : undefined;
@@ -199,9 +217,40 @@ class ContextPanelComponent implements Component {
     private readonly theme: Theme,
     private readonly getState: () => ContextPanelState,
     private readonly getCtx: () => ExtensionContext | undefined,
-  ) {}
+  ) { }
 
-  invalidate(): void {}
+  invalidate(): void { }
+
+  private maxRenderLines(): number {
+    const rows = typeof process.stdout.rows === "number" && process.stdout.rows > 0 ? process.stdout.rows : 30;
+    return Math.max(10, Math.floor(rows * 0.8));
+  }
+
+  private applyViewport(lines: string[], panelWidth: number, theme: Theme): string[] {
+    const maxLines = this.maxRenderLines();
+    if (lines.length <= maxLines) return lines;
+
+    const header = lines.slice(0, 3);
+    const body = lines.slice(3, -2);
+    const hBar = lines[lines.length - 1] ?? theme.fg("dim", "─".repeat(panelWidth));
+    const maxBodyLines = Math.max(4, maxLines - header.length - 2);
+    const maxOffset = Math.max(0, body.length - maxBodyLines);
+    const state = this.getState();
+    const offset = Math.max(0, Math.min(state.scrollOffset, maxOffset));
+    state.scrollOffset = offset;
+    const hiddenAbove = offset;
+    const hiddenBelow = Math.max(0, body.length - offset - maxBodyLines);
+    const scrollHint = hiddenAbove || hiddenBelow
+      ? `↑${hiddenAbove} ↓${hiddenBelow}  Alt+[/] scroll`
+      : "Alt+C to close";
+
+    return [
+      ...header,
+      ...body.slice(offset, offset + maxBodyLines),
+      `  ${theme.fg("dim", truncateToWidth(scrollHint, panelWidth - 4))}`,
+      hBar,
+    ];
+  }
 
   render(width: number): string[] {
     const theme = this.theme;
@@ -218,8 +267,10 @@ class ContextPanelComponent implements Component {
     lines.push("");
 
     if (ctx) {
-      const elapsed = formatDuration(Date.now() - state.sessionStart);
-      lines.push(`${pad}${theme.fg("dim", "Session:")} ${theme.fg("muted", elapsed)}`);
+      const age = formatDuration(Date.now() - state.sessionStart);
+      const active = formatDuration(state.activeMs);
+      lines.push(`${pad}${theme.fg("dim", "Age:")}     ${theme.fg("muted", age)}`);
+      lines.push(`${pad}${theme.fg("dim", "Active:")}  ${theme.fg("muted", active)}`);
 
       const contextUsage = ctx.getContextUsage();
       if (contextUsage && contextUsage.percent !== null) {
@@ -293,7 +344,7 @@ class ContextPanelComponent implements Component {
 
     lines.push(`${pad}${theme.fg("dim", "(Alt+C to close)")}`);
     lines.push(hBar);
-    return lines;
+    return this.applyViewport(lines, panelWidth, theme);
   }
 }
 
@@ -323,15 +374,33 @@ export class TakomiContextPanel {
     this.requestRender?.();
   }
 
+  trackActivity(timestamp = Date.now()): void {
+    const previous = this.state.lastActivityAt;
+    const delta = timestamp - previous;
+    if (delta > 0 && delta <= ACTIVE_GAP_THRESHOLD_MS) this.state.activeMs += delta;
+    this.state.lastActivityAt = Math.max(previous, timestamp);
+    this.requestRender?.();
+  }
+
   trackToolUse(toolName: string): void {
     this.state.toolUses[toolName] = (this.state.toolUses[toolName] ?? 0) + 1;
     this.state.lastToolAt = Date.now();
-    this.requestRender?.();
+    this.trackActivity(this.state.lastToolAt);
   }
 
   resetSession(): void {
     this.state = createEmptyState(Date.now(), this.state.runtime);
     this.requestRender?.();
+  }
+
+  scroll(delta: number): void {
+    if (!this.visible) return;
+    this.state.scrollOffset = Math.max(0, this.state.scrollOffset + delta);
+    this.requestRender?.();
+  }
+
+  page(delta: number): void {
+    this.scroll(delta * 8);
   }
 
   rebuildFromSession(ctx: ExtensionContext): void {
@@ -347,8 +416,11 @@ export class TakomiContextPanel {
         timestamp?: number;
       };
     }>;
-    const firstTs = branch.map(toTimestampMs).find((value): value is number => typeof value === "number");
+    const activityTimestamps = branch.map(toTimestampMs).filter((value): value is number => typeof value === "number");
+    const firstTs = activityTimestamps[0];
     const next = createEmptyState(firstTs ?? Date.now(), this.state.runtime);
+    next.activeMs = calculateActiveMs(activityTimestamps);
+    next.lastActivityAt = activityTimestamps.at(-1) ?? next.sessionStart;
     const toolCalls = new Map<string, { name: string; input: ToolCallInput }>();
 
     for (const entry of branch) {
@@ -406,9 +478,9 @@ export class TakomiContextPanel {
         overlay: true,
         overlayOptions: {
           width: 36,
-          maxHeight: "70%",
-          anchor: "right-center",
-          margin: { right: 1, top: 2, bottom: 3 },
+          maxHeight: "100%",
+          anchor: "top-right",
+          margin: { right: 1, top: 1, bottom: 3 },
           nonCapturing: true,
           visible: (termWidth) => termWidth >= 100,
         },
@@ -460,6 +532,12 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
     if (change) panel.trackFileChange(change);
   });
 
+  pi.on("message_end", (event) => {
+    const message = (event as { message?: { role?: string } }).message;
+    if (message?.role === "toolResult") return;
+    panel.trackActivity(Date.now());
+  });
+
   pi.on("turn_end", () => {
     panel.refresh();
   });
@@ -472,6 +550,34 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
     description: "Toggle Takomi context panel",
     handler: async (ctx) => {
       panel.toggle(ctx);
+    },
+  });
+
+  pi.registerShortcut("alt+[", {
+    description: "Scroll Takomi context panel up",
+    handler: async () => {
+      panel.scroll(-1);
+    },
+  });
+
+  pi.registerShortcut("alt+]", {
+    description: "Scroll Takomi context panel down",
+    handler: async () => {
+      panel.scroll(1);
+    },
+  });
+
+  pi.registerShortcut("alt+shift+[", {
+    description: "Page Takomi context panel up",
+    handler: async () => {
+      panel.page(-1);
+    },
+  });
+
+  pi.registerShortcut("alt+shift+]", {
+    description: "Page Takomi context panel down",
+    handler: async () => {
+      panel.page(1);
     },
   });
 }
