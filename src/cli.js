@@ -43,6 +43,7 @@ import {
 import { runDoctor } from './doctor.js';
 import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
+import { offerPiOptionalFeatures } from './pi-optional-features.js';
 import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
 import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
 import { printTakomiStats } from './takomi-stats.js';
@@ -232,12 +233,13 @@ async function installSkillsTarget() {
   }
 }
 
-async function installAllTargets() {
-  await installPiTarget();
+async function installAllTargets(options = {}) {
+  await installPiTarget(options);
   await installSkillsTarget();
 }
 
-async function installPiTarget() {
+async function installPiTarget(options = {}) {
+  const { offerOptionalFeatures = true } = options;
   console.log(pc.magenta('🧭 Pi Harness Preflight\n'));
   const report = await runDoctor({ version: program.version() });
 
@@ -247,7 +249,7 @@ async function installPiTarget() {
     printPiInstallResult(installResult);
     if (!installResult.ok) {
       console.log(pc.yellow('\nPi harness install stopped because Pi could not be installed.'));
-      console.log(pc.dim('Retry manually with: npm install -g @mariozechner/pi-coding-agent\n'));
+      console.log(pc.dim('Retry manually with: npm install -g @earendil-works/pi-coding-agent\n'));
       return;
     }
   }
@@ -268,6 +270,10 @@ async function installPiTarget() {
     const result = await installPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
+    if (offerOptionalFeatures) {
+      console.log(pc.cyan('\n🧩 Optional Takomi Pi feature packs...\n'));
+      await offerPiOptionalFeatures({ interactive: true });
+    }
     console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
     printPiManagedPackageUpdateResult(await updatePiManagedPackages());
     console.log(pc.dim('\nNext: cd <project> && takomi\n'));
@@ -275,6 +281,16 @@ async function installPiTarget() {
     console.log(pc.red('\nPi harness asset install failed.'));
     console.log(pc.dim(String(error?.message || error)));
   }
+}
+
+async function installPiOptionalFeaturesTarget() {
+  console.log(pc.magenta('🧩 Takomi Optional Pi Features\n'));
+  const pi = await ensurePiInstalled();
+  printPiInstallResult(pi);
+  if (!pi.ok) return;
+  await offerPiOptionalFeatures({ interactive: true });
+  console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+  printPiManagedPackageUpdateResult(await updatePiManagedPackages());
 }
 
 async function syncPiTarget() {
@@ -347,7 +363,7 @@ async function upgrade(target = 'all') {
   }
 
   if (normalizedTarget === 'pi') {
-    await installPiTarget();
+    await installPiTarget({ offerOptionalFeatures: false });
     return;
   }
 
@@ -356,13 +372,13 @@ async function upgrade(target = 'all') {
     return;
   }
 
-  await installAllTargets();
+  await installAllTargets({ offerOptionalFeatures: false });
   console.log(pc.magenta('\n✨ Fully upgraded. Next: run `takomi` from your project.\n'));
 }
 
 function printUnsupportedInstallTarget(target) {
   console.log(pc.yellow(`Unsupported install target: ${target}`));
-  console.log(pc.dim('Supported targets right now: pi, skills, all'));
+  console.log(pc.dim('Supported targets right now: pi, pi-features, skills, all'));
   console.log(pc.dim('Use plain "takomi install" for the existing interactive global installer.\n'));
 }
 
@@ -384,6 +400,10 @@ async function install(target) {
     }
     if (target === 'skills') {
       await installSkillsTarget();
+      return;
+    }
+    if (target === 'pi-features' || target === 'features' || target === 'optional') {
+      await installPiOptionalFeaturesTarget();
       return;
     }
     if (target === 'all') {
@@ -813,6 +833,7 @@ Primary flow:
 
 Examples:
   takomi setup pi     Set up the Pi harness
+  takomi setup pi-features  Add optional Pi feature packs
   takomi setup skills Install bundled skills
   takomi setup project
   takomi refresh      One-command maintenance
@@ -825,7 +846,7 @@ Legacy aliases still work:
 
 program
   .command('setup [target]')
-  .description('Set up Takomi: guided setup, or setup pi|skills|project|all')
+  .description('Set up Takomi: guided setup, or setup pi|pi-features|skills|project|all')
   .action(async (target) => {
     if (target === 'project') {
       await init();

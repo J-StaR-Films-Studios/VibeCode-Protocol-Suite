@@ -220,6 +220,9 @@ export async function ensurePiInstalled() {
   }
 
   const attempts = [
+    { command: 'npm', args: ['install', '-g', '@earendil-works/pi-coding-agent'] },
+    { command: 'npm.cmd', args: ['install', '-g', '@earendil-works/pi-coding-agent'] },
+    // Legacy fallback for older environments that still publish under the original namespace.
     { command: 'npm', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
     { command: 'npm.cmd', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
   ];
@@ -301,19 +304,23 @@ export async function updatePiManagedPackages() {
   const pi = await detectPiCommand();
   if (!pi.installed) return { ok: false, changed: false, report: 'Pi is not installed.' };
 
+  // `pi update` reconciles every package listed in Pi settings, including
+  // user-installed npm/git/local packages. Keep this broad so Takomi refresh
+  // updates old, new, custom, and optional feature packages without needing to
+  // know their names ahead of time.
   const command = pi.path || 'pi';
   const result = runCommand(command, ['update']);
   const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
   return {
     ok: result.status === 0,
     changed: result.status === 0,
-    report: output || (result.status === 0 ? 'Pi managed packages are up to date.' : 'pi update failed.'),
+    report: output || (result.status === 0 ? 'All Pi-managed packages are up to date.' : 'pi update failed.'),
   };
 }
 
 export function printPiManagedPackageUpdateResult(result) {
   if (result.ok) {
-    console.log(pc.green('✔ Updated Pi-managed packages'));
+    console.log(pc.green('✔ Updated all Pi-managed packages'));
     if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
     return;
   }

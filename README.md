@@ -29,6 +29,8 @@ Optional global skills:
 
 ```bash
 takomi setup skills
+# Optional Pi feature packs can also be managed later:
+takomi setup pi-features
 ```
 
 Useful management commands:
@@ -42,6 +44,8 @@ takomi setup project
 ```
 
 Legacy commands like `takomi install pi`, `takomi sync pi`, `takomi upgrade`, and `takomi init` still work, but the simpler mental model is: **setup once, refresh when stale, run `takomi` to use it.**
+
+During `takomi setup pi` or `takomi setup pi-features`, Takomi offers optional Pi feature packs with recommended/manual/select-all/skip choices. Current defaults install **Takomi Interview** (`npm:@juicesharp/rpiv-ask-user-question`) so models can ask structured clarification questions. **Takomi Todo** (`npm:@juicesharp/rpiv-todo`), **Takomi Browser QA** (`npm:pi-chrome`), and **Takomi Doc Preview** (`npm:pi-markdown-preview`) remain opt-in. `takomi refresh` runs Pi's package updater so installed optional, custom, old, and new Pi packages are reconciled together.
 
 ### Context Manager
 

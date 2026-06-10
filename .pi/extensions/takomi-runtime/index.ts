@@ -1202,6 +1202,24 @@ ${stateJson}`
     }
 
     const routingPolicy = await resolveTakomiRoutingPolicy(runtimeCwd);
+    const optionalFeatureContext = (() => {
+      try {
+        const tools = typeof (pi as { getAllTools?: () => Array<{ name?: string }> }).getAllTools === "function"
+          ? (pi as { getAllTools: () => Array<{ name?: string }> }).getAllTools()
+          : [];
+        const toolNames = new Set(tools.map((tool) => tool.name).filter(Boolean));
+        const guidance: string[] = [];
+        if (toolNames.has("ask_user_question")) {
+          guidance.push("Takomi Interview is available: when Genesis, Design, or ambiguous planning would otherwise require guessing, use ask_user_question to ask concise structured questions before proceeding.");
+        }
+        if (toolNames.has("todo")) {
+          guidance.push("Takomi Todo is available as an optional live overlay. You may use todo for short-lived execution visibility, but takomi_board remains the durable lifecycle/task source of truth.");
+        }
+        return guidance.join("\n");
+      } catch {
+        return "";
+      }
+    })();
     const modelPreflightContext = (() => {
       try {
         const available = typeof (ctx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry?.getAvailable === "function"
@@ -1223,6 +1241,7 @@ ${stateJson}`
       routingPolicy.text
         ? `${routingPolicy.source === "bundled" ? "Bundled" : "Project"} Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy.text}`
         : "No Takomi routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
+      optionalFeatureContext,
       modelPreflightContext,
       `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       `Takomi execution gate: ${effectiveState.launchMode === "manual" ? "review" : "auto"}. In review gate mode, show the delegation plan before launching and return to the user after each task with results, verification guidance, and the recommended next step.`,
