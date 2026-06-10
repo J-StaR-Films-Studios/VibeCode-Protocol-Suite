@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import pc from 'picocolors';
 import { PATHS } from './utils.js';
+import { CORE_SKILLS } from './skills-catalog.js';
 
 // ─── Global Store Path ───────────────────────────────────────────────────────
 const HOME = os.homedir();
@@ -83,16 +84,10 @@ export async function populateSkills(mode) {
     const storeSkills = path.join(STORE_PATH, 'skills');
     await fs.ensureDir(storeSkills);
 
-    const coreSkills = [
-        'takomi',
-        'ai-sdk', 'code-review', 'component-analysis', 'context7',
-        'nextjs-standards', 'security-audit', 'spawn-task', 'stitch',
-    ];
-
     let skillsToCopy = [];
 
     if (mode === 'core') {
-        skillsToCopy = coreSkills;
+        skillsToCopy = CORE_SKILLS;
     } else if (mode === 'all') {
         // Read all skill directories from package assets
         const entries = await fs.readdir(PATHS.skills);

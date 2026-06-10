@@ -44,7 +44,24 @@ import { runDoctor } from './doctor.js';
 import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { offerPiOptionalFeatures } from './pi-optional-features.js';
-import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
+import {
+  buildSkillsReconcilePlan,
+  getInstalledTakomiSkillNames,
+  installBundledSkills,
+  printSkillsInstallSummary,
+  validateSkillsInstall,
+  SKILLS_ROOT,
+} from './skills-installer.js';
+import {
+  colorCategory,
+  CORE_SKILLS,
+  getSkillChoices,
+  getSkillsForCategories,
+  getUncategorizedSkills,
+  getValidCoreSkills,
+  listBundledSkillNames,
+  SKILL_CATEGORIES,
+} from './skills-catalog.js';
 import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
 import { printTakomiStats } from './takomi-stats.js';
 
@@ -173,13 +190,7 @@ async function init() {
       // Handle Skills
       if (response.skillMode === 'core') {
         console.log(pc.green('✔ Downloading Core Skills...'));
-        const coreSkills = [
-          'takomi',
-          'ai-sdk', 'code-review', 'component-analysis',
-          'nextjs-standards', 'security-audit', 'spawn-task',
-          'stitch', 'sync-docs'
-        ];
-        await copySpecificSkills(coreSkills, skillsDest);
+        await copySpecificSkills(CORE_SKILLS, skillsDest);
       } else if (response.skillMode === 'all') {
         console.log(pc.green('✔ Downloading all skills...'));
         await copyAllSkills(skillsDest);
@@ -220,11 +231,175 @@ async function init() {
   }
 }
 
+function formatCoreSkillsSummary() {
+  return CORE_SKILLS.join(', ');
+}
+
+async function promptCustomSkillSelection(initialSelected = [], options = {}) {
+  const initialSet = new Set(initialSelected);
+  const uncategorized = await getUncategorizedSkills();
+  const categoryChoices = SKILL_CATEGORIES.map((category) => ({
+    title: colorCategory(category),
+    value: category.id,
+    selected: category.skills.some((skill) => initialSet.has(skill)),
+    description: category.description,
+  }));
+
+  if (uncategorized.length) {
+    categoryChoices.push({
+      title: pc.dim('[Other / Uncategorized]'),
+      value: '__uncategorized',
+      selected: uncategorized.some((skill) => initialSet.has(skill)),
+      description: 'Bundled skills that are not assigned to a curated category yet.',
+    });
+  }
+
+  const categoryResponse = await prompts({
+    type: 'multiselect',
+    name: 'categories',
+    message: 'Select skill categories:',
+    choices: categoryChoices,
+    hint: '- Space to select. Return to continue',
+  });
+
+  if (!categoryResponse.categories) return null;
+
+  const selected = new Set();
+  const selectedCategories = categoryResponse.categories;
+
+  for (const categoryId of selectedCategories) {
+    const category = SKILL_CATEGORIES.find((item) => item.id === categoryId);
+    const skillNames = categoryId === '__uncategorized'
+      ? uncategorized
+      : (await getSkillsForCategories([categoryId]));
+    const categoryHadInitialSelection = skillNames.some((skill) => initialSet.has(skill));
+    const defaultSelected = options.selectAllForNewCategories && !categoryHadInitialSelection
+      ? skillNames
+      : skillNames.filter((skill) => initialSet.has(skill));
+
+    const skillResponse = await prompts({
+      type: 'multiselect',
+      name: 'skills',
+      message: `Select skills in ${category?.title || 'Other / Uncategorized'}:`,
+      choices: await getSkillChoices(skillNames, defaultSelected),
+      hint: '- Space to select. Return to continue',
+    });
+
+    if (!skillResponse.skills) return null;
+    for (const skill of skillResponse.skills) selected.add(skill);
+  }
+
+  return [...selected].sort();
+}
+
+async function confirmSkillRemovalIfNeeded(selectedSkills, mode) {
+  const plan = await buildSkillsReconcilePlan(selectedSkills);
+  if (plan.toRemove.length === 0) return true;
+
+  console.log(pc.yellow('\nTakomi will remove deselected Takomi-managed skills only:'));
+  for (const skill of plan.toRemove) console.log(pc.dim(`  - ${skill}`));
+  console.log(pc.dim('\nManual skills and modified Takomi skills are preserved.'));
+
+  const response = await prompts({
+    type: 'confirm',
+    name: 'confirm',
+    message: `Remove ${plan.toRemove.length} Takomi-managed skill${plan.toRemove.length === 1 ? '' : 's'} for "${mode}"?`,
+    initial: false,
+  });
+
+  return Boolean(response.confirm);
+}
+
+async function promptSkillsInstallSelection() {
+  const envMode = process.env.TAKOMI_SKILLS_MODE;
+  if (envMode) {
+    const mode = envMode.toLowerCase();
+    if (mode === 'core') return { mode, selectedSkills: await getValidCoreSkills() };
+    if (mode === 'all') return { mode, selectedSkills: await listBundledSkillNames() };
+    if (mode === 'none') return { mode, selectedSkills: [] };
+    if (mode === 'leave-as-is' || mode === 'leave') return { mode: 'leave-as-is', leaveAsIs: true };
+  }
+
+  const installed = await getInstalledTakomiSkillNames();
+  const hasTakomiSkills = installed.length > 0;
+  const choices = hasTakomiSkills
+    ? [
+        { title: 'Leave As Is', value: 'leave-as-is', selected: true, description: `Recommended: keep ${installed.length} Takomi-managed skill${installed.length === 1 ? '' : 's'} unchanged.` },
+        { title: 'Present Custom', value: 'present-custom', description: 'Review your current Takomi-managed skills and adjust selections.' },
+        { title: 'Core Skills', value: 'core', description: `[Recommended defaults] ${formatCoreSkillsSummary()}` },
+        { title: 'Custom', value: 'custom', description: 'Choose categories and individual skills.' },
+        { title: 'All Skills', value: 'all', description: 'Install every bundled Takomi skill.' },
+        { title: 'None', value: 'none', description: 'Disable Takomi-managed skills after confirmation.' },
+      ]
+    : [
+        { title: 'Core Skills', value: 'core', selected: true, description: `[Recommended defaults] ${formatCoreSkillsSummary()}` },
+        { title: 'Custom', value: 'custom', description: 'Choose categories and individual skills.' },
+        { title: 'All Skills', value: 'all', description: 'Install every bundled Takomi skill.' },
+        { title: 'None', value: 'none', description: 'Do not install Takomi skills.' },
+      ];
+
+  const response = await prompts({
+    type: 'select',
+    name: 'mode',
+    message: 'Skills Installation',
+    choices,
+  });
+
+  if (!response.mode) return null;
+
+  if (response.mode === 'leave-as-is') {
+    return { mode: response.mode, leaveAsIs: true, ownedCount: installed.length };
+  }
+
+  let selectedSkills = [];
+  if (response.mode === 'core') {
+    selectedSkills = await getValidCoreSkills();
+  } else if (response.mode === 'all') {
+    const confirmAll = await prompts({
+      type: 'confirm',
+      name: 'confirm',
+      message: 'Install every bundled skill? This may add skill discovery noise in supported harnesses.',
+      initial: false,
+    });
+    if (!confirmAll.confirm) return { mode: 'leave-as-is', leaveAsIs: true, ownedCount: installed.length };
+    selectedSkills = await listBundledSkillNames();
+  } else if (response.mode === 'none') {
+    selectedSkills = [];
+  } else if (response.mode === 'present-custom') {
+    const customSelection = await promptCustomSkillSelection(installed, { selectAllForNewCategories: true });
+    if (!customSelection) return null;
+    selectedSkills = customSelection;
+  } else if (response.mode === 'custom') {
+    const customSelection = await promptCustomSkillSelection([], { selectAllForNewCategories: true });
+    if (!customSelection) return null;
+    selectedSkills = customSelection;
+  }
+
+  const confirmedRemoval = await confirmSkillRemovalIfNeeded(selectedSkills, response.mode);
+  if (!confirmedRemoval) {
+    return { mode: 'leave-as-is', leaveAsIs: true, ownedCount: installed.length };
+  }
+
+  return { mode: response.mode, selectedSkills };
+}
+
 async function installSkillsTarget() {
   console.log(pc.magenta('🧰 Takomi Skills Install\n'));
   try {
-    const result = await installBundledSkills(program.version());
-    const validation = await validateSkillsInstall();
+    const selection = await promptSkillsInstallSelection();
+    if (!selection) return;
+    if (selection.leaveAsIs) {
+      printSkillsInstallSummary({
+        leaveAsIs: true,
+        targetRoot: SKILLS_ROOT,
+        ownedCount: selection.ownedCount || (await getInstalledTakomiSkillNames()).length,
+      });
+      console.log(pc.dim('\nGlobal skills were not changed.\n'));
+      return;
+    }
+
+    const result = await installBundledSkills(program.version(), selection);
+    const validation = await validateSkillsInstall(selection.selectedSkills);
     printSkillsInstallSummary(result, validation);
     console.log(pc.dim('\nGlobal skills are ready for Pi or other supported harnesses.\n'));
   } catch (error) {
@@ -310,8 +485,18 @@ async function syncPiTarget() {
 async function syncSkillsTarget() {
   console.log(pc.magenta('📡 Takomi Skills Sync\n'));
   try {
-    const result = await installBundledSkills(program.version());
-    const validation = await validateSkillsInstall();
+    const selection = await promptSkillsInstallSelection();
+    if (!selection) return;
+    if (selection.leaveAsIs) {
+      printSkillsInstallSummary({
+        leaveAsIs: true,
+        targetRoot: SKILLS_ROOT,
+        ownedCount: selection.ownedCount || (await getInstalledTakomiSkillNames()).length,
+      });
+      return;
+    }
+    const result = await installBundledSkills(program.version(), selection);
+    const validation = await validateSkillsInstall(selection.selectedSkills);
     printSkillsInstallSummary(result, validation);
   } catch (error) {
     console.log(pc.red('\nSkills sync failed.'));
@@ -467,7 +652,7 @@ async function install(target) {
       name: 'skillMode',
       message: 'Which skill pack?',
       choices: [
-        { title: 'Core (Takomi + essentials)', value: 'core', description: 'takomi, ai-sdk, code-review...' },
+        { title: 'Core (Recommended defaults)', value: 'core', description: 'takomi, sync-docs, ai-sdk, git-commit-generation...' },
         { title: `All (${(await getSkills()).length} skills)`, value: 'all' },
         { title: 'Custom selection', value: 'custom' },
       ],
