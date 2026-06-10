@@ -241,7 +241,7 @@ class ContextPanelComponent implements Component {
     const hiddenAbove = offset;
     const hiddenBelow = Math.max(0, body.length - offset - maxBodyLines);
     const scrollHint = hiddenAbove || hiddenBelow
-      ? `↑${hiddenAbove} ↓${hiddenBelow}  Alt+[/] scroll`
+      ? `↑${hiddenAbove} ↓${hiddenBelow}  Alt+K/J scroll`
       : "Alt+C to close";
 
     return [
@@ -553,28 +553,28 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
     },
   });
 
-  pi.registerShortcut("alt+[", {
+  pi.registerShortcut("alt+k", {
     description: "Scroll Takomi context panel up",
     handler: async () => {
       panel.scroll(-1);
     },
   });
 
-  pi.registerShortcut("alt+]", {
+  pi.registerShortcut("alt+j", {
     description: "Scroll Takomi context panel down",
     handler: async () => {
       panel.scroll(1);
     },
   });
 
-  pi.registerShortcut("alt+shift+[", {
+  pi.registerShortcut("alt+shift+k", {
     description: "Page Takomi context panel up",
     handler: async () => {
       panel.page(-1);
     },
   });
 
-  pi.registerShortcut("alt+shift+]", {
+  pi.registerShortcut("alt+shift+j", {
     description: "Page Takomi context panel down",
     handler: async () => {
       panel.page(1);

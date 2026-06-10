@@ -40,6 +40,28 @@ function cost(model, input, cache, output, additiveCache = true) { const p = PRI
 function fmtTokens(n) { if (n >= 1e9) return `${(n/1e9).toFixed(2)}B`; if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
 function fmtMoney(n) { return `$${(n || 0).toFixed(n > 100 ? 0 : 2)}`; }
 function ms(n) { if (!n) return '-'; const s = Math.round(n/1000); if (s < 60) return `${s}s`; const m = Math.floor(s/60); if (m < 60) return `${m}m ${s%60}s`; const h = Math.floor(m/60); return `${h}h ${m%60}m`; }
+const ACTIVE_GAP_THRESHOLD_MS = 15 * 60 * 1000;
+function timestampMs(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function addTimestamp(target, value) {
+  const parsed = timestampMs(value);
+  if (parsed !== null) target.push(parsed);
+}
+function activeDuration(timestamps, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
+  const sorted = [...new Set((timestamps || []).filter(Number.isFinite))].sort((a, b) => a - b);
+  let total = 0;
+  for (let i = 1; i < sorted.length; i += 1) {
+    const delta = sorted[i] - sorted[i - 1];
+    if (delta > 0 && delta <= maxGapMs) total += delta;
+  }
+  return total;
+}
 function parseSince(value) {
   if (!value) return null;
   const raw = String(value).trim().toLowerCase();
@@ -88,14 +110,20 @@ async function files(root, suffix = '.jsonl') {
   await walk(root); return out;
 }
 
+function pushTask(taskRows, task) {
+  if (!task?.end || task.end === task.start) return;
+  task.activeMs = activeDuration(task.activityTimestamps || []);
+  taskRows.push(task);
+}
+
 async function scanPiSessions(root, source, events, sessionRows = [], taskRows = []) {
   for (const file of await files(root)) {
     let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null;
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0 };
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityTimestamps: [] };
     const text = await fs.readFile(file, 'utf8').catch(() => '');
     for (const line of text.split(/\r?\n/)) {
       const obj = safeJson(line); if (!obj) continue;
-      if (obj.timestamp) { row.start ||= obj.timestamp; row.end = obj.timestamp; }
+      if (obj.timestamp) { row.start ||= obj.timestamp; row.end = obj.timestamp; addTimestamp(row.activityTimestamps, obj.timestamp); }
       if (obj.type === 'session') { session = obj.id || session; cwd = obj.cwd || cwd; row.key = session; row.session = session; row.cwd = cwd; }
       if (obj.type === 'model_change') { provider = obj.provider || provider; model = obj.modelId || model; }
       if (obj.type === 'custom' && obj.customType === 'takomi-runtime-state' && obj.data) {
@@ -112,12 +140,14 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         row.messages += 1;
         const ts = obj.timestamp || msg.timestamp || '';
         if (msg.role === 'user') {
-          if (currentTask?.end && currentTask.end !== currentTask.start) taskRows.push(currentTask);
+          pushTask(taskRows, currentTask);
           row.turns += 1;
           const textPart = (msg.content || []).find(p => p?.type === 'text')?.text || '';
-          currentTask = { source, file, session, project: projectKey(file), cwd, start: ts, end: ts, provider, model, turns: 1, toolCalls: 0, title: String(textPart).replace(/\s+/g, ' ').trim() };
+          currentTask = { source, file, session, project: projectKey(file), cwd, start: ts, end: ts, provider, model, turns: 1, toolCalls: 0, title: String(textPart).replace(/\s+/g, ' ').trim(), activityTimestamps: [] };
+          addTimestamp(currentTask.activityTimestamps, ts);
         } else if (currentTask && ts) {
           currentTask.end = ts;
+          addTimestamp(currentTask.activityTimestamps, ts);
         }
         for (const part of msg.content || []) {
           if (!part || part.type !== 'toolCall') continue;
@@ -135,8 +165,8 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
       const u = msg && msg.usage;
       if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: +u.input||0, cache: +u.cacheRead||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, true) });
     }
-    if (currentTask?.end && currentTask.end !== currentTask.start) taskRows.push(currentTask);
-    row.activeMs = taskRows.filter(t => t.file === file).reduce((sum, t) => sum + taskDuration(t), 0);
+    pushTask(taskRows, currentTask);
+    row.activeMs = activeDuration(row.activityTimestamps);
     if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
   }
 }
@@ -336,9 +366,7 @@ function sessionDuration(row) {
   return row?.activeMs || 0;
 }
 function taskDuration(row) {
-  const start = Date.parse(row?.start || '');
-  const end = Date.parse(row?.end || '');
-  return Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : 0;
+  return row?.activeMs ?? activeDuration(row?.activityTimestamps || []);
 }
 function taskLabel(row, width = 34) {
   const label = row?.title || row?.project || row?.session || 'unknown';
@@ -379,7 +407,7 @@ function renderFocusedView(stats, opts = {}) {
     `      ${pc.cyan(ms(sessionDuration(r)))}  ${pc.dim(r.turns + ' turns')}  ${pc.dim(r.toolCalls + ' tools')}`,
     `      ${pc.dim(r.file || '')}`,
   ].join('\n'), limit);
-  if (view === 'tasks-full' || view === 'task-full') return renderFullList('Longest Tasks — Full Prompts', stats.topTasks || [], (r, i) => [
+  if (view === 'tasks-full' || view === 'task-full') return renderFullList('Longest Active Turns — Full Prompts', stats.topTasks || [], (r, i) => [
     `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.cyan(ms(taskDuration(r)))}  ${pc.magenta(r.toolCalls + ' tools')}  ${pc.dim(dayOf(r.start))}`,
     `      ${pc.white(indentWrap(r.title || r.project || r.session || 'unknown'))}`,
     `      ${pc.dim(r.project || '')}`,
@@ -426,7 +454,7 @@ function renderFocusedView(stats, opts = {}) {
       { width: 8, align: 'right', get: r => pc.cyan(String(r.toolCalls)) },
       { width: 8, align: 'left', get: () => pc.dim('tools') },
     ]],
-    tasks: ['Longest Tasks', stats.topTasks || [], [
+    tasks: ['Longest Active Turns', stats.topTasks || [], [
       { width: 6, align: 'left', get: r => pc.dim(dayOf(r.start).slice(5)) },
       { width: 9, align: 'right', get: r => pc.cyan(ms(taskDuration(r))) },
       { width: 11, align: 'right', get: r => pc.magenta(`${r.toolCalls} tools`) },
@@ -518,9 +546,9 @@ export function renderTakomiStats(stats, opts = {}) {
   // ── Duration Cards ────────────────────────────────────────────────────
   lines.push('');
   const cards3 = [
-    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Active Session', pc.cyan),
+    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Top Active Session', pc.cyan),
     statCard(longestSession ? String(longestSession.turns) : '-', 'Turns in Session', pc.cyan),
-    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Task', pc.magenta),
+    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Active Turn', pc.magenta),
     statCard(longestTask ? String(longestTask.toolCalls) : '-', 'Tools in Task', pc.magenta),
     statCard(stats.mostSubagentsSession ? String(stats.mostSubagentsSession.subagentCalls) : '0', 'Max Subagents', pc.blue),
   ];
@@ -530,7 +558,7 @@ export function renderTakomiStats(stats, opts = {}) {
 
   // ── Info line ─────────────────────────────────────────────────────────
   lines.push('');
-  const infoText = `Peak: ${peak?.key || '-'}  ·  ${streaks.quietDays} quiet days  ·  ${stats.totals.events.toLocaleString()} events${stats.since ? `  ·  since ${stats.since}` : ''}`;
+  const infoText = `Peak: ${peak?.key || '-'}  ·  ${streaks.quietDays} quiet days  ·  ${stats.totals.events.toLocaleString()} events  ·  active gaps ≤15m${stats.since ? `  ·  since ${stats.since}` : ''}`;
   lines.push(center(pc.dim(infoText), W));
 
   lines.push('');
@@ -586,10 +614,10 @@ export function renderTakomiStats(stats, opts = {}) {
     ]));
   }
 
-  // ── Longest Tasks ──────────────────────────────────────────────────────
+  // ── Longest Active Turns ───────────────────────────────────────────────
   if (stats.topTasks?.length) {
     lines.push('');
-    lines.push(renderTable('Longest Tasks', stats.topTasks.slice(0, 5), [
+    lines.push(renderTable('Longest Active Turns', stats.topTasks.slice(0, 5), [
       { width: 6,  align: 'left',  get: r => pc.dim(dayOf(r.start).slice(5)) },
       { width: 9,  align: 'right', get: r => pc.cyan(ms(taskDuration(r))) },
       { width: 11, align: 'right', get: r => pc.magenta(`${r.toolCalls} tools`) },
