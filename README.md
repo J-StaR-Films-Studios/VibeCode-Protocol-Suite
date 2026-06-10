@@ -31,6 +31,7 @@ Optional global skills:
 takomi setup skills
 # First install defaults to Core Skills.
 # Repeat installs default to Leave As Is so existing selections are not pruned accidentally.
+# Custom opens a color-coded category TUI with expandable skill rows when a TTY is available.
 # Optional Pi feature packs can also be managed later:
 takomi setup pi-features
 ```
@@ -75,7 +76,8 @@ npx takomi install
 What happens next:
 - 🔍 **Auto-detects** every AI harness on your machine
 - 📦 **Creates your command center** at `~/.takomi/`
-- 📡 **Syncs your entire toolkit** to every IDE automatically
+- 🧰 **Lets you choose Core, Present Custom, Custom, All, or Leave As Is for skills**
+- 📡 **Syncs your selected toolkit** to every IDE automatically
 - 🔄 **Keeps KiloCode in sync** across CLI and VS Code
 
 ### Option B: Per-Project Setup
@@ -124,7 +126,7 @@ Original Takomi-authored skills in this bundle include `21st-dev-components`, `t
 
 Think of skills as specialized team members you can summon on demand. From security audits to AI video generation — there's a skill for that.
 
-Takomi's own installer no longer installs every bundled skill by default. `takomi setup skills` uses **Core Skills** for first-time installs, **Leave As Is** for repeat installs, and ownership-safe cleanup when you explicitly deselect Takomi-managed skills. Manual/user-added skills are preserved.
+Takomi's own installer no longer installs every bundled skill by default. `takomi setup skills` uses **Core Skills** for first-time installs, **Leave As Is** for repeat installs, and ownership-safe cleanup when you explicitly deselect Takomi-managed skills. Manual/user-added skills are preserved. Custom selection opens a color-coded category browser with expandable rows on capable terminals, and falls back to simple prompts elsewhere. The global store/harness sync path uses the same ownership model so deselected Takomi-managed skills and workflows can be pruned from `~/.takomi/` and synced harness folders without touching manual or imported resources.
 
 The published bundle currently ships **72 top-level skills**, including the original `21st-dev-components` workflow for guided 21st.dev integration. The `pr-comment-fix` skill is sourced from https://gist.github.com/GSonofNun/35c67304c35dac7d6b43308b5371f671.
 

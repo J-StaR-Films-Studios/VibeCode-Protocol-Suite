@@ -1,7 +1,7 @@
 # Takomi Resource Installer Selection
 
 ## Status
-Draft design notes from Genesis/Design discussion.
+Implemented first pass: core/repeat-install modes, categorized selection, ownership-safe skill reconciliation, global store/harness ownership tracking, tests, and a terminal TUI category browser with prompt fallback.
 
 ## Goal
 Takomi should stop installing every bundled skill by default. Skill installation should be intentional, categorized, visually clear, and ownership-safe on repeat installs.
@@ -79,10 +79,11 @@ Controls target:
 - Enter: continue
 - Back/Escape: previous page
 
-Visual target:
+Visual behavior:
 - Color-coded categories.
-- Selected category labels appear in brackets, e.g. `[Takomi Core]`, `[Security]`, `[Convex]`.
+- Selected category labels appear in brackets, e.g. `[Core / Recommended]`, `[Security / Review]`, `[Convex]`.
 - Expanded category shows skill names and descriptions.
+- If the terminal is not an interactive TTY, the installer falls back to category and per-category multiselect prompts.
 
 ## Proposed Categories
 ### Core / Recommended
@@ -210,3 +211,9 @@ This enables safe reconciliation across setup, refresh, global store sync, and h
 3. Add ownership-aware reconciler.
 4. Use it from `setup skills`, `refresh skills`, `setup all`, global store population, and harness sync.
 5. Add TUI/custom selector after the basic resolver is stable.
+
+## Implemented Coverage
+- Direct global skills target: `takomi setup skills`, `takomi refresh skills`, and `takomi setup all` skills portion.
+- Multi-IDE global store setup: `takomi setup` / legacy `takomi install` skills and workflows portions.
+- Harness sync: ownership-aware copying and pruning for skills/workflows synced from the global store.
+- Safety behavior: manual collisions and modified Takomi-owned resources are preserved and reported.

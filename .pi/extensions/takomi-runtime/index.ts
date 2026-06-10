@@ -84,6 +84,9 @@ const STATE_ENTRY = "takomi-runtime-state";
 
 let activeProfile: TakomiProfile = DEFAULT_TAKOMI_PROFILE;
 let activeSubagentLabel: string | undefined;
+let activeSubagentAgent: string | undefined;
+let activeSubagentTask: string | undefined;
+let activeSubagentStatus: string | undefined;
 
 const ThinkingSchema = Type.Union([
   Type.Literal("off"),
@@ -665,18 +668,27 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       launchMode: state.launchMode,
       planMode: state.planMode,
       activeSubagent: activeSubagentLabel,
+      activeSubagentAgent,
+      activeSubagentTask,
+      activeSubagentStatus,
     });
   }
 
   async function applySubagentRuntimeEvent(event: TakomiSubagentRuntimeEvent, ctx: ExtensionContext): Promise<void> {
     if (event.type === "start") {
       activeSubagentLabel = `${event.state.agent}: ${event.state.taskLabel}`;
+      activeSubagentAgent = event.state.agent;
+      activeSubagentTask = event.state.taskLabel;
+      activeSubagentStatus = event.state.status ?? "running";
       syncContextPanelState();
     } else if ((event.type === "update" || event.type === "complete" || event.type === "block") && event.patch) {
       const model = event.patch.model ? ` @ ${event.patch.model}` : "";
       const thinking = event.patch.thinking ? ` (${event.patch.thinking})` : "";
       const label = event.patch.summary?.split(/\r?\n/).find(Boolean);
       if (label) activeSubagentLabel = `${label}${model}${thinking}`;
+      if (event.patch.agent) activeSubagentAgent = event.patch.agent;
+      if (event.patch.taskLabel) activeSubagentTask = event.patch.taskLabel;
+      activeSubagentStatus = event.type === "complete" ? "completed" : event.type === "block" ? "blocked" : event.patch.status ?? activeSubagentStatus;
       syncContextPanelState();
     }
     switch (event.type) {
@@ -761,6 +773,9 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       await updateState(ctx, () => {
         state = cloneState(DEFAULT_STATE);
         activeSubagentLabel = undefined;
+        activeSubagentAgent = undefined;
+        activeSubagentTask = undefined;
+        activeSubagentStatus = undefined;
       }, "Takomi runtime state reset");
       subagentController.reset(ctx);
       contextPanel.resetSession();
@@ -1276,8 +1291,10 @@ ${stateJson}`
     runtimeCtx = ctx;
     activeProfile = await loadTakomiProfile(ctx.cwd);
     activeSubagentLabel = undefined;
+    activeSubagentAgent = undefined;
+    activeSubagentTask = undefined;
+    activeSubagentStatus = undefined;
     subagentController.reset(ctx);
-    contextPanel.resetSession();
     const entries = ctx.sessionManager.getEntries();
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i] as { type: string; customType?: string; data?: TakomiState };
@@ -1297,6 +1314,7 @@ ${stateJson}`
     }
 
     syncContextPanelState();
+    contextPanel.rebuildFromSession(ctx);
     await refreshUi(ctx, state);
     contextPanel.show(ctx);
     flushPendingSubagentEvents();

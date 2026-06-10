@@ -1,12 +1,14 @@
 /**
  * Takomi Context Panel - right-side overlay showing session context.
  *
- * Tracks file edits, tool usage, and Takomi runtime metadata.
+ * Tracks changed files, tool usage, and active Takomi work.
  * Toggled with Alt+C or /takomi-context.
  */
 
+import { accessSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
-import { ellipsizeMiddle, formatDuration, truncateToWidth } from "./shared";
+import { ellipsizeMiddle, formatDuration, truncateToWidth, visibleWidth } from "./shared";
 
 interface Component {
   render(width: number): string[];
@@ -20,10 +22,12 @@ interface OverlayHandle {
   isHidden(): boolean;
 }
 
-export type FileEdit = {
+export type FileChange = {
   path: string;
-  action: "M" | "+" | "R";
+  action: "M" | "+";
   timestamp: number;
+  added?: number;
+  removed?: number;
 };
 
 export type ToolUseCount = {
@@ -39,24 +43,155 @@ export type ContextRuntimeState = {
   launchMode?: string;
   planMode?: boolean;
   activeSubagent?: string;
+  activeSubagentAgent?: string;
+  activeSubagentTask?: string;
+  activeSubagentStatus?: "running" | "completed" | "blocked" | string;
 };
 
 export type ContextPanelState = {
-  fileEdits: FileEdit[];
+  fileChanges: FileChange[];
   toolUses: ToolUseCount;
   sessionStart: number;
   lastToolAt: number;
   runtime: ContextRuntimeState;
 };
 
-function createEmptyState(): ContextPanelState {
+type ToolCallInput = Record<string, unknown>;
+
+type BoardCounts = {
+  completed: number;
+  pending: number;
+  inProgress: number;
+  blocked: number;
+};
+
+function createEmptyState(sessionStart = Date.now(), runtime: ContextRuntimeState = {}): ContextPanelState {
   return {
-    fileEdits: [],
+    fileChanges: [],
     toolUses: {},
-    sessionStart: Date.now(),
+    sessionStart,
     lastToolAt: 0,
-    runtime: {},
+    runtime,
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function normalizeToolPath(input: ToolCallInput): string | undefined {
+  const value = firstString(input.path, input.file_path, input.filePath);
+  return value?.replace(/^@/, "");
+}
+
+function countLines(text: string): number {
+  if (!text) return 0;
+  return text.replace(/\r?\n$/, "").split(/\r?\n/).length;
+}
+
+function lineDeltaForEdit(input: ToolCallInput): { added?: number; removed?: number } {
+  const edits = Array.isArray(input.edits)
+    ? input.edits.map(asRecord)
+    : typeof input.oldText === "string" || typeof input.newText === "string"
+      ? [input]
+      : [];
+
+  let added = 0;
+  let removed = 0;
+  for (const edit of edits) {
+    const oldText = typeof edit.oldText === "string" ? edit.oldText : "";
+    const newText = typeof edit.newText === "string" ? edit.newText : "";
+    const oldLines = countLines(oldText);
+    const newLines = countLines(newText);
+    if (newLines > oldLines) added += newLines - oldLines;
+    if (oldLines > newLines) removed += oldLines - newLines;
+  }
+
+  return {
+    ...(added > 0 ? { added } : {}),
+    ...(removed > 0 ? { removed } : {}),
+  };
+}
+
+function lineDeltaForWrite(input: ToolCallInput): { added?: number; removed?: number } {
+  const content = typeof input.content === "string" ? input.content : undefined;
+  if (content === undefined) return {};
+  const added = countLines(content);
+  return added > 0 ? { added } : {};
+}
+
+function changeFromTool(toolName: string, input: ToolCallInput, actionOverride?: "M" | "+"): FileChange | undefined {
+  if (toolName !== "edit" && toolName !== "write") return undefined;
+  const filePath = normalizeToolPath(input);
+  if (!filePath) return undefined;
+  const delta = toolName === "write" ? lineDeltaForWrite(input) : lineDeltaForEdit(input);
+  return {
+    path: filePath,
+    action: actionOverride ?? (toolName === "write" ? "+" : "M"),
+    timestamp: Date.now(),
+    ...delta,
+  };
+}
+
+function formatDiff(change: FileChange, theme: Theme): string {
+  const parts = [];
+  if (change.added && change.added > 0) parts.push(theme.fg("success", `+${change.added}`));
+  if (change.removed && change.removed > 0) parts.push(theme.fg("error", `-${change.removed}`));
+  return parts.join(" ");
+}
+
+function toTimestampMs(entry: { timestamp?: unknown; message?: { timestamp?: unknown } }): number | undefined {
+  if (typeof entry.message?.timestamp === "number") return entry.message.timestamp;
+  if (typeof entry.timestamp === "string") {
+    const parsed = Date.parse(entry.timestamp);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function formatDisplayPath(filePath: string, cwd?: string): string {
+  const normalized = filePath.replace(/^@/, "");
+  const absolute = path.isAbsolute(normalized) ? normalized : undefined;
+  if (absolute && cwd) {
+    const rel = path.relative(cwd, absolute);
+    if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel.replace(/\\/g, "/");
+  }
+  return normalized.replace(/\\/g, "/");
+}
+
+function loadBoardCounts(cwd: string, sessionId?: string): BoardCounts | undefined {
+  if (!sessionId) return undefined;
+  try {
+    const stateFile = path.join(cwd, ".pi", "takomi", "orchestrator", `${sessionId}.json`);
+    const parsed = JSON.parse(readFileSync(stateFile, "utf8")) as { tasks?: Array<{ status?: string }> };
+    const counts: BoardCounts = { completed: 0, pending: 0, inProgress: 0, blocked: 0 };
+    for (const task of parsed.tasks ?? []) {
+      if (task.status === "completed") counts.completed += 1;
+      else if (task.status === "in-progress") counts.inProgress += 1;
+      else if (task.status === "blocked") counts.blocked += 1;
+      else counts.pending += 1;
+    }
+    return counts;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatBoardCounts(counts: BoardCounts): string {
+  const parts = [
+    counts.completed ? `${counts.completed} done` : "",
+    counts.inProgress ? `${counts.inProgress} active` : "",
+    counts.pending ? `${counts.pending} pending` : "",
+    counts.blocked ? `${counts.blocked} blocked` : "",
+  ].filter(Boolean);
+  return parts.join(" · ") || "0 tasks";
 }
 
 class ContextPanelComponent implements Component {
@@ -84,20 +219,7 @@ class ContextPanelComponent implements Component {
 
     if (ctx) {
       const elapsed = formatDuration(Date.now() - state.sessionStart);
-      const runtimeLabel = [
-        state.runtime.role ?? "agent",
-        state.runtime.stage ?? "-",
-      ].join(" · ");
-
-      lines.push(`${pad}${theme.fg("muted", runtimeLabel)}`);
       lines.push(`${pad}${theme.fg("dim", "Session:")} ${theme.fg("muted", elapsed)}`);
-
-      if (state.runtime.workflow) {
-        lines.push(`${pad}${theme.fg("dim", "Flow:")}    ${theme.fg("muted", truncateToWidth(state.runtime.workflow, innerWidth - 10))}`);
-      }
-      if (state.runtime.activeSessionId) {
-        lines.push(`${pad}${theme.fg("dim", "ID:")}      ${theme.fg("muted", ellipsizeMiddle(state.runtime.activeSessionId, innerWidth - 10))}`);
-      }
 
       const contextUsage = ctx.getContextUsage();
       if (contextUsage && contextUsage.percent !== null) {
@@ -112,30 +234,45 @@ class ContextPanelComponent implements Component {
       if (ctx.model) {
         lines.push(`${pad}${theme.fg("dim", "Model:")}   ${theme.fg("muted", ellipsizeMiddle(ctx.model.id, innerWidth - 10))}`);
       }
-      if (state.runtime.activeSubagent) {
-        lines.push(`${pad}${theme.fg("dim", "Agent:")}   ${theme.fg("muted", truncateToWidth(state.runtime.activeSubagent, innerWidth - 10))}`);
-      }
-
-      const modeFlags = [
-        state.runtime.launchMode ?? (state.runtime.autoOrch ? "auto" : "manual"),
-        state.runtime.planMode ? "plan" : "direct",
-      ].join(" | ");
-      lines.push(`${pad}${theme.fg("dim", "Mode:")}    ${theme.fg("muted", modeFlags)}`);
       lines.push("");
+
+      const boardCounts = loadBoardCounts(ctx.cwd, state.runtime.activeSessionId);
+      const activeAgent = state.runtime.activeSubagentAgent;
+      const activeTask = state.runtime.activeSubagentTask;
+      const activeStatus = state.runtime.activeSubagentStatus ?? "running";
+      if (activeAgent || activeTask || boardCounts) {
+        lines.push(`${pad}${theme.fg("accent", "-- Active Work --")}`);
+        if (activeAgent) {
+          const statusTone = activeStatus === "blocked" ? "error" : activeStatus === "completed" ? "success" : "muted";
+          lines.push(`${pad}${theme.fg(statusTone as never, truncateToWidth(`${activeAgent} ${activeStatus}`, innerWidth))}`);
+        }
+        if (activeTask) {
+          lines.push(`${pad}${theme.fg("muted", truncateToWidth(activeTask, innerWidth))}`);
+        }
+        if (boardCounts) {
+          lines.push("");
+          lines.push(`${pad}${theme.fg("dim", "Board:")} ${theme.fg("muted", truncateToWidth(formatBoardCounts(boardCounts), innerWidth - 7))}`);
+        }
+        lines.push("");
+      }
     }
 
-    lines.push(`${pad}${theme.fg("accent", "-- Files Modified --")}`);
-    if (state.fileEdits.length === 0) {
+    lines.push(`${pad}${theme.fg("accent", "-- Files Changed --")}`);
+    if (state.fileChanges.length === 0) {
       lines.push(`${pad}${theme.fg("dim", "  (none yet)")}`);
     } else {
-      const seen = new Map<string, FileEdit>();
-      for (const edit of state.fileEdits) seen.set(edit.path, edit);
+      const seen = new Map<string, FileChange>();
+      for (const change of state.fileChanges) seen.set(change.path, change);
       const deduped = [...seen.values()].slice(-12);
 
-      for (const edit of deduped) {
-        const icon = edit.action === "+" ? theme.fg("success", "+") : edit.action === "R" ? theme.fg("muted", "R") : theme.fg("warning", "M");
-        const displayPath = ellipsizeMiddle(edit.path.replace(/\\/g, "/"), innerWidth - 4);
-        lines.push(`${pad} ${icon}  ${truncateToWidth(displayPath, innerWidth - 4)}`);
+      for (const change of deduped) {
+        const icon = change.action === "+" ? theme.fg("success", "+") : theme.fg("warning", "M");
+        const diff = formatDiff(change, theme);
+        const diffWidth = visibleWidth(diff);
+        const pathWidth = Math.max(8, innerWidth - 5 - diffWidth);
+        const displayPath = ellipsizeMiddle(formatDisplayPath(change.path, ctx?.cwd), pathWidth);
+        const spacer = diff ? " ".repeat(Math.max(1, innerWidth - 4 - visibleWidth(displayPath) - diffWidth)) : "";
+        lines.push(`${pad} ${icon}  ${truncateToWidth(displayPath, pathWidth)}${spacer}${diff}`);
       }
       if (seen.size > 12) {
         lines.push(`${pad}    ${theme.fg("dim", `... +${seen.size - 12} more`)}`);
@@ -176,12 +313,12 @@ export class TakomiContextPanel {
   }
 
   setRuntimeState(runtime: ContextRuntimeState): void {
-    this.state.runtime = { ...runtime };
+    this.state.runtime = { ...this.state.runtime, ...runtime };
     this.requestRender?.();
   }
 
-  trackFileEdit(filePath: string, action: "M" | "+" | "R"): void {
-    this.state.fileEdits.push({ path: filePath, action, timestamp: Date.now() });
+  trackFileChange(change: FileChange): void {
+    this.state.fileChanges.push({ ...change, timestamp: change.timestamp || Date.now() });
     this.state.lastToolAt = Date.now();
     this.requestRender?.();
   }
@@ -193,7 +330,51 @@ export class TakomiContextPanel {
   }
 
   resetSession(): void {
-    this.state = createEmptyState();
+    this.state = createEmptyState(Date.now(), this.state.runtime);
+    this.requestRender?.();
+  }
+
+  rebuildFromSession(ctx: ExtensionContext): void {
+    this.lastCtx = ctx;
+    const branch = ctx.sessionManager.getBranch() as Array<{
+      type?: string;
+      timestamp?: string;
+      message?: {
+        role?: string;
+        content?: unknown;
+        toolCallId?: string;
+        toolName?: string;
+        timestamp?: number;
+      };
+    }>;
+    const firstTs = branch.map(toTimestampMs).find((value): value is number => typeof value === "number");
+    const next = createEmptyState(firstTs ?? Date.now(), this.state.runtime);
+    const toolCalls = new Map<string, { name: string; input: ToolCallInput }>();
+
+    for (const entry of branch) {
+      const message = entry.message;
+      if (!message) continue;
+      if (message.role === "assistant" && Array.isArray(message.content)) {
+        for (const block of message.content) {
+          const record = asRecord(block);
+          if (record.type !== "toolCall") continue;
+          const id = typeof record.id === "string" ? record.id : undefined;
+          const name = typeof record.name === "string" ? record.name : undefined;
+          if (!id || !name) continue;
+          toolCalls.set(id, { name, input: asRecord(record.arguments) });
+        }
+      }
+      if (message.role !== "toolResult" || !message.toolName) continue;
+      next.toolUses[message.toolName] = (next.toolUses[message.toolName] ?? 0) + 1;
+      next.lastToolAt = toTimestampMs(entry) ?? next.lastToolAt;
+      const input = message.toolCallId ? toolCalls.get(message.toolCallId)?.input : undefined;
+      if (input) {
+        const change = changeFromTool(message.toolName, input);
+        if (change) next.fileChanges.push({ ...change, timestamp: toTimestampMs(entry) ?? change.timestamp });
+      }
+    }
+
+    this.state = next;
     this.requestRender?.();
   }
 
@@ -251,26 +432,40 @@ export class TakomiContextPanel {
 }
 
 export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): void {
+  const pendingWriteActions = new Map<string, "M" | "+">();
+
+  pi.on("tool_call", (event, ctx) => {
+    if (event.toolName !== "write") return;
+    const input = asRecord(event.input);
+    const filePath = normalizeToolPath(input);
+    if (!filePath) return;
+    const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(ctx.cwd, filePath);
+    try {
+      accessSync(absolute);
+      statSync(absolute);
+      pendingWriteActions.set(event.toolCallId, "M");
+    } catch {
+      pendingWriteActions.set(event.toolCallId, "+");
+    }
+  });
+
   pi.on("tool_result", (event) => {
     const toolName = event.toolName;
     panel.trackToolUse(toolName);
 
-    if (toolName === "edit" || toolName === "write" || toolName === "read") {
-      const input = event.input as { file_path?: string; filePath?: string };
-      const filePath = input.file_path ?? input.filePath;
-      if (filePath) {
-        const action = toolName === "write" ? "+" : toolName === "read" ? "R" : "M";
-        panel.trackFileEdit(filePath, action);
-      }
-    }
+    const input = asRecord(event.input);
+    const actionOverride = toolName === "write" ? pendingWriteActions.get(event.toolCallId) : undefined;
+    pendingWriteActions.delete(event.toolCallId);
+    const change = changeFromTool(toolName, input, actionOverride);
+    if (change) panel.trackFileChange(change);
   });
 
   pi.on("turn_end", () => {
     panel.refresh();
   });
 
-  pi.on("session_start", () => {
-    panel.resetSession();
+  pi.on("session_start", (_event, ctx) => {
+    panel.rebuildFromSession(ctx);
   });
 
   pi.registerShortcut("alt+c", {
