@@ -349,18 +349,32 @@ export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
   };
 }
 
+function printFirstRunGuidance(reason) {
+  console.log(pc.magenta('\n🎯 Welcome to Takomi\n'));
+  if (reason) console.log(pc.yellow(reason));
+  console.log(pc.white('\nRecommended first step:'));
+  console.log(pc.cyan('  takomi setup pi'));
+  console.log(pc.dim('    Set up the Pi-native Takomi harness.'));
+  console.log(pc.white('\nOptional setup:'));
+  console.log(pc.dim('  takomi setup pi-features  Add optional Pi feature packs'));
+  console.log(pc.dim('  takomi setup skills       Install global Takomi skills'));
+  console.log(pc.dim('  takomi setup all          Set up Pi + skills'));
+  console.log(pc.white('\nDiagnostics and help:'));
+  console.log(pc.dim('  takomi doctor             Check installation health'));
+  console.log(pc.dim('  takomi status             Show connected harnesses/toolkit status'));
+  console.log(pc.dim('  takomi --help             Show all commands\n'));
+}
+
 export async function launchTakomiHarness(cwd = process.cwd()) {
   const report = await inspectPiHarnessEnvironment(cwd);
 
   if (!report.pi.installed) {
-    console.log(pc.red('Pi is not installed.'));
-    console.log(pc.dim('Run: takomi install pi'));
+    printFirstRunGuidance('Pi is not installed yet.');
     return 1;
   }
 
   if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled) {
-    console.log(pc.red('Takomi Pi harness is not fully installed.'));
-    console.log(pc.dim('Run: takomi install pi'));
+    printFirstRunGuidance('Takomi Pi harness is not fully installed yet.');
     return 1;
   }
 
