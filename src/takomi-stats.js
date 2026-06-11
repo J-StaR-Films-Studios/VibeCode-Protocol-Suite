@@ -53,14 +53,47 @@ function addTimestamp(target, value) {
   const parsed = timestampMs(value);
   if (parsed !== null) target.push(parsed);
 }
-function activeDuration(timestamps, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
-  const sorted = [...new Set((timestamps || []).filter(Number.isFinite))].sort((a, b) => a - b);
-  let total = 0;
+function mergeIntervals(intervals) {
+  const sorted = (intervals || [])
+    .filter((interval) => Number.isFinite(interval?.start) && Number.isFinite(interval?.end) && interval.end > interval.start)
+    .map((interval) => ({ start: interval.start, end: interval.end }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  if (!sorted.length) return [];
+  const merged = [sorted[0]];
   for (let i = 1; i < sorted.length; i += 1) {
-    const delta = sorted[i] - sorted[i - 1];
-    if (delta > 0 && delta <= maxGapMs) total += delta;
+    const current = sorted[i];
+    const previous = merged[merged.length - 1];
+    if (current.start <= previous.end) previous.end = Math.max(previous.end, current.end);
+    else merged.push({ ...current });
   }
-  return total;
+  return merged;
+}
+function activeDuration(intervals) {
+  return mergeIntervals(intervals).reduce((total, interval) => total + (interval.end - interval.start), 0);
+}
+function createActivityTracker(sessionStart) {
+  return { intervals: [], lastActivityAt: sessionStart ?? 0, toolStarts: new Map() };
+}
+function noteActivity(tracker, timestamp, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
+  const previous = tracker.lastActivityAt;
+  const delta = timestamp - previous;
+  if (delta > 0 && delta <= maxGapMs) tracker.intervals.push({ start: previous, end: timestamp });
+  tracker.lastActivityAt = Math.max(previous, timestamp);
+}
+function noteToolStart(tracker, toolCallId, timestamp, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
+  noteActivity(tracker, timestamp, maxGapMs);
+  if (toolCallId) tracker.toolStarts.set(toolCallId, timestamp);
+}
+function noteToolEnd(tracker, toolCallId, timestamp, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
+  const start = toolCallId ? tracker.toolStarts.get(toolCallId) : undefined;
+  if (start !== undefined) {
+    noteActivity(tracker, start, maxGapMs);
+    tracker.intervals.push({ start, end: timestamp });
+    tracker.toolStarts.delete(toolCallId);
+  } else {
+    noteActivity(tracker, timestamp, maxGapMs);
+  }
+  tracker.lastActivityAt = Math.max(tracker.lastActivityAt, timestamp);
 }
 function parseSince(value) {
   if (!value) return null;
@@ -112,18 +145,21 @@ async function files(root, suffix = '.jsonl') {
 
 function pushTask(taskRows, task) {
   if (!task?.end || task.end === task.start) return;
-  task.activeMs = activeDuration(task.activityTimestamps || []);
+  task.activeMs = activeDuration(task.activityIntervals || []);
   taskRows.push(task);
 }
 
 async function scanPiSessions(root, source, events, sessionRows = [], taskRows = []) {
   for (const file of await files(root)) {
-    let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null;
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityTimestamps: [] };
+    let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null, currentTaskTracker = null;
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [] };
+    const rowTracker = createActivityTracker();
+    const toolCalls = new Map();
     const text = await fs.readFile(file, 'utf8').catch(() => '');
+
     for (const line of text.split(/\r?\n/)) {
       const obj = safeJson(line); if (!obj) continue;
-      if (obj.timestamp) { row.start ||= obj.timestamp; row.end = obj.timestamp; addTimestamp(row.activityTimestamps, obj.timestamp); }
+      if (obj.timestamp) { row.start ||= obj.timestamp; row.end = obj.timestamp; }
       if (obj.type === 'session') { session = obj.id || session; cwd = obj.cwd || cwd; row.key = session; row.session = session; row.cwd = cwd; }
       if (obj.type === 'model_change') { provider = obj.provider || provider; model = obj.modelId || model; }
       if (obj.type === 'custom' && obj.customType === 'takomi-runtime-state' && obj.data) {
@@ -135,38 +171,72 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         row.workflows.set(workflow, (row.workflows.get(workflow) || 0) + 1);
         events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'role', role, stage, workflow, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
       }
+
       const msg = obj.type === 'message' && obj.message ? obj.message : null;
       if (msg) {
         row.messages += 1;
         const ts = obj.timestamp || msg.timestamp || '';
+        if (!ts) continue;
+
         if (msg.role === 'user') {
           pushTask(taskRows, currentTask);
+          currentTask = null;
+          currentTaskTracker = createActivityTracker(ts);
           row.turns += 1;
-          const textPart = (msg.content || []).find(p => p?.type === 'text')?.text || '';
-          currentTask = { source, file, session, project: projectKey(file), cwd, start: ts, end: ts, provider, model, turns: 1, toolCalls: 0, title: String(textPart).replace(/\s+/g, ' ').trim(), activityTimestamps: [] };
-          addTimestamp(currentTask.activityTimestamps, ts);
-        } else if (currentTask && ts) {
-          currentTask.end = ts;
-          addTimestamp(currentTask.activityTimestamps, ts);
+          const textPart = Array.isArray(msg.content) ? msg.content.find((p) => p?.type === 'text')?.text || '' : '';
+          currentTask = { source, file, session, project: projectKey(file), cwd, start: ts, end: ts, provider, model, turns: 1, toolCalls: 0, title: String(textPart).replace(/\s+/g, ' ').trim(), activityIntervals: currentTaskTracker.intervals };
+          noteActivity(rowTracker, ts);
+          noteActivity(currentTaskTracker, ts);
+          continue;
         }
-        for (const part of msg.content || []) {
-          if (!part || part.type !== 'toolCall') continue;
-          const name = part.name || 'unknown';
-          row.toolCalls += 1;
-          if (currentTask) currentTask.toolCalls += 1;
-          if (name === 'takomi_subagent') {
-            const args = part.arguments || {};
-            const count = Array.isArray(args.tasks) ? args.tasks.length : Array.isArray(args.chain) ? args.chain.length : 1;
-            row.subagentCalls += count;
+
+        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+          noteActivity(rowTracker, ts);
+          if (currentTaskTracker) noteActivity(currentTaskTracker, ts);
+          if (currentTask) currentTask.end = ts;
+          for (const part of msg.content) {
+            if (!part || part.type !== 'toolCall') continue;
+            const name = part.name || 'unknown';
+            const callId = part.id || part.toolCallId || part.callId || part.invocationId || '';
+            const input = part.arguments || {};
+            row.toolCalls += 1;
+            if (currentTask) currentTask.toolCalls += 1;
+            if (name === 'takomi_subagent') {
+              const count = Array.isArray(input.tasks) ? input.tasks.length : Array.isArray(input.chain) ? input.chain.length : 1;
+              row.subagentCalls += count;
+            }
+            if (callId) {
+              toolCalls.set(callId, { name, input, startedAt: ts });
+              noteToolStart(rowTracker, callId, ts);
+              if (currentTaskTracker) noteToolStart(currentTaskTracker, callId, ts);
+            }
+            events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
           }
-          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+          continue;
         }
+
+        if (msg.role === 'toolResult' && msg.toolName) {
+          noteToolEnd(rowTracker, msg.toolCallId, ts);
+          if (currentTaskTracker) noteToolEnd(currentTaskTracker, msg.toolCallId, ts);
+          if (msg.toolCallId) toolCalls.delete(msg.toolCallId);
+          if (currentTask) currentTask.end = ts;
+          continue;
+        }
+
+        noteActivity(rowTracker, ts);
+        if (currentTaskTracker) noteActivity(currentTaskTracker, ts);
+        if (currentTask) currentTask.end = ts;
       }
+
       const u = msg && msg.usage;
       if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: +u.input||0, cache: +u.cacheRead||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, true) });
     }
     pushTask(taskRows, currentTask);
-    row.activeMs = activeDuration(row.activityTimestamps);
+    if (currentTaskTracker && currentTask) {
+      currentTask.activityIntervals = currentTaskTracker.intervals;
+    }
+    row.activityIntervals = rowTracker.intervals;
+    row.activeMs = activeDuration(rowTracker.intervals);
     if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
   }
 }
@@ -363,10 +433,10 @@ function sessionLabel(row, width = 36) {
 }
 function sessionDay(row) { return dayOf(row.start || row.end).slice(5) || '??-??'; }
 function sessionDuration(row) {
-  return row?.activeMs || 0;
+  return row?.activeMs ?? activeDuration(row?.activityIntervals || []);
 }
 function taskDuration(row) {
-  return row?.activeMs ?? activeDuration(row?.activityTimestamps || []);
+  return row?.activeMs ?? activeDuration(row?.activityIntervals || []);
 }
 function taskLabel(row, width = 34) {
   const label = row?.title || row?.project || row?.session || 'unknown';
