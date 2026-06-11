@@ -53,6 +53,8 @@ export type ContextPanelState = {
   toolUses: ToolUseCount;
   sessionStart: number;
   activeMs: number;
+  activityIntervals: ActivityInterval[];
+  pendingToolStarts: Record<string, number>;
   lastActivityAt: number;
   lastToolAt: number;
   runtime: ContextRuntimeState;
@@ -76,6 +78,11 @@ type BoardCountsCacheEntry = {
   counts?: BoardCounts;
 };
 
+type ActivityInterval = {
+  start: number;
+  end: number;
+};
+
 const BOARD_COUNTS_CACHE_MS = 1_000;
 const boardCountsCache = new Map<string, BoardCountsCacheEntry>();
 
@@ -85,6 +92,8 @@ function createEmptyState(sessionStart = Date.now(), runtime: ContextRuntimeStat
     toolUses: {},
     sessionStart,
     activeMs: 0,
+    activityIntervals: [],
+    pendingToolStarts: {},
     lastActivityAt: sessionStart,
     lastToolAt: 0,
     runtime,
@@ -173,14 +182,28 @@ function toTimestampMs(entry: { timestamp?: unknown; message?: { timestamp?: unk
   return undefined;
 }
 
-function calculateActiveMs(timestamps: number[]): number {
-  const sorted = [...new Set(timestamps.filter((value) => Number.isFinite(value)))].sort((a, b) => a - b);
-  let activeMs = 0;
+function mergeIntervals(intervals: ActivityInterval[]): ActivityInterval[] {
+  const sorted = intervals
+    .filter((interval) => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
+    .map((interval) => ({ start: interval.start, end: interval.end }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  if (sorted.length === 0) return [];
+
+  const merged: ActivityInterval[] = [sorted[0]];
   for (let i = 1; i < sorted.length; i += 1) {
-    const delta = sorted[i] - sorted[i - 1];
-    if (delta > 0 && delta <= ACTIVE_GAP_THRESHOLD_MS) activeMs += delta;
+    const current = sorted[i];
+    const previous = merged[merged.length - 1];
+    if (current.start <= previous.end) {
+      previous.end = Math.max(previous.end, current.end);
+    } else {
+      merged.push({ ...current });
+    }
   }
-  return activeMs;
+  return merged;
+}
+
+function calculateActiveMs(intervals: ActivityInterval[]): number {
+  return mergeIntervals(intervals).reduce((total, interval) => total + (interval.end - interval.start), 0);
 }
 
 function formatDisplayPath(filePath: string, cwd?: string): string {
@@ -290,7 +313,10 @@ class ContextPanelComponent implements Component {
 
     if (ctx) {
       const age = formatDuration(Date.now() - state.sessionStart);
-      const active = formatDuration(state.activeMs);
+      const pendingStarts = Object.values(state.pendingToolStarts ?? {});
+      const pendingStart = pendingStarts.length > 0 ? Math.min(...pendingStarts) : undefined;
+      const activeMs = pendingStart !== undefined ? state.activeMs + Math.max(0, Date.now() - pendingStart) : state.activeMs;
+      const active = formatDuration(activeMs);
       lines.push(`${pad}${theme.fg("dim", "Age:")}     ${theme.fg("muted", age)}`);
       lines.push(`${pad}${theme.fg("dim", "Active:")}  ${theme.fg("muted", active)}`);
 
@@ -376,6 +402,7 @@ export class TakomiContextPanel {
   private overlayHandle?: OverlayHandle;
   private requestRender?: () => void;
   private lastCtx?: ExtensionContext;
+  private readonly toolStartTimes = new Map<string, number>();
 
   getState(): ContextPanelState {
     return this.state;
@@ -390,6 +417,33 @@ export class TakomiContextPanel {
     this.requestRender?.();
   }
 
+  private recomputeActiveMs(): void {
+    this.state.activeMs = calculateActiveMs(this.state.activityIntervals);
+  }
+
+  private addActivityInterval(start: number, end: number): void {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+    this.state.activityIntervals.push({ start, end });
+    this.recomputeActiveMs();
+    this.state.lastActivityAt = Math.max(this.state.lastActivityAt, end);
+  }
+
+  private noteActivity(timestamp = Date.now(), allowLongGap = false): void {
+    const previous = this.state.lastActivityAt;
+    const delta = timestamp - previous;
+    if (delta > 0 && (allowLongGap || delta <= ACTIVE_GAP_THRESHOLD_MS)) {
+      this.addActivityInterval(previous, timestamp);
+      return;
+    }
+    this.state.lastActivityAt = Math.max(previous, timestamp);
+  }
+
+  private noteToolWindow(toolCallId: string | undefined, start: number, end: number): void {
+    this.noteActivity(start);
+    this.addActivityInterval(start, end);
+    if (toolCallId) delete this.state.pendingToolStarts[toolCallId];
+  }
+
   trackFileChange(change: FileChange): void {
     this.state.fileChanges.push({ ...change, timestamp: change.timestamp || Date.now() });
     this.state.lastToolAt = Date.now();
@@ -397,21 +451,39 @@ export class TakomiContextPanel {
   }
 
   trackActivity(timestamp = Date.now()): void {
-    const previous = this.state.lastActivityAt;
-    const delta = timestamp - previous;
-    if (delta > 0 && delta <= ACTIVE_GAP_THRESHOLD_MS) this.state.activeMs += delta;
-    this.state.lastActivityAt = Math.max(previous, timestamp);
+    this.noteActivity(timestamp);
+    this.requestRender?.();
+  }
+
+  trackToolStart(toolCallId: string | undefined, timestamp = Date.now()): void {
+    if (toolCallId) {
+      this.toolStartTimes.set(toolCallId, timestamp);
+      this.state.pendingToolStarts[toolCallId] = timestamp;
+    }
+    this.noteActivity(timestamp);
+    this.requestRender?.();
+  }
+
+  trackToolEnd(toolCallId: string | undefined, timestamp = Date.now()): void {
+    const start = toolCallId ? this.toolStartTimes.get(toolCallId) : undefined;
+    if (start !== undefined) {
+      this.noteToolWindow(toolCallId, start, timestamp);
+      if (toolCallId) this.toolStartTimes.delete(toolCallId);
+    } else {
+      if (toolCallId) delete this.state.pendingToolStarts[toolCallId];
+      this.noteActivity(timestamp);
+    }
     this.requestRender?.();
   }
 
   trackToolUse(toolName: string): void {
     this.state.toolUses[toolName] = (this.state.toolUses[toolName] ?? 0) + 1;
     this.state.lastToolAt = Date.now();
-    this.trackActivity(this.state.lastToolAt);
   }
 
   resetSession(): void {
     this.state = createEmptyState(Date.now(), this.state.runtime);
+    this.toolStartTimes.clear();
     this.requestRender?.();
   }
 
@@ -438,35 +510,64 @@ export class TakomiContextPanel {
         timestamp?: number;
       };
     }>;
-    const activityTimestamps = branch.map(toTimestampMs).filter((value): value is number => typeof value === "number");
-    const firstTs = activityTimestamps[0];
-    const next = createEmptyState(firstTs ?? Date.now(), this.state.runtime);
-    next.activeMs = calculateActiveMs(activityTimestamps);
-    next.lastActivityAt = activityTimestamps.at(-1) ?? next.sessionStart;
-    const toolCalls = new Map<string, { name: string; input: ToolCallInput }>();
+    const next = createEmptyState(Date.now(), this.state.runtime);
+    const intervals: ActivityInterval[] = [];
+    const toolCalls = new Map<string, { name: string; input: ToolCallInput; startedAt: number }>();
+    let lastActivityPoint: number | undefined;
+    let firstSessionTs: number | undefined;
+    this.toolStartTimes.clear();
 
     for (const entry of branch) {
+      const ts = toTimestampMs(entry);
       const message = entry.message;
-      if (!message) continue;
+      if (ts !== undefined) firstSessionTs = firstSessionTs === undefined ? ts : Math.min(firstSessionTs, ts);
+      if (!message || ts === undefined) continue;
+
       if (message.role === "assistant" && Array.isArray(message.content)) {
+        let sawToolCall = false;
         for (const block of message.content) {
           const record = asRecord(block);
           if (record.type !== "toolCall") continue;
           const id = typeof record.id === "string" ? record.id : undefined;
           const name = typeof record.name === "string" ? record.name : undefined;
           if (!id || !name) continue;
-          toolCalls.set(id, { name, input: asRecord(record.arguments) });
+          sawToolCall = true;
+          toolCalls.set(id, { name, input: asRecord(record.arguments), startedAt: ts });
+          this.toolStartTimes.set(id, ts);
         }
+        if (lastActivityPoint !== undefined && ts > lastActivityPoint && ts - lastActivityPoint <= ACTIVE_GAP_THRESHOLD_MS) {
+          intervals.push({ start: lastActivityPoint, end: ts });
+        }
+        lastActivityPoint = ts;
+        if (!sawToolCall) continue;
       }
-      if (message.role !== "toolResult" || !message.toolName) continue;
-      next.toolUses[message.toolName] = (next.toolUses[message.toolName] ?? 0) + 1;
-      next.lastToolAt = toTimestampMs(entry) ?? next.lastToolAt;
-      const input = message.toolCallId ? toolCalls.get(message.toolCallId)?.input : undefined;
-      if (input) {
-        const change = changeFromTool(message.toolName, input);
-        if (change) next.fileChanges.push({ ...change, timestamp: toTimestampMs(entry) ?? change.timestamp });
+
+      if (message.role === "toolResult" && message.toolName) {
+        next.toolUses[message.toolName] = (next.toolUses[message.toolName] ?? 0) + 1;
+        next.lastToolAt = ts;
+        const toolCall = message.toolCallId ? toolCalls.get(message.toolCallId) : undefined;
+        if (toolCall) {
+          intervals.push({ start: toolCall.startedAt, end: ts });
+          const change = changeFromTool(message.toolName, toolCall.input);
+          if (change) next.fileChanges.push({ ...change, timestamp: ts });
+          if (message.toolCallId) toolCalls.delete(message.toolCallId);
+        } else if (lastActivityPoint !== undefined && ts > lastActivityPoint && ts - lastActivityPoint <= ACTIVE_GAP_THRESHOLD_MS) {
+          intervals.push({ start: lastActivityPoint, end: ts });
+        }
+        lastActivityPoint = ts;
+        continue;
       }
+
+      if (lastActivityPoint !== undefined && ts > lastActivityPoint && ts - lastActivityPoint <= ACTIVE_GAP_THRESHOLD_MS) {
+        intervals.push({ start: lastActivityPoint, end: ts });
+      }
+      lastActivityPoint = ts;
     }
+
+    next.sessionStart = firstSessionTs ?? next.sessionStart;
+    next.activityIntervals = intervals;
+    next.activeMs = calculateActiveMs(intervals);
+    next.lastActivityAt = lastActivityPoint ?? next.sessionStart;
 
     this.state = next;
     this.requestRender?.();
@@ -529,6 +630,7 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
   const pendingWriteActions = new Map<string, "M" | "+">();
 
   pi.on("tool_call", (event, ctx) => {
+    panel.trackToolStart(event.toolCallId, Date.now());
     if (event.toolName !== "write") return;
     const input = asRecord(event.input);
     const filePath = normalizeToolPath(input);
@@ -546,6 +648,7 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
   pi.on("tool_result", (event) => {
     const toolName = event.toolName;
     panel.trackToolUse(toolName);
+    panel.trackToolEnd(event.toolCallId, Date.now());
 
     const input = asRecord(event.input);
     const actionOverride = toolName === "write" ? pendingWriteActions.get(event.toolCallId) : undefined;
