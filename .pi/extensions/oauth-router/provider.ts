@@ -10,8 +10,8 @@ import {
   streamSimpleOpenAICodexResponses,
   streamSimpleOpenAICompletions,
   streamSimpleOpenAIResponses,
-} from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadRouterConfig } from "./config.ts";
 import { refreshAccountCredentials, getApiKeyForAccount, refreshProviderUsageSnapshot } from "./oauth-flow.ts";
 import { RouterAccountStore } from "./oauth-store.ts";
@@ -41,6 +41,21 @@ function parseRetryAfterMs(value: string | undefined): number | undefined {
   const timestamp = Date.parse(value);
   if (Number.isFinite(timestamp)) return Math.max(0, timestamp - now());
   return undefined;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("Request was aborted"));
+      return;
+    }
+
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timeout);
+      reject(new Error("Request was aborted"));
+    }, { once: true });
+  });
 }
 
 function isMeaningfulEvent(event: AssistantMessageEvent): boolean {
@@ -88,6 +103,25 @@ function isAbortLike(message?: string, signal?: AbortSignal, stopReason?: string
   return lower.includes("abort") || lower.includes("cancelled") || lower.includes("canceled");
 }
 
+function isClientNetworkFailure(lower: string): boolean {
+  return [
+    "codex sse response headers timed out",
+    "response headers timed out",
+    "headers timeout",
+    "headers timed out",
+    "fetch failed",
+    "network",
+    "econnreset",
+    "etimedout",
+    "enotfound",
+    "eai_again",
+    "socket hang up",
+    "connection reset",
+    "connection terminated",
+    "und_err_headers_timeout",
+  ].some((token) => lower.includes(token));
+}
+
 function classifyFailure(
   status: number | undefined,
   headers: Record<string, string>,
@@ -105,13 +139,15 @@ function classifyFailure(
     return { kind: "auth", status: status ?? 401, message };
   }
 
-  if (
-    (status !== undefined && status >= 500) ||
-    lower.includes("network") ||
-    lower.includes("fetch failed") ||
-    lower.includes("connection") ||
-    lower.includes("timeout")
-  ) {
+  if (isClientNetworkFailure(lower)) {
+    return { kind: "client-network", status, message };
+  }
+
+  if (status !== undefined && status >= 500) {
+    return { kind: "transient", status, message };
+  }
+
+  if (lower.includes("timeout") || lower.includes("service unavailable") || lower.includes("overloaded")) {
     return { kind: "transient", status: status ?? 500, message };
   }
 
@@ -218,11 +254,35 @@ export class RouterRuntime {
 
   async refreshUsageSnapshot(id: string) {
     this.reloadConfig();
-    const account = this.accounts.get(id);
+    let account = this.accounts.get(id);
     if (!account) throw new Error(`Unknown account: ${id}`);
     const upstream = this.getUpstream(account.upstreamId);
     if (!upstream) throw new Error(`Unknown upstream for account ${id}: ${account.upstreamId}`);
-    const snapshot = await refreshProviderUsageSnapshot(account, upstream);
+
+    const refreshIfPossible = async (reason: string): Promise<boolean> => {
+      if (!account || account.provider === "api-key") return false;
+      try {
+        account = await refreshAccountCredentials(account);
+        this.accounts.update(account);
+        this.state.clearHealth(id);
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.state.markAuthFailure(id, 401, `Unable to refresh OAuth credentials for usage probe (${reason}): ${message}`);
+        throw error;
+      }
+    };
+
+    if (account.provider !== "api-key" && account.expires - this.config.tokenRefreshSkewMs <= now()) {
+      await refreshIfPossible("expired access token");
+    }
+
+    let snapshot = await refreshProviderUsageSnapshot(account, upstream);
+    if (account.provider !== "api-key" && (snapshot.status === 401 || snapshot.status === 403)) {
+      const refreshed = await refreshIfPossible(`provider quota probe returned HTTP ${snapshot.status}`);
+      if (refreshed) snapshot = await refreshProviderUsageSnapshot(account, upstream);
+    }
+
     this.state.setProviderUsage(id, snapshot);
     return snapshot;
   }
@@ -283,6 +343,7 @@ export class RouterRuntime {
         rateLimitCount: state.rateLimitCount,
         authFailureCount: state.authFailureCount,
         successCount: state.successCount,
+        lastError: state.lastError,
         expires: account.expires,
       };
     });
@@ -378,9 +439,46 @@ export class RouterRuntime {
           failure.message,
         );
         break;
+      case "client-network":
+        if (this.config.clientNetworkPenaltyMs > 0) {
+          this.state.markTransientFailure(accountId, this.config.clientNetworkPenaltyMs, failure.status ?? 500, failure.message);
+        } else {
+          this.state.recordClientNetworkFailure(accountId, failure.status, failure.message);
+        }
+        break;
       case "fatal":
         this.state.markTransientFailure(accountId, this.config.transientPenaltyMs, failure.status ?? 500, failure.message);
         break;
+    }
+  }
+
+  private getClientNetworkRetryDelayMs(retryIndex: number): number {
+    const baseDelayMs = Math.max(0, this.config.clientNetworkRetryBaseDelayMs);
+    const uncappedDelayMs = baseDelayMs * 2 ** retryIndex;
+    const maxDelayMs = this.config.clientNetworkMaxRetryDelayMs;
+    return maxDelayMs > 0 ? Math.min(uncappedDelayMs, maxDelayMs) : uncappedDelayMs;
+  }
+
+  private async tryAccountWithClientNetworkRetries(
+    selection: DelegateSelection,
+    outerStream: ReturnType<typeof createAssistantMessageEventStream>,
+    context: Context,
+    modelId: string,
+    options?: SimpleStreamOptions,
+  ): Promise<{ completed: boolean; emittedMeaningfulOutput: boolean; failure?: FailureClassification }> {
+    for (let retryIndex = 0; ; retryIndex += 1) {
+      const result = await this.trySingleAccount(selection, outerStream, context, options);
+      const canRetry =
+        !result.completed &&
+        !result.emittedMeaningfulOutput &&
+        result.failure?.kind === "client-network" &&
+        retryIndex < this.config.clientNetworkMaxRetries;
+
+      if (!canRetry) return result;
+
+      const delayMs = this.getClientNetworkRetryDelayMs(retryIndex);
+      await sleep(delayMs, options?.signal);
+      this.state.markAttempt(selection.account.id, modelId);
     }
   }
 
@@ -402,6 +500,8 @@ export class RouterRuntime {
         ...(options?.headers ?? {}),
         ...selection.headers,
       },
+      maxRetries: options?.maxRetries ?? this.config.upstreamMaxRetries,
+      maxRetryDelayMs: options?.maxRetryDelayMs ?? this.config.upstreamMaxRetryDelayMs,
       onResponse: async (response, responseModel) => {
         responseStatus = response.status;
         responseHeaders = response.headers;
@@ -520,7 +620,7 @@ export class RouterRuntime {
             continue;
           }
 
-          const result = await this.trySingleAccount(selection, outer, context, options);
+          const result = await this.tryAccountWithClientNetworkRetries(selection, outer, context, model.id, options);
           if (result.completed) {
             outer.end();
             return;

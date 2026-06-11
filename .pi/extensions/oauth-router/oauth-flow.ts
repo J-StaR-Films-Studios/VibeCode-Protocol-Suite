@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import type { OAuthCredentials, OAuthSelectPrompt } from "@earendil-works/pi-ai/oauth";
 import { getOAuthProvider } from "@earendil-works/pi-ai/oauth";
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { RouterProviderQuotaWindow, RouterProviderUsageSnapshot, RouterUpstreamConfig, StoredRouterAccount } from "./types.ts";
 
 function now() {
@@ -197,7 +197,8 @@ export function inspectAccountToken(account: StoredRouterAccount): RouterProvide
     getStringClaim(claims, "account_id");
   const planType =
     (typeof account.meta?.planType === "string" ? account.meta.planType : undefined) ??
-    (openaiAuth && (getStringClaim(openaiAuth, "plan_type") ?? getStringClaim(openaiAuth, "planType"))) ??
+    (openaiAuth && (getStringClaim(openaiAuth, "chatgpt_plan_type") ?? getStringClaim(openaiAuth, "plan_type") ?? getStringClaim(openaiAuth, "planType"))) ??
+    getStringClaim(claims, "chatgpt_plan_type") ??
     getStringClaim(claims, "plan_type") ??
     getStringClaim(claims, "planType");
 
@@ -254,12 +255,16 @@ function normalizeResetAt(record: Record<string, unknown>): number | undefined {
   return raw < 10_000_000_000 ? raw * 1000 : raw;
 }
 
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
 function quotaFromRecord(label: string, record: Record<string, unknown>): RouterProviderQuotaWindow | undefined {
   const limit = firstNumber(record.limit, record.cap, record.total, record.max, record.quota);
   const remaining = firstNumber(record.remaining, record.available, record.left, record.remaining_messages, record.remainingMessages);
   const used = firstNumber(record.used, record.consumed, record.current, record.used_messages, record.usedMessages);
   const usedPercent = firstNumber(record.used_percent, record.usedPercent);
-  const percentRemaining = firstNumber(record.percent_remaining, record.percentRemaining, record.remaining_percent, record.remainingPercent) ?? (usedPercent !== undefined ? 100 - Math.max(0, Math.min(100, usedPercent)) : undefined);
+  const percentRemaining = firstNumber(record.percent_remaining, record.percentRemaining, record.remaining_percent, record.remainingPercent) ?? (usedPercent !== undefined ? 100 - clampPercent(usedPercent) : undefined);
   const resetAt = normalizeResetAt(record);
 
   if (limit === undefined && remaining === undefined && used === undefined && percentRemaining === undefined && resetAt === undefined) {
@@ -271,7 +276,24 @@ function quotaFromRecord(label: string, record: Record<string, unknown>): Router
     used,
     limit,
     remaining,
-    percentRemaining: percentRemaining !== undefined ? percentRemaining : limit && remaining !== undefined ? (remaining / limit) * 100 : undefined,
+    percentRemaining: percentRemaining !== undefined ? clampPercent(percentRemaining) : limit && remaining !== undefined ? clampPercent((remaining / limit) * 100) : undefined,
+    resetAt,
+  };
+}
+
+function quotaFromWhamWindow(label: string, window: Record<string, unknown> | undefined, limitReached?: boolean): RouterProviderQuotaWindow | undefined {
+  if (!window) return undefined;
+
+  const usedPercent = firstNumber(window.used_percent, window.usedPercent);
+  const explicitRemainingPercent = firstNumber(window.percent_remaining, window.percentRemaining, window.remaining_percent, window.remainingPercent);
+  const percentRemaining = explicitRemainingPercent ?? (usedPercent !== undefined ? 100 - clampPercent(usedPercent) : limitReached ? 0 : undefined);
+  const resetAt = normalizeResetAt(window);
+
+  if (percentRemaining === undefined && resetAt === undefined) return undefined;
+
+  return {
+    label,
+    percentRemaining: percentRemaining !== undefined ? clampPercent(percentRemaining) : undefined,
     resetAt,
   };
 }
@@ -282,20 +304,43 @@ function mergeQuota(previous: RouterProviderQuotaWindow | undefined, next: Route
   return { ...previous, ...next };
 }
 
+function pickWindow(record: Record<string, unknown>, snakeKey: string, camelKey: string): Record<string, unknown> | undefined {
+  const snake = record[snakeKey];
+  if (isRecord(snake)) return snake;
+  const camel = record[camelKey];
+  return isRecord(camel) ? camel : undefined;
+}
+
+function extractWhamUsage(json: unknown): Pick<RouterProviderUsageSnapshot, "planType" | "fiveHour" | "weekly"> {
+  if (!isRecord(json)) return {};
+
+  const planType = firstString(json.plan_type, json.planType, json.plan, json.subscription_plan, json.subscriptionPlan);
+  const rateLimit = isRecord(json.rate_limit) ? json.rate_limit : isRecord(json.rateLimit) ? json.rateLimit : undefined;
+  if (!rateLimit) return { planType };
+
+  const limitReached = Boolean(rateLimit.limit_reached ?? rateLimit.limitReached);
+  return {
+    planType,
+    fiveHour: quotaFromWhamWindow("5h", pickWindow(rateLimit, "primary_window", "primaryWindow"), limitReached),
+    weekly: quotaFromWhamWindow("weekly", pickWindow(rateLimit, "secondary_window", "secondaryWindow"), limitReached),
+  };
+}
+
 function extractProviderUsage(json: unknown): Pick<RouterProviderUsageSnapshot, "planType" | "fiveHour" | "weekly"> {
-  let planType: string | undefined;
-  let fiveHour: RouterProviderQuotaWindow | undefined;
-  let weekly: RouterProviderQuotaWindow | undefined;
+  const wham = extractWhamUsage(json);
+  let planType = wham.planType;
+  let fiveHour = wham.fiveHour;
+  let weekly = wham.weekly;
+
+  if (fiveHour || weekly) return { planType, fiveHour, weekly };
 
   walkRecords(json, (record) => {
     planType ??= firstString(record.plan_type, record.planType, record.plan, record.subscription_plan, record.subscriptionPlan, record.account_plan, record.accountPlan);
 
-    const rateLimit = isRecord(record.rate_limit) ? record.rate_limit : undefined;
+    const rateLimit = isRecord(record.rate_limit) ? record.rate_limit : isRecord(record.rateLimit) ? record.rateLimit : undefined;
     if (rateLimit) {
-      const primary = isRecord(rateLimit.primary_window) ? rateLimit.primary_window : isRecord(rateLimit.primaryWindow) ? rateLimit.primaryWindow : undefined;
-      const secondary = isRecord(rateLimit.secondary_window) ? rateLimit.secondary_window : isRecord(rateLimit.secondaryWindow) ? rateLimit.secondaryWindow : undefined;
-      fiveHour = mergeQuota(fiveHour, primary ? quotaFromRecord("5h", primary) : undefined);
-      weekly = mergeQuota(weekly, secondary ? quotaFromRecord("weekly", secondary) : undefined);
+      fiveHour = mergeQuota(fiveHour, quotaFromWhamWindow("5h", pickWindow(rateLimit, "primary_window", "primaryWindow"), Boolean(rateLimit.limit_reached ?? rateLimit.limitReached)));
+      weekly = mergeQuota(weekly, quotaFromWhamWindow("weekly", pickWindow(rateLimit, "secondary_window", "secondaryWindow"), Boolean(rateLimit.limit_reached ?? rateLimit.limitReached)));
     }
 
     const name = [record.name, record.label, record.bucket, record.window, record.period, record.type, record.key, record.id]
@@ -361,7 +406,7 @@ export async function refreshProviderUsageSnapshot(account: StoredRouterAccount,
 
   const accountId = base.accountId;
   const endpoints = Array.from(new Set(["/wham/usage", ...(upstream.usageProbe?.endpoints ?? [])]));
-  if (!accountId || endpoints.length === 0) {
+  if (endpoints.length === 0) {
     return { ...base, message: `${base.message ?? "Token inspected."} No provider usage probe endpoints are configured.` };
   }
 
@@ -382,17 +427,21 @@ export async function refreshProviderUsageSnapshot(account: StoredRouterAccount,
     const url = resolveProbeUrl(upstream.baseUrl, endpoint);
     lastEndpoint = url;
     try {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${account.access}`,
+        Originator: "codex_cli_rs",
+        originator: "codex_cli_rs",
+        "User-Agent": "codex_cli_rs/0.133.0 (Windows; x86_64) pi/oauth-router",
+        accept: "application/json",
+      };
+      if (accountId) {
+        headers["ChatGPT-Account-Id"] = accountId;
+        headers["chatgpt-account-id"] = accountId;
+      }
+
       const { response, text } = await fetchJsonWithTimeout(url, {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${account.access}`,
-          "ChatGPT-Account-Id": accountId,
-          "chatgpt-account-id": accountId,
-          Originator: "codex_cli_rs",
-          originator: "codex_cli_rs",
-          "User-Agent": "codex_cli_rs/0.133.0 (Windows; x86_64) pi/oauth-router",
-          accept: "application/json",
-        },
+        headers,
       }, Math.max(1, remainingMs));
       lastStatus = response.status;
       lastHeaders = collectRateLimitHeaders(response.headers);

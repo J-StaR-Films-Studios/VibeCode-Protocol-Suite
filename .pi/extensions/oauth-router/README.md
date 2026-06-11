@@ -27,6 +27,8 @@ Pi extension that auto-loads and registers an `oauth-router` provider with multi
   - weighted round robin
   - 429 cooldowns
   - transient failure penalties
+  - client/network transport failure tracking without default account cooldown
+  - 5 router-level client/network retries by default before pre-output failover, starting at 5s and doubling
   - auth failure quarantine
   - safe pre-output failover
 
@@ -45,7 +47,7 @@ The extension ships with two default upstream profiles:
    - api: `openai-responses`
    - default models: `gpt-4o`, `gpt-4.1`, `o4-mini`
 
-Edit `~/.pi/agent/oauth-router/config.json` to add more upstreams, swap endpoints, or change model catalogs.
+Edit `~/.pi/agent/oauth-router/config.json` to add more upstreams, swap endpoints, change model catalogs, or tune retry behavior. By default client-side transport failures such as `Codex SSE response headers timed out after 10000ms` retry the same account 5 times with exponential backoff (`5s`, `10s`, `20s`, `40s`, then capped at `60s`) before router failover. These failures are recorded but do not cool down an account unless `clientNetworkPenaltyMs` is set above `0`.
 
 ## Setup
 
@@ -98,7 +100,7 @@ Health and local usage state live separately in:
 
 - `~/.pi/agent/oauth-router/state.json`
 
-The router records successful request usage per account for rolling local 5-hour and weekly windows. These are router-observed counters only. `/router-refresh-usage [id|all]` now also probes configured authenticated provider endpoints for ChatGPT/Codex quota windows, then falls back to safe token claims such as account id, token expiry, issuer, subject, and available claim keys. `/router-usage` shows a compact visual quota view; `/router-usage-raw [id]` shows detailed/raw provider data. Provider-side quota counters depend on undocumented upstream endpoints and may change; they are not normally present in the OAuth token itself.
+The router records successful request usage per account for rolling local 5-hour and weekly windows. These are router-observed counters only. `/router-refresh-usage [id|all]` probes ChatGPT/Codex provider quota from `/backend-api/wham/usage` first and treats `rate_limit.primary_window.used_percent` as the 5-hour window and `rate_limit.secondary_window.used_percent` as the weekly window. It then falls back to safe token claims such as account id, token expiry, issuer, subject, and available claim keys. `/router-usage` shows a compact visual quota view; `/router-usage-raw [id]` shows detailed/raw provider data. Provider-side quota counters depend on undocumented upstream endpoints and may change; they are not normally present in the OAuth token itself.
 
 Most account commands accept an optional account ID. When run in the Pi UI without an ID, the extension opens an account picker instead of dumping the same account list repeatedly.
 

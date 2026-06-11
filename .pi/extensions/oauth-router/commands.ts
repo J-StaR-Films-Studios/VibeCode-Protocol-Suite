@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { createAccountFromUpstream } from "./oauth-flow.ts";
 import type { RouterStatusRow, RouterUsageSummary, RouterUsageWindowSummary, RoutingPolicyName, StoredRouterAccount } from "./types.ts";
 import { RouterRuntime } from "./provider.ts";
@@ -98,7 +98,8 @@ export function formatStatusReport(runtime: RouterRuntime): string {
             `  upstream=${row.upstream} enabled=${row.enabled} weight=${row.weight} state=${health}`,
             `  lastUsed=${formatLastUsedSummary(row.lastUsedAt)} | lastStatus=${row.lastStatus ?? "-"} | expires=${formatWhen(row.expires)}`,
             `  successes=${row.successCount} failures=${row.failures} 429s=${row.rateLimitCount} authFailures=${row.authFailureCount}`,
-          ].join("\n");
+            row.lastError ? `  lastError=${row.lastError}` : undefined,
+          ].filter((line): line is string => Boolean(line)).join("\n");
         })
     : ["- No accounts configured yet. Use /router-login add."];
 
@@ -118,7 +119,18 @@ export function formatStatusReport(runtime: RouterRuntime): string {
   ].join("\n");
 }
 
-export function formatAccountsReport(runtime: RouterRuntime): string {
+export async function refreshUsageAfterCredentialChange(runtime: RouterRuntime, accountId: string): Promise<string> {
+  try {
+    const snapshot = await runtime.refreshUsageSnapshot(accountId);
+    const windows = [snapshot.fiveHour ? "5h" : undefined, snapshot.weekly ? "weekly" : undefined].filter(Boolean).join("/");
+    return ` Provider usage refreshed (${snapshot.source}${windows ? `, ${windows}` : ""}).`;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return ` Provider usage refresh failed: ${message}`;
+  }
+}
+
+function formatAccountsReport(runtime: RouterRuntime): string {
   const rows = runtime.getStatusRows();
   const accounts = rows.length
     ? [...rows]
@@ -404,13 +416,15 @@ async function handleRouterLogin(pi: ExtensionAPI, runtime: RouterRuntime, args:
           updatedAt: Date.now(),
         });
         runtime.clearAccountHealth(duplicate.id);
+        const usageMessage = await refreshUsageAfterCredentialChange(runtime, duplicate.id);
         setFooterStatus(ctx, runtime);
-        emitReport(pi, `Updated existing account ${duplicate.id} (${duplicate.label}) with fresh credentials instead of adding a duplicate. Run /router-refresh-usage ${duplicate.id} to refresh provider quota metadata.`);
+        emitReport(pi, `Updated existing account ${duplicate.id} (${duplicate.label}) with fresh credentials instead of adding a duplicate.${usageMessage}`);
         return;
       }
       runtime.addAccount(account);
+      const usageMessage = await refreshUsageAfterCredentialChange(runtime, account.id);
       setFooterStatus(ctx, runtime);
-      emitReport(pi, `Added account ${account.id} (${account.label}) for upstream ${upstream.id}. Run /router-refresh-usage ${account.id} to refresh provider quota metadata.`);
+      emitReport(pi, `Added account ${account.id} (${account.label}) for upstream ${upstream.id}.${usageMessage}`);
       ctx.ui.notify(`Added ${account.id}`, "info");
       return;
     }
@@ -459,15 +473,17 @@ async function handleRouterLogin(pi: ExtensionAPI, runtime: RouterRuntime, args:
         updatedAt: Date.now(),
       });
       runtime.clearAccountHealth(existing.id);
+      const usageMessage = await refreshUsageAfterCredentialChange(runtime, existing.id);
       setFooterStatus(ctx, runtime);
-      emitReport(pi, `Re-logged account ${existing.id} (${existing.label}) and cleared auth state. Run /router-refresh-usage ${existing.id} to refresh provider quota metadata.`);
+      emitReport(pi, `Re-logged account ${existing.id} (${existing.label}) and cleared auth state.${usageMessage}`);
       return;
     }
     case "refresh": {
       const account = await pickAccount(runtime, ctx, first, "Choose account to refresh");
       const refreshed = await runtime.refreshAccount(account.id);
+      const usageMessage = await refreshUsageAfterCredentialChange(runtime, refreshed.id);
       setFooterStatus(ctx, runtime);
-      emitReport(pi, `Refreshed account ${refreshed.id} (${refreshed.label}). Run /router-refresh-usage ${refreshed.id} to refresh provider quota metadata.`);
+      emitReport(pi, `Refreshed account ${refreshed.id} (${refreshed.label}).${usageMessage}`);
       return;
     }
     case "help":
@@ -555,8 +571,20 @@ export function registerRouterCommands(pi: ExtensionAPI, runtime: RouterRuntime)
       const [requestedId] = parseArgs(args || "");
       const target = await pickUsageTarget(runtime, ctx, requestedId);
       const ids = target === "all" ? runtime.listAccounts().map((account) => account.id) : [target];
-      for (const accountId of ids) await runtime.refreshUsageSnapshot(accountId);
-      emitReport(pi, formatUsageReport(runtime, target === "all" ? undefined : target));
+      const failures: string[] = [];
+
+      for (const accountId of ids) {
+        try {
+          await runtime.refreshUsageSnapshot(accountId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failures.push(`- ${accountId}: ${message}`);
+        }
+      }
+
+      const report = formatUsageReport(runtime, target === "all" ? undefined : target);
+      emitReport(pi, failures.length ? [report, "", "## Refresh failures", ...failures].join("\n") : report);
+      if (failures.length) ctx.ui.notify(`oauth-router usage refreshed with ${failures.length} failure(s)`, "error");
       setFooterStatus(ctx, runtime);
     },
   });

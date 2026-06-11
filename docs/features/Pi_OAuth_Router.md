@@ -43,7 +43,9 @@ Do not commit or move those credential/state files into the repository.
   - disabled-account skipping
   - 429 cooldowns
   - transient-failure penalties
+  - client/network transport failure tracking without default account cooldown
   - auth failure quarantine
+- Retries header timeouts and similar pre-response client/network failures on the same account 5 times by default, starting at 5 seconds and doubling before router failover
 - Retries another account only while it is still safe, before meaningful output is emitted
 
 ## Commands
@@ -146,7 +148,7 @@ Health/routing state and local usage samples live in:
 ~/.pi/agent/oauth-router/state.json
 ```
 
-Usage reporting includes router-observed rolling 5-hour and weekly windows per account. `/router-refresh-usage [id|all]` also probes configured authenticated provider endpoints for ChatGPT/Codex quota windows, then falls back to safe token metadata such as account id, expiry, issuer, subject, and claim keys. `/router-usage` shows a compact visual quota view; `/router-usage-raw [id]` shows detailed/raw provider data. OAuth tokens generally do not contain exact provider quota percentages; exact Codex/ChatGPT 5-hour and weekly remaining windows depend on undocumented provider-side endpoints and may change.
+Usage reporting includes router-observed rolling 5-hour and weekly windows per account. `/router-refresh-usage [id|all]` probes `/backend-api/wham/usage` first and maps `rate_limit.primary_window.used_percent` to 5-hour quota remaining and `rate_limit.secondary_window.used_percent` to weekly quota remaining. It then falls back to safe token metadata such as account id, expiry, issuer, subject, and claim keys. `/router-usage` shows a compact visual quota view; `/router-usage-raw [id]` shows detailed/raw provider data. OAuth tokens generally do not contain exact provider quota percentages; exact Codex/ChatGPT 5-hour and weekly remaining windows depend on undocumented provider-side endpoints and may change.
 
 Most account commands accept an optional account ID. In the Pi UI, omitting the ID opens an account picker instead of printing the same account list repeatedly.
 
@@ -155,6 +157,22 @@ Configuration lives in:
 ```text
 ~/.pi/agent/oauth-router/config.json
 ```
+
+Relevant retry/health defaults:
+
+```json
+{
+  "upstreamMaxRetries": 0,
+  "upstreamMaxRetryDelayMs": 60000,
+  "clientNetworkMaxRetries": 5,
+  "clientNetworkRetryBaseDelayMs": 5000,
+  "clientNetworkMaxRetryDelayMs": 60000,
+  "clientNetworkPenaltyMs": 0,
+  "transientPenaltyMs": 30000
+}
+```
+
+`clientNetworkRetryBaseDelayMs: 5000` means local/client transport failures such as `Codex SSE response headers timed out after 10000ms`, `fetch failed`, or connection resets retry after roughly `5s`, `10s`, `20s`, `40s`, and `60s` before account failover. `clientNetworkPenaltyMs: 0` keeps those failures visible in `/router-status` without making the account temporarily ineligible on future turns. 429s still cool down, auth failures still quarantine, and upstream 5xx-style transient failures still use `transientPenaltyMs`.
 
 ## Security notes
 
