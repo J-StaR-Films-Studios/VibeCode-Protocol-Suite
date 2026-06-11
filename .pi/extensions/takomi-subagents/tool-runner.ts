@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 import { loadTakomiProfile } from "../takomi-runtime/profile";
 import { applyTakomiRoutingDefaults, loadTakomiModelRoutingSnapshot } from "../takomi-runtime/model-routing-defaults";

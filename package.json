@@ -1,6 +1,6 @@
 {
   "name": "takomi",
-  "version": "2.1.30",
+  "version": "2.1.31",
   "description": "🎯 Stop wrestling with AI. Start building with purpose. The artisan's toolkit for agent workflows, Codex skills, and original Takomi capabilities like 21st.dev integration.",
   "type": "module",
   "bin": {
@@ -45,11 +45,6 @@
   "author": "J StaR Films Studios",
   "license": "ISC",
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.78.1",
-    "@mariozechner/pi-agent-core": "^0.70.6",
-    "@mariozechner/pi-ai": "^0.70.2",
-    "@mariozechner/pi-coding-agent": "^0.70.2",
-    "@mariozechner/pi-tui": "^0.70.6",
     "commander": "^13.1.0",
     "figlet": "^1.8.0",
     "fs-extra": "^11.3.0",
@@ -62,9 +57,10 @@
   },
   "homepage": "https://github.com/JStaRFilms/VibeCode-Protocol-Suite#readme",
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "^0.78.1",
-    "@earendil-works/pi-coding-agent": "^0.78.1",
-    "@earendil-works/pi-tui": "^0.78.1",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@earendil-works/pi-ai": "^0.79.1",
+    "@earendil-works/pi-coding-agent": "^0.79.1",
+    "@earendil-works/pi-tui": "^0.79.1",
     "@types/node": "^25.5.2",
     "typebox": "^1.1.33",
     "typescript": "^6.0.2"

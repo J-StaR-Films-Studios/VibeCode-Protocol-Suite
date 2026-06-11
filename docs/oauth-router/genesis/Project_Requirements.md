@@ -4,7 +4,7 @@
 
 **Name:** Pi OAuth Router
 **Mission:** Add an auto-loaded Pi provider that load-balances requests across multiple OAuth-authenticated accounts for OpenAI-compatible upstreams without a separate router process.
-**Tech Stack:** Pi Extensions, TypeScript, Node.js built-ins, `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`
+**Tech Stack:** Pi Extensions, TypeScript, Node.js built-ins, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`
 
 ## Functional Requirements
 

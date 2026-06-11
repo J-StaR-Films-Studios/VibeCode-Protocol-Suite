@@ -258,9 +258,6 @@ export async function ensurePiInstalled() {
   const attempts = [
     { command: 'npm', args: ['install', '-g', '@earendil-works/pi-coding-agent'] },
     { command: 'npm.cmd', args: ['install', '-g', '@earendil-works/pi-coding-agent'] },
-    // Legacy fallback for older environments that still publish under the original namespace.
-    { command: 'npm', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
-    { command: 'npm.cmd', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
   ];
 
   let lastError = 'Unknown install failure.';
