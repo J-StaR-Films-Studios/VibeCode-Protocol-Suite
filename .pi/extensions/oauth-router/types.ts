@@ -231,6 +231,24 @@ export interface RouterStreamInput {
   options?: SimpleStreamOptions;
 }
 
+export type RouterUiEventPhase = "attempt" | "retry" | "failover" | "success" | "error";
+
+export interface RouterUiEvent {
+  phase: RouterUiEventPhase;
+  modelId?: string;
+  accountId?: string;
+  accountLabel?: string;
+  upstreamId?: string;
+  failureKind?: FailureClassification["kind"];
+  status?: number;
+  message?: string;
+  retryAttempt?: number;
+  maxRetries?: number;
+  delayMs?: number;
+}
+
+export type RouterUiReporter = (event: RouterUiEvent) => void;
+
 export interface RouterErrorMessageInput {
   model: Model<Api>;
   message: string;
