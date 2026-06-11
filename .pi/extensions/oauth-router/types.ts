@@ -27,6 +27,8 @@ export interface RouterModelConfig {
 export interface RouterProviderUsageProbeConfig {
   enabled?: boolean;
   endpoints?: string[];
+  /** Total best-effort probe budget per account. Provider usage checks must not block login/refresh UX. */
+  timeoutMs?: number;
 }
 
 export interface RouterUpstreamConfig {

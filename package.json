@@ -23,7 +23,7 @@
   ],
   "scripts": {
     "postinstall": "node src/postinstall.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node scripts/test-skill-selection.js",
     "test:skills": "node scripts/test-skill-selection.js"
   },
   "repository": {
@@ -45,6 +45,11 @@
   "author": "J StaR Films Studios",
   "license": "ISC",
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.78.1",
+    "@mariozechner/pi-agent-core": "^0.70.6",
+    "@mariozechner/pi-ai": "^0.70.2",
+    "@mariozechner/pi-coding-agent": "^0.70.2",
+    "@mariozechner/pi-tui": "^0.70.6",
     "commander": "^13.1.0",
     "figlet": "^1.8.0",
     "fs-extra": "^11.3.0",
@@ -58,11 +63,8 @@
   "homepage": "https://github.com/JStaRFilms/VibeCode-Protocol-Suite#readme",
   "devDependencies": {
     "@earendil-works/pi-agent-core": "^0.78.1",
-    "@earendil-works/pi-ai": "^0.78.1",
     "@earendil-works/pi-coding-agent": "^0.78.1",
     "@earendil-works/pi-tui": "^0.78.1",
-    "@mariozechner/pi-ai": "^0.70.2",
-    "@mariozechner/pi-coding-agent": "^0.70.2",
     "@types/node": "^25.5.2",
     "typebox": "^1.1.33",
     "typescript": "^6.0.2"

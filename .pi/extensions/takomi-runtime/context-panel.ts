@@ -70,6 +70,15 @@ type BoardCounts = {
   blocked: number;
 };
 
+type BoardCountsCacheEntry = {
+  checkedAt: number;
+  mtimeMs: number;
+  counts?: BoardCounts;
+};
+
+const BOARD_COUNTS_CACHE_MS = 1_000;
+const boardCountsCache = new Map<string, BoardCountsCacheEntry>();
+
 function createEmptyState(sessionStart = Date.now(), runtime: ContextRuntimeState = {}): ContextPanelState {
   return {
     fileChanges: [],
@@ -186,8 +195,19 @@ function formatDisplayPath(filePath: string, cwd?: string): string {
 
 function loadBoardCounts(cwd: string, sessionId?: string): BoardCounts | undefined {
   if (!sessionId) return undefined;
+  const stateFile = path.join(cwd, ".pi", "takomi", "orchestrator", `${sessionId}.json`);
+  const cached = boardCountsCache.get(stateFile);
+  const checkedAt = Date.now();
+
+  if (cached && checkedAt - cached.checkedAt < BOARD_COUNTS_CACHE_MS) return cached.counts;
+
   try {
-    const stateFile = path.join(cwd, ".pi", "takomi", "orchestrator", `${sessionId}.json`);
+    const mtimeMs = statSync(stateFile).mtimeMs;
+    if (cached && cached.mtimeMs === mtimeMs) {
+      boardCountsCache.set(stateFile, { ...cached, checkedAt });
+      return cached.counts;
+    }
+
     const parsed = JSON.parse(readFileSync(stateFile, "utf8")) as { tasks?: Array<{ status?: string }> };
     const counts: BoardCounts = { completed: 0, pending: 0, inProgress: 0, blocked: 0 };
     for (const task of parsed.tasks ?? []) {
@@ -196,8 +216,10 @@ function loadBoardCounts(cwd: string, sessionId?: string): BoardCounts | undefin
       else if (task.status === "blocked") counts.blocked += 1;
       else counts.pending += 1;
     }
+    boardCountsCache.set(stateFile, { checkedAt, mtimeMs, counts });
     return counts;
   } catch {
+    boardCountsCache.set(stateFile, { checkedAt, mtimeMs: 0, counts: undefined });
     return undefined;
   }
 }

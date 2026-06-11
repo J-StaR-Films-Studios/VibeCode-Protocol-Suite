@@ -98,6 +98,7 @@ const DEFAULT_UPSTREAMS: RouterUpstreamConfig[] = [
     modelIds: ["gpt-5.1", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5"],
     usageProbe: {
       enabled: true,
+      timeoutMs: 2_500,
       endpoints: [
         "/wham/usage",
         "/codex/usage",
@@ -138,6 +139,8 @@ function sleepSync(ms: number): void {
 }
 
 const HELD_JSON_LOCKS = new Set<string>();
+const JSON_LOCK_WAIT_TIMEOUT_MS = 2_000;
+const JSON_LOCK_STALE_AFTER_MS = 5_000;
 
 export function withJsonFileLock<T>(filePath: string, fn: () => T): T {
   const lockPath = `${filePath}.lock`;
@@ -150,12 +153,12 @@ export function withJsonFileLock<T>(filePath: string, fn: () => T): T {
     } catch {
       try {
         const ageMs = Date.now() - statSync(lockPath).mtimeMs;
-        if (ageMs > 30_000) rmSync(lockPath, { recursive: true, force: true });
+        if (ageMs > JSON_LOCK_STALE_AFTER_MS) rmSync(lockPath, { recursive: true, force: true });
       } catch {
         // The lock disappeared between mkdir attempts.
       }
-      if (Date.now() - started > 10_000) {
-        throw new Error(`Timed out waiting for oauth-router JSON lock: ${lockPath}`);
+      if (Date.now() - started > JSON_LOCK_WAIT_TIMEOUT_MS) {
+        throw new Error(`Timed out after ${JSON_LOCK_WAIT_TIMEOUT_MS}ms waiting for oauth-router JSON lock: ${lockPath}`);
       }
       sleepSync(50);
     }
