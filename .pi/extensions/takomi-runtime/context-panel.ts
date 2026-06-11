@@ -7,7 +7,7 @@
 
 import { accessSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { ellipsizeMiddle, formatDuration, truncateToWidth, visibleWidth } from "./shared";
 
 interface Component {

@@ -67,18 +67,18 @@ export interface TakomiSubagentController {
   hasRuns(): boolean;
   getStatusSummary(): string;
   getViewMode(): SubagentViewMode;
-  start(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, state: TakomiSubagentRunInit, runKey?: string): Promise<void>;
-  update(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, patch: TakomiSubagentRunPatch, runKey?: string): Promise<void>;
-  appendLog(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, chunk: string, runKey?: string): Promise<void>;
-  complete(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, patch?: TakomiSubagentRunPatch, runKey?: string): Promise<void>;
-  block(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext, patch?: TakomiSubagentRunPatch, runKey?: string): Promise<void>;
-  reset(ctx?: import("@mariozechner/pi-coding-agent").ExtensionContext): void;
+  start(ctx: import("@earendil-works/pi-coding-agent").ExtensionContext, state: TakomiSubagentRunInit, runKey?: string): Promise<void>;
+  update(ctx: import("@earendil-works/pi-coding-agent").ExtensionContext, patch: TakomiSubagentRunPatch, runKey?: string): Promise<void>;
+  appendLog(ctx: import("@earendil-works/pi-coding-agent").ExtensionContext, chunk: string, runKey?: string): Promise<void>;
+  complete(ctx: import("@earendil-works/pi-coding-agent").ExtensionContext, patch?: TakomiSubagentRunPatch, runKey?: string): Promise<void>;
+  block(ctx: import("@earendil-works/pi-coding-agent").ExtensionContext, patch?: TakomiSubagentRunPatch, runKey?: string): Promise<void>;
+  reset(ctx?: import("@earendil-works/pi-coding-agent").ExtensionContext): void;
   refresh(): void;
-  refreshWithContext(ctx: import("@mariozechner/pi-coding-agent").ExtensionContext): void;
-  cycleFocus(direction: SubagentFocusDirection, ctx?: import("@mariozechner/pi-coding-agent").ExtensionContext): boolean;
-  setViewMode(mode: SubagentViewMode, ctx?: import("@mariozechner/pi-coding-agent").ExtensionContext): SubagentViewMode | undefined;
-  cycleViewMode(ctx?: import("@mariozechner/pi-coding-agent").ExtensionContext): SubagentViewMode | undefined;
-  closeFullscreen(ctx?: import("@mariozechner/pi-coding-agent").ExtensionContext): SubagentViewMode;
+  refreshWithContext(ctx: import("@earendil-works/pi-coding-agent").ExtensionContext): void;
+  cycleFocus(direction: SubagentFocusDirection, ctx?: import("@earendil-works/pi-coding-agent").ExtensionContext): boolean;
+  setViewMode(mode: SubagentViewMode, ctx?: import("@earendil-works/pi-coding-agent").ExtensionContext): SubagentViewMode | undefined;
+  cycleViewMode(ctx?: import("@earendil-works/pi-coding-agent").ExtensionContext): SubagentViewMode | undefined;
+  closeFullscreen(ctx?: import("@earendil-works/pi-coding-agent").ExtensionContext): SubagentViewMode;
   getKnownParentRunKey(parentTaskId: string): string | undefined;
 }
 
