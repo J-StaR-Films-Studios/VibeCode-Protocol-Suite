@@ -9,7 +9,7 @@ import type {
   RouterUsageWindowSummary,
   RoutingPolicyName,
 } from "./types.ts";
-import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -332,6 +332,17 @@ export class RouterStateStore {
       account.lastError = message;
       account.penaltyUntil = Date.now() + Math.max(1_000, penaltyMs);
       account.failures += 1;
+    });
+  }
+
+  recordClientNetworkFailure(accountId: string, status: number | undefined, message = "Client/network transport failure") {
+    this.mutate(() => {
+      const account = this.ensureAccountInMemory(accountId);
+      account.lastStatus = status;
+      account.lastError = message;
+      account.failures += 1;
+      account.penaltyUntil = undefined;
+      account.cooldownUntil = undefined;
     });
   }
 

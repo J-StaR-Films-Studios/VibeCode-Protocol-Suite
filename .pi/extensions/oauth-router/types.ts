@@ -1,4 +1,4 @@
-import type { Api, AssistantMessage, Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
+import type { Api, AssistantMessage, Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
 
 export type RouterUpstreamApi = "openai-completions" | "openai-responses" | "openai-codex-responses";
 export type RouterAuthMode = "oauth" | "api-key";
@@ -52,6 +52,18 @@ export interface RouterConfig {
   tokenRefreshSkewMs: number;
   rateLimitCooldownMs: number;
   transientPenaltyMs: number;
+  /** Default retry attempts passed to upstream providers when the caller does not specify one. */
+  upstreamMaxRetries: number;
+  /** Maximum provider-request retry delay when supported by the upstream provider. */
+  upstreamMaxRetryDelayMs: number;
+  /** Router-level same-account retries for local/client transport failures before account failover. */
+  clientNetworkMaxRetries: number;
+  /** First router-level retry delay for local/client transport failures. Later retries double this delay. */
+  clientNetworkRetryBaseDelayMs: number;
+  /** Maximum router-level retry delay for local/client transport failures. */
+  clientNetworkMaxRetryDelayMs: number;
+  /** Penalty for local/client transport failures. Zero records the failure without cooling down the account. */
+  clientNetworkPenaltyMs: number;
   models: RouterModelConfig[];
   upstreams: RouterUpstreamConfig[];
 }
@@ -180,6 +192,7 @@ export interface RouterStatusRow {
   rateLimitCount: number;
   authFailureCount: number;
   successCount: number;
+  lastError?: string;
   expires: number;
 }
 
@@ -200,7 +213,7 @@ export interface DelegateSelection {
 }
 
 export interface FailureClassification {
-  kind: "rate-limit" | "auth" | "transient" | "fatal";
+  kind: "rate-limit" | "auth" | "transient" | "client-network" | "fatal";
   status?: number;
   retryAfterMs?: number;
   message: string;

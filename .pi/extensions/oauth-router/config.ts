@@ -98,7 +98,7 @@ const DEFAULT_UPSTREAMS: RouterUpstreamConfig[] = [
     modelIds: ["gpt-5.1", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5"],
     usageProbe: {
       enabled: true,
-      timeoutMs: 2_500,
+      timeoutMs: 8_000,
       endpoints: [
         "/wham/usage",
         "/codex/usage",
@@ -117,6 +117,12 @@ export const DEFAULT_CONFIG: RouterConfig = {
   tokenRefreshSkewMs: 60_000,
   rateLimitCooldownMs: 120_000,
   transientPenaltyMs: 30_000,
+  upstreamMaxRetries: 0,
+  upstreamMaxRetryDelayMs: 60_000,
+  clientNetworkMaxRetries: 5,
+  clientNetworkRetryBaseDelayMs: 5_000,
+  clientNetworkMaxRetryDelayMs: 60_000,
+  clientNetworkPenaltyMs: 0,
   models: DEFAULT_MODELS,
   upstreams: DEFAULT_UPSTREAMS,
 };
