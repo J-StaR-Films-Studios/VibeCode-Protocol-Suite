@@ -33,6 +33,8 @@ import {
   initGlobalStore,
   getManifest,
   writeManifest,
+  buildStoreSkillsReconcilePlan,
+  buildStoreWorkflowsReconcilePlan,
   populateSkills,
   populateWorkflows,
   populateAgentYamls,
@@ -43,7 +45,26 @@ import {
 import { runDoctor } from './doctor.js';
 import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
-import { installBundledSkills, printSkillsInstallSummary, validateSkillsInstall } from './skills-installer.js';
+import { offerPiOptionalFeatures } from './pi-optional-features.js';
+import {
+  buildSkillsReconcilePlan,
+  getInstalledTakomiSkillNames,
+  installBundledSkills,
+  printSkillsInstallSummary,
+  validateSkillsInstall,
+  SKILLS_ROOT,
+} from './skills-installer.js';
+import {
+  colorCategory,
+  CORE_SKILLS,
+  getSkillChoices,
+  getSkillsForCategories,
+  getUncategorizedSkills,
+  getValidCoreSkills,
+  listBundledSkillNames,
+  SKILL_CATEGORIES,
+} from './skills-catalog.js';
+import { promptSkillCategoryTui } from './skills-selection-tui.js';
 import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
 import { printTakomiStats } from './takomi-stats.js';
 
@@ -172,13 +193,7 @@ async function init() {
       // Handle Skills
       if (response.skillMode === 'core') {
         console.log(pc.green('✔ Downloading Core Skills...'));
-        const coreSkills = [
-          'takomi',
-          'ai-sdk', 'code-review', 'component-analysis',
-          'nextjs-standards', 'security-audit', 'spawn-task',
-          'stitch', 'sync-docs'
-        ];
-        await copySpecificSkills(coreSkills, skillsDest);
+        await copySpecificSkills(CORE_SKILLS, skillsDest);
       } else if (response.skillMode === 'all') {
         console.log(pc.green('✔ Downloading all skills...'));
         await copyAllSkills(skillsDest);
@@ -219,11 +234,182 @@ async function init() {
   }
 }
 
+function formatCoreSkillsSummary() {
+  return CORE_SKILLS.join(', ');
+}
+
+async function promptCustomSkillSelection(initialSelected = [], options = {}) {
+  const tuiSelection = await promptSkillCategoryTui({
+    initialSelected,
+    title: options.title || 'Custom Skills Selection',
+  });
+  if (Array.isArray(tuiSelection)) return tuiSelection;
+  if (tuiSelection === null) return null;
+
+  const initialSet = new Set(initialSelected);
+  const uncategorized = await getUncategorizedSkills();
+  const categoryChoices = SKILL_CATEGORIES.map((category) => ({
+    title: colorCategory(category),
+    value: category.id,
+    selected: category.skills.some((skill) => initialSet.has(skill)),
+    description: category.description,
+  }));
+
+  if (uncategorized.length) {
+    categoryChoices.push({
+      title: pc.dim('[Other / Uncategorized]'),
+      value: '__uncategorized',
+      selected: uncategorized.some((skill) => initialSet.has(skill)),
+      description: 'Bundled skills that are not assigned to a curated category yet.',
+    });
+  }
+
+  const categoryResponse = await prompts({
+    type: 'multiselect',
+    name: 'categories',
+    message: 'Select skill categories:',
+    choices: categoryChoices,
+    hint: '- Space to select. Return to continue',
+  });
+
+  if (!categoryResponse.categories) return null;
+
+  const selected = new Set();
+  const selectedCategories = categoryResponse.categories;
+
+  for (const categoryId of selectedCategories) {
+    const category = SKILL_CATEGORIES.find((item) => item.id === categoryId);
+    const skillNames = categoryId === '__uncategorized'
+      ? uncategorized
+      : (await getSkillsForCategories([categoryId]));
+    const categoryHadInitialSelection = skillNames.some((skill) => initialSet.has(skill));
+    const defaultSelected = options.selectAllForNewCategories && !categoryHadInitialSelection
+      ? skillNames
+      : skillNames.filter((skill) => initialSet.has(skill));
+
+    const skillResponse = await prompts({
+      type: 'multiselect',
+      name: 'skills',
+      message: `Select skills in ${category?.title || 'Other / Uncategorized'}:`,
+      choices: await getSkillChoices(skillNames, defaultSelected),
+      hint: '- Space to select. Return to continue',
+    });
+
+    if (!skillResponse.skills) return null;
+    for (const skill of skillResponse.skills) selected.add(skill);
+  }
+
+  return [...selected].sort();
+}
+
+async function confirmSkillRemovalIfNeeded(selectedSkills, mode) {
+  const plan = await buildSkillsReconcilePlan(selectedSkills);
+  if (plan.toRemove.length === 0) return true;
+
+  console.log(pc.yellow('\nTakomi will remove deselected Takomi-managed skills only:'));
+  for (const skill of plan.toRemove) console.log(pc.dim(`  - ${skill}`));
+  console.log(pc.dim('\nManual skills and modified Takomi skills are preserved.'));
+
+  const response = await prompts({
+    type: 'confirm',
+    name: 'confirm',
+    message: `Remove ${plan.toRemove.length} Takomi-managed skill${plan.toRemove.length === 1 ? '' : 's'} for "${mode}"?`,
+    initial: false,
+  });
+
+  return Boolean(response.confirm);
+}
+
+async function promptSkillsInstallSelection() {
+  const envMode = process.env.TAKOMI_SKILLS_MODE;
+  if (envMode) {
+    const mode = envMode.toLowerCase();
+    if (mode === 'core') return { mode, selectedSkills: await getValidCoreSkills() };
+    if (mode === 'all') return { mode, selectedSkills: await listBundledSkillNames() };
+    if (mode === 'none') return { mode, selectedSkills: [] };
+    if (mode === 'leave-as-is' || mode === 'leave') return { mode: 'leave-as-is', leaveAsIs: true };
+  }
+
+  const installed = await getInstalledTakomiSkillNames();
+  const hasTakomiSkills = installed.length > 0;
+  const choices = hasTakomiSkills
+    ? [
+        { title: 'Leave As Is', value: 'leave-as-is', selected: true, description: `Recommended: keep ${installed.length} Takomi-managed skill${installed.length === 1 ? '' : 's'} unchanged.` },
+        { title: 'Present Custom', value: 'present-custom', description: 'Review your current Takomi-managed skills and adjust selections.' },
+        { title: 'Core Skills', value: 'core', description: `[Recommended defaults] ${formatCoreSkillsSummary()}` },
+        { title: 'Custom', value: 'custom', description: 'Choose categories and individual skills.' },
+        { title: 'All Skills', value: 'all', description: 'Install every bundled Takomi skill.' },
+        { title: 'None', value: 'none', description: 'Disable Takomi-managed skills after confirmation.' },
+      ]
+    : [
+        { title: 'Core Skills', value: 'core', selected: true, description: `[Recommended defaults] ${formatCoreSkillsSummary()}` },
+        { title: 'Custom', value: 'custom', description: 'Choose categories and individual skills.' },
+        { title: 'All Skills', value: 'all', description: 'Install every bundled Takomi skill.' },
+        { title: 'None', value: 'none', description: 'Do not install Takomi skills.' },
+      ];
+
+  const response = await prompts({
+    type: 'select',
+    name: 'mode',
+    message: 'Skills Installation',
+    choices,
+  });
+
+  if (!response.mode) return null;
+
+  if (response.mode === 'leave-as-is') {
+    return { mode: response.mode, leaveAsIs: true, ownedCount: installed.length };
+  }
+
+  let selectedSkills = [];
+  if (response.mode === 'core') {
+    selectedSkills = await getValidCoreSkills();
+  } else if (response.mode === 'all') {
+    const confirmAll = await prompts({
+      type: 'confirm',
+      name: 'confirm',
+      message: 'Install every bundled skill? This may add skill discovery noise in supported harnesses.',
+      initial: false,
+    });
+    if (!confirmAll.confirm) return { mode: 'leave-as-is', leaveAsIs: true, ownedCount: installed.length };
+    selectedSkills = await listBundledSkillNames();
+  } else if (response.mode === 'none') {
+    selectedSkills = [];
+  } else if (response.mode === 'present-custom') {
+    const customSelection = await promptCustomSkillSelection(installed, { selectAllForNewCategories: true, title: 'Present Custom Skills' });
+    if (!customSelection) return null;
+    selectedSkills = customSelection;
+  } else if (response.mode === 'custom') {
+    const customSelection = await promptCustomSkillSelection([], { selectAllForNewCategories: true, title: 'Custom Skills Selection' });
+    if (!customSelection) return null;
+    selectedSkills = customSelection;
+  }
+
+  const confirmedRemoval = await confirmSkillRemovalIfNeeded(selectedSkills, response.mode);
+  if (!confirmedRemoval) {
+    return { mode: 'leave-as-is', leaveAsIs: true, ownedCount: installed.length };
+  }
+
+  return { mode: response.mode, selectedSkills };
+}
+
 async function installSkillsTarget() {
   console.log(pc.magenta('🧰 Takomi Skills Install\n'));
   try {
-    const result = await installBundledSkills(program.version());
-    const validation = await validateSkillsInstall();
+    const selection = await promptSkillsInstallSelection();
+    if (!selection) return;
+    if (selection.leaveAsIs) {
+      printSkillsInstallSummary({
+        leaveAsIs: true,
+        targetRoot: SKILLS_ROOT,
+        ownedCount: selection.ownedCount || (await getInstalledTakomiSkillNames()).length,
+      });
+      console.log(pc.dim('\nGlobal skills were not changed.\n'));
+      return;
+    }
+
+    const result = await installBundledSkills(program.version(), selection);
+    const validation = await validateSkillsInstall(selection.selectedSkills);
     printSkillsInstallSummary(result, validation);
     console.log(pc.dim('\nGlobal skills are ready for Pi or other supported harnesses.\n'));
   } catch (error) {
@@ -232,12 +418,13 @@ async function installSkillsTarget() {
   }
 }
 
-async function installAllTargets() {
-  await installPiTarget();
+async function installAllTargets(options = {}) {
+  await installPiTarget(options);
   await installSkillsTarget();
 }
 
-async function installPiTarget() {
+async function installPiTarget(options = {}) {
+  const { offerOptionalFeatures = true } = options;
   console.log(pc.magenta('🧭 Pi Harness Preflight\n'));
   const report = await runDoctor({ version: program.version() });
 
@@ -247,7 +434,7 @@ async function installPiTarget() {
     printPiInstallResult(installResult);
     if (!installResult.ok) {
       console.log(pc.yellow('\nPi harness install stopped because Pi could not be installed.'));
-      console.log(pc.dim('Retry manually with: npm install -g @mariozechner/pi-coding-agent\n'));
+      console.log(pc.dim('Retry manually with: npm install -g @earendil-works/pi-coding-agent\n'));
       return;
     }
   }
@@ -268,6 +455,10 @@ async function installPiTarget() {
     const result = await installPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
+    if (offerOptionalFeatures) {
+      console.log(pc.cyan('\n🧩 Optional Takomi Pi feature packs...\n'));
+      await offerPiOptionalFeatures({ interactive: true });
+    }
     console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
     printPiManagedPackageUpdateResult(await updatePiManagedPackages());
     console.log(pc.dim('\nNext: cd <project> && takomi\n'));
@@ -275,6 +466,16 @@ async function installPiTarget() {
     console.log(pc.red('\nPi harness asset install failed.'));
     console.log(pc.dim(String(error?.message || error)));
   }
+}
+
+async function installPiOptionalFeaturesTarget() {
+  console.log(pc.magenta('🧩 Takomi Optional Pi Features\n'));
+  const pi = await ensurePiInstalled();
+  printPiInstallResult(pi);
+  if (!pi.ok) return;
+  await offerPiOptionalFeatures({ interactive: true });
+  console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+  printPiManagedPackageUpdateResult(await updatePiManagedPackages());
 }
 
 async function syncPiTarget() {
@@ -294,8 +495,18 @@ async function syncPiTarget() {
 async function syncSkillsTarget() {
   console.log(pc.magenta('📡 Takomi Skills Sync\n'));
   try {
-    const result = await installBundledSkills(program.version());
-    const validation = await validateSkillsInstall();
+    const selection = await promptSkillsInstallSelection();
+    if (!selection) return;
+    if (selection.leaveAsIs) {
+      printSkillsInstallSummary({
+        leaveAsIs: true,
+        targetRoot: SKILLS_ROOT,
+        ownedCount: selection.ownedCount || (await getInstalledTakomiSkillNames()).length,
+      });
+      return;
+    }
+    const result = await installBundledSkills(program.version(), selection);
+    const validation = await validateSkillsInstall(selection.selectedSkills);
     printSkillsInstallSummary(result, validation);
   } catch (error) {
     console.log(pc.red('\nSkills sync failed.'));
@@ -347,7 +558,7 @@ async function upgrade(target = 'all') {
   }
 
   if (normalizedTarget === 'pi') {
-    await installPiTarget();
+    await installPiTarget({ offerOptionalFeatures: false });
     return;
   }
 
@@ -356,13 +567,13 @@ async function upgrade(target = 'all') {
     return;
   }
 
-  await installAllTargets();
+  await installAllTargets({ offerOptionalFeatures: false });
   console.log(pc.magenta('\n✨ Fully upgraded. Next: run `takomi` from your project.\n'));
 }
 
 function printUnsupportedInstallTarget(target) {
   console.log(pc.yellow(`Unsupported install target: ${target}`));
-  console.log(pc.dim('Supported targets right now: pi, skills, all'));
+  console.log(pc.dim('Supported targets right now: pi, pi-features, skills, all'));
   console.log(pc.dim('Use plain "takomi install" for the existing interactive global installer.\n'));
 }
 
@@ -384,6 +595,10 @@ async function install(target) {
     }
     if (target === 'skills') {
       await installSkillsTarget();
+      return;
+    }
+    if (target === 'pi-features' || target === 'features' || target === 'optional') {
+      await installPiOptionalFeaturesTarget();
       return;
     }
     if (target === 'all') {
@@ -426,6 +641,11 @@ async function install(target) {
   if (!harnessResponse.harnesses || harnessResponse.harnesses.length === 0) return;
 
   const selectedHarnesses = detected.filter(h => harnessResponse.harnesses.includes(h.id));
+  const existingStoreManifest = await getManifest();
+  const existingStoreOwnedSkills = Object.keys(existingStoreManifest.bundledOwned?.skills || {});
+  const existingStoreOwnedWorkflows = Object.keys(existingStoreManifest.bundledOwned?.workflows || {});
+  const hasExistingStoreSkills = existingStoreOwnedSkills.length > 0;
+  const hasExistingStoreWorkflows = existingStoreOwnedWorkflows.length > 0;
 
   // 3. Ask what to install
   const contentResponse = await prompts([
@@ -447,13 +667,15 @@ async function install(target) {
       name: 'skillMode',
       message: 'Which skill pack?',
       choices: [
-        { title: 'Core (Takomi + essentials)', value: 'core', description: 'takomi, ai-sdk, code-review...' },
+        ...(hasExistingStoreSkills ? [{ title: 'Leave As Is (Recommended)', value: 'leave-as-is', description: `Keep ${existingStoreOwnedSkills.length} Takomi-managed store skill${existingStoreOwnedSkills.length === 1 ? '' : 's'} unchanged.` }] : []),
+        ...(hasExistingStoreSkills ? [{ title: 'Present Custom', value: 'present-custom', description: 'Review current Takomi-managed store skills and adjust selections.' }] : []),
+        { title: 'Core (Recommended defaults)', value: 'core', description: 'takomi, sync-docs, ai-sdk, git-commit-generation...' },
         { title: `All (${(await getSkills()).length} skills)`, value: 'all' },
         { title: 'Custom selection', value: 'custom' },
       ],
     },
     {
-      type: (prev, values) => values.skillMode === 'custom' ? 'multiselect' : null,
+      type: null,
       name: 'selectedSkills',
       message: 'Select skills:',
       choices: async () => {
@@ -468,6 +690,7 @@ async function install(target) {
       name: 'workflowMode',
       message: 'Which workflow pack?',
       choices: [
+        ...(hasExistingStoreWorkflows ? [{ title: 'Leave As Is (Recommended)', value: 'leave-as-is', description: `Keep ${existingStoreOwnedWorkflows.length} Takomi-managed workflow${existingStoreOwnedWorkflows.length === 1 ? '' : 's'} unchanged.` }] : []),
         { title: 'Core (16 essentials)', value: 'core', description: 'vibe-build, mode-architect...' },
         { title: `All (${(await getWorkflows()).length} workflows)`, value: 'all' },
         { title: 'All (Exclude Legacy)', value: 'no-legacy' },
@@ -495,19 +718,73 @@ async function install(target) {
 
     // 5. Populate store from package assets
     if (contentResponse.content.includes('skills')) {
-      const skillMode = contentResponse.skillMode === 'custom'
-        ? contentResponse.selectedSkills
-        : contentResponse.skillMode;
-      const skills = await populateSkills(skillMode);
-      console.log(pc.green(`  ✔ ${skills.length} skills loaded into store`));
+      let skillMode = contentResponse.skillMode;
+      if (contentResponse.skillMode === 'leave-as-is') {
+        console.log(pc.green(`  ✔ Left ${existingStoreOwnedSkills.length} Takomi-managed store skill${existingStoreOwnedSkills.length === 1 ? '' : 's'} unchanged`));
+      } else {
+        if (contentResponse.skillMode === 'present-custom') {
+          const customSelection = await promptCustomSkillSelection(existingStoreOwnedSkills, { selectAllForNewCategories: true, title: 'Present Global Store Custom Skills' });
+          if (!customSelection) return;
+          skillMode = customSelection;
+        } else if (contentResponse.skillMode === 'custom') {
+          const customSelection = await promptCustomSkillSelection([], { selectAllForNewCategories: true, title: 'Global Store Custom Skills' });
+          if (!customSelection) return;
+          skillMode = customSelection;
+        }
+
+        const plan = await buildStoreSkillsReconcilePlan(skillMode);
+        if (plan.toRemove.length > 0) {
+          console.log(pc.yellow('\nTakomi will remove deselected Takomi-managed skills from the global store only:'));
+          for (const skill of plan.toRemove) console.log(pc.dim(`  - ${skill}`));
+          console.log(pc.dim('\nManual/imported store skills and modified Takomi skills are preserved.'));
+          const confirmStorePrune = await prompts({
+            type: 'confirm',
+            name: 'confirm',
+            message: `Remove ${plan.toRemove.length} Takomi-managed store skill${plan.toRemove.length === 1 ? '' : 's'}?`,
+            initial: false,
+          });
+          if (!confirmStorePrune.confirm) {
+            console.log(pc.green('  ✔ Left global store skills unchanged'));
+            skillMode = null;
+          }
+        }
+
+        if (skillMode) {
+          const skills = await populateSkills(skillMode);
+          console.log(pc.green(`  ✔ ${skills.length} skills loaded into store`));
+        }
+      }
     }
 
     if (contentResponse.content.includes('workflows')) {
-      const workflowMode = contentResponse.workflowMode === 'custom'
+      let workflowMode = contentResponse.workflowMode === 'custom'
         ? contentResponse.selectedWorkflows
         : contentResponse.workflowMode;
-      const workflows = await populateWorkflows(workflowMode);
-      console.log(pc.green(`  ✔ ${workflows.length} workflows loaded into store`));
+      if (contentResponse.workflowMode === 'leave-as-is') {
+        console.log(pc.green(`  ✔ Left ${existingStoreOwnedWorkflows.length} Takomi-managed workflow${existingStoreOwnedWorkflows.length === 1 ? '' : 's'} unchanged`));
+      } else {
+        const plan = await buildStoreWorkflowsReconcilePlan(workflowMode);
+        if (plan.toRemove.length > 0) {
+          console.log(pc.yellow('\nTakomi will remove deselected Takomi-managed workflows from the global store only:'));
+          for (const workflow of plan.toRemove) console.log(pc.dim(`  - ${workflow}`));
+          console.log(pc.dim('\nManual/imported store workflows and modified Takomi workflows are preserved.'));
+          const confirmWorkflowPrune = await prompts({
+            type: 'confirm',
+            name: 'confirm',
+            message: `Remove ${plan.toRemove.length} Takomi-managed workflow${plan.toRemove.length === 1 ? '' : 's'}?`,
+            initial: false,
+          });
+          if (!confirmWorkflowPrune.confirm) {
+            console.log(pc.green('  ✔ Left global store workflows unchanged'));
+            workflowMode = null;
+          }
+        }
+
+        if (workflowMode) {
+          const workflows = await populateWorkflows(workflowMode);
+          console.log(pc.green(`  ✔ ${workflows.length} workflows loaded into store`));
+        }
+      }
     }
 
     if (contentResponse.content.includes('yamls')) {
@@ -517,13 +794,21 @@ async function install(target) {
 
     // 6. Sync store to all selected harnesses
     console.log(pc.cyan('\n📡 Syncing to harnesses...\n'));
-    await syncToAllHarnesses(selectedHarnesses, STORE_PATH);
+    let manifest = await getManifest();
+    const syncSummary = await syncToAllHarnesses(selectedHarnesses, STORE_PATH, {
+      useOwnership: true,
+      owned: manifest.harnessOwned,
+    });
 
     // 7. Update manifest
-    const manifest = await getManifest();
+    manifest = await getManifest();
     manifest.linkedHarnesses = selectedHarnesses.map(h => h.id);
     manifest.installed.skills = await getStoreSkills();
     manifest.installed.workflows = await getStoreWorkflows();
+    manifest.harnessOwned = manifest.harnessOwned || {};
+    for (const harness of selectedHarnesses) {
+      manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
+    }
     await writeManifest(manifest);
 
     // 8. Summary
@@ -594,10 +879,17 @@ async function sync(target) {
   const selectedHarnesses = detected.filter(h => response.harnesses.includes(h.id));
 
   console.log(pc.cyan('\n📡 Syncing from global store...\n'));
-  await syncToAllHarnesses(selectedHarnesses, STORE_PATH);
+  const syncSummary = await syncToAllHarnesses(selectedHarnesses, STORE_PATH, {
+    useOwnership: true,
+    owned: manifest.harnessOwned,
+  });
 
   // Update manifest with current harnesses
   manifest.linkedHarnesses = [...new Set([...manifest.linkedHarnesses, ...response.harnesses])];
+  manifest.harnessOwned = manifest.harnessOwned || {};
+  for (const harness of selectedHarnesses) {
+    manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
+  }
   await writeManifest(manifest);
 
   const skills = await getStoreSkills();
@@ -813,6 +1105,7 @@ Primary flow:
 
 Examples:
   takomi setup pi     Set up the Pi harness
+  takomi setup pi-features  Add optional Pi feature packs
   takomi setup skills Install bundled skills
   takomi setup project
   takomi refresh      One-command maintenance
@@ -825,7 +1118,7 @@ Legacy aliases still work:
 
 program
   .command('setup [target]')
-  .description('Set up Takomi: guided setup, or setup pi|skills|project|all')
+  .description('Set up Takomi: guided setup, or setup pi|pi-features|skills|project|all')
   .action(async (target) => {
     if (target === 'project') {
       await init();

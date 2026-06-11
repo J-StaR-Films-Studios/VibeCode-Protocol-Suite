@@ -29,6 +29,11 @@ Optional global skills:
 
 ```bash
 takomi setup skills
+# First install defaults to Core Skills.
+# Repeat installs default to Leave As Is so existing selections are not pruned accidentally.
+# Custom opens a color-coded category TUI with expandable skill rows when a TTY is available.
+# Optional Pi feature packs can also be managed later:
+takomi setup pi-features
 ```
 
 Useful management commands:
@@ -42,6 +47,8 @@ takomi setup project
 ```
 
 Legacy commands like `takomi install pi`, `takomi sync pi`, `takomi upgrade`, and `takomi init` still work, but the simpler mental model is: **setup once, refresh when stale, run `takomi` to use it.**
+
+During `takomi setup pi` or `takomi setup pi-features`, Takomi offers optional Pi feature packs with recommended/manual/select-all/skip choices. Current defaults install **Takomi Interview** (`npm:@juicesharp/rpiv-ask-user-question`) so models can ask structured clarification questions. **Takomi Todo** (`npm:@juicesharp/rpiv-todo`), **Takomi Browser QA** (`npm:pi-chrome`), and **Takomi Doc Preview** (`npm:pi-markdown-preview`) remain opt-in. `takomi refresh` runs Pi's package updater so installed optional, custom, old, and new Pi packages are reconciled together.
 
 ### Context Manager
 
@@ -69,7 +76,8 @@ npx takomi install
 What happens next:
 - 🔍 **Auto-detects** every AI harness on your machine
 - 📦 **Creates your command center** at `~/.takomi/`
-- 📡 **Syncs your entire toolkit** to every IDE automatically
+- 🧰 **Lets you choose Core, Present Custom, Custom, All, or Leave As Is for skills**
+- 📡 **Syncs your selected toolkit** to every IDE automatically
 - 🔄 **Keeps KiloCode in sync** across CLI and VS Code
 
 ### Option B: Per-Project Setup
@@ -118,7 +126,9 @@ Original Takomi-authored skills in this bundle include `21st-dev-components`, `t
 
 Think of skills as specialized team members you can summon on demand. From security audits to AI video generation — there's a skill for that.
 
-The published bundle currently ships **69 top-level skills**, including the original `21st-dev-components` workflow for guided 21st.dev integration. The `pr-comment-fix` skill is sourced from https://gist.github.com/GSonofNun/35c67304c35dac7d6b43308b5371f671.
+Takomi's own installer no longer installs every bundled skill by default. `takomi setup skills` uses **Core Skills** for first-time installs, **Leave As Is** for repeat installs, and ownership-safe cleanup when you explicitly deselect Takomi-managed skills. Manual/user-added skills are preserved. Custom selection opens a color-coded category browser with expandable rows on capable terminals, and falls back to simple prompts elsewhere. The global store/harness sync path uses the same ownership model so deselected Takomi-managed skills and workflows can be pruned from `~/.takomi/` and synced harness folders without touching manual or imported resources.
+
+The published bundle currently ships **72 top-level skills**, including the original `21st-dev-components` workflow for guided 21st.dev integration. The `pr-comment-fix` skill is sourced from https://gist.github.com/GSonofNun/35c67304c35dac7d6b43308b5371f671.
 
 ### Interactive Search & Install
 ```bash
@@ -130,7 +140,22 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 ```
 
 ### Core Essentials (Start Here)
-The non-negotiables for daily development:
+The recommended Takomi installer defaults are:
+
+```txt
+takomi
+sync-docs
+code-review
+security-audit
+optimize-agent-context
+agent-recovery
+avoid-feature-creep
+ai-sdk
+git-commit-generation
+```
+
+For the external `skills` CLI, install only the router skill if you want the smallest possible footprint:
+
 ```bash
 npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill takomi
 ```
@@ -466,8 +491,9 @@ This is a living system. If you discover improvements:
 
 ## 🙏 Acknowledgements
 
-Externally sourced skills in this bundle retain credit to their upstream creators. Takomi-original skills and workflows in this repository, including `21st-dev-components`, remain authored and maintained by J StaR Films Studios.
+Externally sourced skills and optional Pi packages retain credit to their upstream creators. Takomi-original skills, workflows, and Takomi runtime/orchestration extensions in this repository, including `21st-dev-components`, remain authored and maintained by J StaR Films Studios.
 
+- **Pi Coding Agent**: Built for [Pi](https://github.com/earendil-works/pi) / `@earendil-works/pi-coding-agent` by **Mario Zechner** and Earendil Works — the MIT-licensed coding-agent runtime and extension API that powers the Pi-native Takomi harness.
 - **Anthropic Skills**: From [anthropics/skills](https://github.com/anthropics/skills) — a massive collection including **Office Suite** (PDF/DOCX/PPTX/XLSX), **Frontend Design**, **Webapp Testing**, **Algorithmic Art**, **Monorepo Management**, and **Skill Creator**.
 - **Inference.sh Skills**: From [inference.sh/skills](https://github.com/inference-sh/skills) — complete media & automation suite including **Marketing Videos**, **Voice Cloning**, **Social Content**, **Twitter Automation**, **Product Photography**, and **Prompt Engineering**.
 - **Marketing Skills**: From [coreyhaines31/marketingskills](https://github.com/coreyhaines31/marketingskills) — the complete marketer's toolkit: **Copywriting**, **Pricing Strategy**, **Social Strategy**, **Programmatic SEO**, and **Marketing Ideas**.
@@ -483,6 +509,10 @@ Externally sourced skills in this bundle retain credit to their upstream creator
 - **Google Stitch Skills**: From [google-labs-code/stitch-skills](https://github.com/google-labs-code/stitch-skills) — Design-to-code suite including **design-md**, **enhance-prompt**, **stitch-loop**, **react-components**, and **shadcn-ui**.
 - **Jules**: From [sanjay3290/ai-skills](https://github.com/sanjay3290/ai-skills) — delegate coding tasks to Google Jules AI agent.
 - **Subagent Execution**: Built on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon** — providing the underlying Pi extension for delegated subagent runs (result rendering, live progress, single/parallel/chain execution, session/artifact handling, and related subagent tooling), upon which Takomi adds its own lifecycle orchestration, model-routing policy, and workflow metadata.
+- **Takomi Interview / Todo Optional Packs**: Optional setup integrates **[`@juicesharp/rpiv-ask-user-question`](https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-ask-user-question)** and **[`@juicesharp/rpiv-todo`](https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-todo)** by **juicesharp** — MIT-licensed Pi extensions for structured user questions and live todo overlays.
+- **Takomi Browser QA Optional Pack**: Optional setup can install **[`pi-chrome`](https://github.com/tianrendong/pi-chrome)** by **tianrendong** — an MIT-licensed Pi extension for explicitly authorized Chrome/browser automation.
+- **Takomi Doc Preview Optional Pack**: Optional setup can install **[`pi-markdown-preview`](https://github.com/omaclaren/pi-markdown-preview)** by **omaclaren** — an MIT-licensed Pi extension for terminal/browser/PDF markdown and LaTeX previews.
+- **Context Mode Research / Optional Power User Tooling**: **[`context-mode`](https://github.com/mksglu/context-mode)** by **Mert Koseoğlu** is credited as an external context-window and session-continuity project. It is not bundled as a Takomi default; users can install/evaluate it separately under its own license.
 - **Git Commit Generation**: From the **[`kilocode`](https://github.com/Kilo-Org/kilocode)** repository by **Kilo-Org** (specifically, [git-commit-generation.md](https://github.com/Kilo-Org/kilocode/blob/main/packages/kilo-docs/pages/code-with-ai/features/git-commit-generation.md)) — enabling automated, high-quality conventional git commit messages based on staged changes.
 
 ## 📄 License

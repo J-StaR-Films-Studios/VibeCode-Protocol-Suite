@@ -209,8 +209,70 @@ export async function inspectInstalledTakomiPiHarness(home = HOME) {
   };
 }
 
-function runCommand(command, args) {
-  return spawnSync(command, args, { stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' });
+function quoteWindowsCommandArg(value) {
+  const text = String(value);
+  if (text.length === 0) return '""';
+  if (!/[\s"&|<>^()%!]/.test(text)) return text;
+  return `"${text.replace(/"/g, '\\"')}"`;
+}
+
+function resolveCommandForSpawn(command, args = []) {
+  if (process.platform !== 'win32') return { command, args };
+  if (/\.(exe|com)$/i.test(command)) return { command, args };
+
+  return {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', [command, ...args].map(quoteWindowsCommandArg).join(' ')],
+  };
+}
+
+export function runCommand(command, args) {
+  const resolved = resolveCommandForSpawn(command, args);
+  return spawnSync(resolved.command, resolved.args, { stdio: 'pipe', encoding: 'utf8', shell: false });
+}
+
+function runCommandWithTimeout(command, args, timeoutMs) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+
+    const resolved = resolveCommandForSpawn(command, args);
+    const child = spawn(resolved.command, resolved.args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      windowsHide: true,
+    });
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ stdout, stderr, timedOut, ...result });
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (process.platform === 'win32' && child.pid) {
+        try { spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' }); } catch {}
+      } else {
+        try { child.kill(); } catch {}
+        setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch {}
+        }, 1500).unref?.();
+      }
+      try { child.stdout?.destroy(); } catch {}
+      try { child.stderr?.destroy(); } catch {}
+      finish({ status: null });
+    }, timeoutMs);
+    timer.unref?.();
+
+    child.stdout?.on('data', (chunk) => { stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('error', (error) => finish({ status: 1, error }));
+    child.on('close', (code) => finish({ status: timedOut ? null : code }));
+  });
 }
 
 export async function ensurePiInstalled() {
@@ -220,8 +282,8 @@ export async function ensurePiInstalled() {
   }
 
   const attempts = [
-    { command: 'npm', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
-    { command: 'npm.cmd', args: ['install', '-g', '@mariozechner/pi-coding-agent'] },
+    { command: 'npm', args: ['install', '-g', '@earendil-works/pi-coding-agent'] },
+    { command: 'npm.cmd', args: ['install', '-g', '@earendil-works/pi-coding-agent'] },
   ];
 
   let lastError = 'Unknown install failure.';
@@ -297,23 +359,38 @@ export function printPiSubagentsInstallResult(result) {
   if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
 }
 
-export async function updatePiManagedPackages() {
+export async function updatePiManagedPackages({ timeoutMs = 20_000 } = {}) {
+  if (process.env.TAKOMI_SKIP_PI_PACKAGE_UPDATE === '1') {
+    return { ok: true, changed: false, report: 'Skipped Pi package update because TAKOMI_SKIP_PI_PACKAGE_UPDATE=1.' };
+  }
+
   const pi = await detectPiCommand();
   if (!pi.installed) return { ok: false, changed: false, report: 'Pi is not installed.' };
 
+  // `pi update` reconciles packages from Pi settings, including user-installed
+  // npm/git/local packages. Treat this as a best-effort follow-up: third-party
+  // packages or manual extension entries must never hang Takomi installation.
   const command = pi.path || 'pi';
-  const result = runCommand(command, ['update']);
+  const result = await runCommandWithTimeout(command, ['update'], timeoutMs);
   const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+  if (result.timedOut) {
+    return {
+      ok: false,
+      changed: false,
+      report: `Timed out after ${Math.round(timeoutMs / 1000)}s while running \`pi update\`. Takomi setup is complete; retry package updates later with \`pi update\` or skip this step with TAKOMI_SKIP_PI_PACKAGE_UPDATE=1. Last output:\n${output}`.trim(),
+    };
+  }
+
   return {
     ok: result.status === 0,
     changed: result.status === 0,
-    report: output || (result.status === 0 ? 'Pi managed packages are up to date.' : 'pi update failed.'),
+    report: output || (result.status === 0 ? 'All Pi-managed packages are up to date.' : 'pi update failed.'),
   };
 }
 
 export function printPiManagedPackageUpdateResult(result) {
   if (result.ok) {
-    console.log(pc.green('✔ Updated Pi-managed packages'));
+    console.log(pc.green('✔ Updated all Pi-managed packages'));
     if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
     return;
   }
@@ -342,18 +419,32 @@ export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
   };
 }
 
+function printFirstRunGuidance(reason) {
+  console.log(pc.magenta('\n🎯 Welcome to Takomi\n'));
+  if (reason) console.log(pc.yellow(reason));
+  console.log(pc.white('\nRecommended first step:'));
+  console.log(pc.cyan('  takomi setup pi'));
+  console.log(pc.dim('    Set up the Pi-native Takomi harness.'));
+  console.log(pc.white('\nOptional setup:'));
+  console.log(pc.dim('  takomi setup pi-features  Add optional Pi feature packs'));
+  console.log(pc.dim('  takomi setup skills       Install global Takomi skills'));
+  console.log(pc.dim('  takomi setup all          Set up Pi + skills'));
+  console.log(pc.white('\nDiagnostics and help:'));
+  console.log(pc.dim('  takomi doctor             Check installation health'));
+  console.log(pc.dim('  takomi status             Show connected harnesses/toolkit status'));
+  console.log(pc.dim('  takomi --help             Show all commands\n'));
+}
+
 export async function launchTakomiHarness(cwd = process.cwd()) {
   const report = await inspectPiHarnessEnvironment(cwd);
 
   if (!report.pi.installed) {
-    console.log(pc.red('Pi is not installed.'));
-    console.log(pc.dim('Run: takomi install pi'));
+    printFirstRunGuidance('Pi is not installed yet.');
     return 1;
   }
 
   if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled) {
-    console.log(pc.red('Takomi Pi harness is not fully installed.'));
-    console.log(pc.dim('Run: takomi install pi'));
+    printFirstRunGuidance('Takomi Pi harness is not fully installed yet.');
     return 1;
   }
 

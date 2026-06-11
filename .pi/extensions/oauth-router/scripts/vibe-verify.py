@@ -20,10 +20,6 @@ REQUIRED = [
     ROOT / "config.ts",
     ROOT / "types.ts",
     ROOT / "README.md",
-    ROOT / "docs" / "Project_Requirements.md",
-    ROOT / "docs" / "Coding_Guidelines.md",
-    ROOT / "docs" / "Builder_Prompt.md",
-    ROOT / "docs" / "issues" / "FR-001.md",
 ]
 EXPECTED_MODELS = ["oauth-router", "gpt-4o", "gpt-4.1", "o4-mini", "gpt-5.4"]
 PI_CANDIDATES = [

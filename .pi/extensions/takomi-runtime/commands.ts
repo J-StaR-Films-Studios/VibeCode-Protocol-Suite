@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type {
   TakomiLaunchMode,
   TakomiRole,
@@ -7,7 +7,7 @@ import type {
 } from "../../../src/pi-takomi-core";
 import { commandHelp, completions, statusText, workflowPrompt } from "./command-text";
 import type { TakomiSubagentController } from "./subagent-types";
-import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy, type RoutingPolicyInstallScope } from "./routing-policy";
+import { previewTakomiRoutingPolicy, renderRoutingPolicyPreview, resolveTakomiRoutingPolicy, type RoutingPolicyInstallScope } from "./routing-policy";
 import { collectTakomiStats, renderTakomiStats } from "./takomi-stats.js";
 
 export type TakomiRuntimeCommandState = {
@@ -158,12 +158,29 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
     const policyText = scopeMatch?.[2] ?? trimmed.replace(/^set\s+/i, "");
 
     try {
-      const result = await installTakomiRoutingPolicy(ctx.cwd, policyText, { scope });
-      const detected = result.detectedDefaults.length ? `\n\nDetected defaults:\n- ${result.detectedDefaults.join("\n- ")}` : "\n\nNo model names were auto-detected; saved policy only.";
-      const overrideNote = scope === "global"
-        ? "\n\nThis will be used by every project unless that project has its own .pi/takomi/model-routing.md override."
-        : "\n\nThis project-local policy overrides the global policy for the current project.";
-      ctx.ui.notify(`Takomi routing policy updated (${scope}).\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}${overrideNote}`, "info");
+      const preview = previewTakomiRoutingPolicy(ctx.cwd, policyText, { scope });
+      const reviewPrompt = [
+        "Review this Takomi routing policy extraction before it is saved.",
+        "",
+        "Rules:",
+        "- Do not invent providers or model IDs not grounded in the policy.",
+        "- Providerless names like GPT-5.5 are routing intent unless a preferred provider/router is declared.",
+        "- Valid Takomi roles are: general, orchestrator, architect, designer, coder, reviewer.",
+        "- If the extraction is correct and safe, call takomi_apply_routing_policy with the exact policyText and scope below.",
+        "- If it is ambiguous or wrong, explain what the user should clarify and do not call the tool.",
+        "",
+        "Deterministic extraction:",
+        renderRoutingPolicyPreview(preview),
+        "",
+        "Original policy text:",
+        "```",
+        preview.policy,
+        "```",
+        "",
+        `Tool call to apply if safe: takomi_apply_routing_policy({ scope: ${JSON.stringify(scope)}, policyText: <original policy text> })`,
+      ].join("\n");
+      ctx.ui.notify("Takomi routing extraction prepared. Sending it to the active model for review before saving.", "info");
+      pi.sendUserMessage(reviewPrompt);
     } catch (error) {
       ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
     }

@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { RouterConfig, RouterModelConfig, RouterUpstreamConfig } from "./types.ts";
@@ -96,6 +96,17 @@ const DEFAULT_UPSTREAMS: RouterUpstreamConfig[] = [
     oauthProviderId: "openai-codex",
     enabled: true,
     modelIds: ["gpt-5.1", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5"],
+    usageProbe: {
+      enabled: true,
+      timeoutMs: 8_000,
+      endpoints: [
+        "/wham/usage",
+        "/codex/usage",
+        "/codex/limits",
+        "/codex/rate_limits",
+        "/codex/subscription",
+      ],
+    },
   },
 ];
 
@@ -106,27 +117,83 @@ export const DEFAULT_CONFIG: RouterConfig = {
   tokenRefreshSkewMs: 60_000,
   rateLimitCooldownMs: 120_000,
   transientPenaltyMs: 30_000,
+  upstreamMaxRetries: 0,
+  upstreamMaxRetryDelayMs: 60_000,
+  clientNetworkMaxRetries: 5,
+  clientNetworkRetryBaseDelayMs: 5_000,
+  clientNetworkMaxRetryDelayMs: 60_000,
+  clientNetworkPenaltyMs: 0,
   models: DEFAULT_MODELS,
   upstreams: DEFAULT_UPSTREAMS,
 };
 
-function applySecurePermissions(path: string, mode: number) {
+function applySecurePermissions(filePath: string, mode: number) {
   try {
-    chmodSync(path, mode);
+    chmodSync(filePath, mode);
   } catch {
     // Best effort only. Windows commonly ignores POSIX chmod semantics.
   }
 }
 
-export function ensureDirectory(path: string) {
-  mkdirSync(path, { recursive: true, mode: 0o700 });
-  applySecurePermissions(path, 0o700);
+export function ensureDirectory(filePath: string) {
+  mkdirSync(filePath, { recursive: true, mode: 0o700 });
+  applySecurePermissions(filePath, 0o700);
 }
 
-export function writeJsonFile(path: string, value: unknown, secure = true) {
-  ensureDirectory(dirname(path));
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: secure ? 0o600 : 0o644 });
-  applySecurePermissions(path, secure ? 0o600 : 0o644);
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+const HELD_JSON_LOCKS = new Set<string>();
+const JSON_LOCK_WAIT_TIMEOUT_MS = 2_000;
+const JSON_LOCK_STALE_AFTER_MS = 5_000;
+
+export function withJsonFileLock<T>(filePath: string, fn: () => T): T {
+  const lockPath = `${filePath}.lock`;
+  if (HELD_JSON_LOCKS.has(lockPath)) return fn();
+  const started = Date.now();
+  while (true) {
+    try {
+      mkdirSync(lockPath, { mode: 0o700 });
+      break;
+    } catch {
+      try {
+        const ageMs = Date.now() - statSync(lockPath).mtimeMs;
+        if (ageMs > JSON_LOCK_STALE_AFTER_MS) rmSync(lockPath, { recursive: true, force: true });
+      } catch {
+        // The lock disappeared between mkdir attempts.
+      }
+      if (Date.now() - started > JSON_LOCK_WAIT_TIMEOUT_MS) {
+        throw new Error(`Timed out after ${JSON_LOCK_WAIT_TIMEOUT_MS}ms waiting for oauth-router JSON lock: ${lockPath}`);
+      }
+      sleepSync(50);
+    }
+  }
+
+  HELD_JSON_LOCKS.add(lockPath);
+  try {
+    return fn();
+  } finally {
+    HELD_JSON_LOCKS.delete(lockPath);
+    rmSync(lockPath, { recursive: true, force: true });
+  }
+}
+
+export function writeJsonFile(filePath: string, value: unknown, secure = true) {
+  ensureDirectory(dirname(filePath));
+  withJsonFileLock(filePath, () => {
+    const mode = secure ? 0o600 : 0o644;
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode });
+      applySecurePermissions(tempPath, mode);
+      renameSync(tempPath, filePath);
+      applySecurePermissions(filePath, mode);
+    } catch (error) {
+      rmSync(tempPath, { force: true });
+      throw error;
+    }
+  });
 }
 
 function deepClone<T>(value: T): T {
@@ -160,7 +227,12 @@ function mergeUpstreamConfigs(candidateUpstreams: RouterUpstreamConfig[] | undef
     }
 
     const modelIds = Array.from(new Set([...(previous.modelIds ?? []), ...(upstream.modelIds ?? [])]));
-    merged.set(upstream.id, { ...previous, ...deepClone(upstream), id: upstream.id, modelIds });
+    const usageProbe = {
+      ...(previous.usageProbe ?? {}),
+      ...(upstream.usageProbe ?? {}),
+      endpoints: Array.from(new Set([...(previous.usageProbe?.endpoints ?? []), ...(upstream.usageProbe?.endpoints ?? [])])),
+    };
+    merged.set(upstream.id, { ...previous, ...deepClone(upstream), id: upstream.id, modelIds, usageProbe });
   }
   return Array.from(merged.values());
 }

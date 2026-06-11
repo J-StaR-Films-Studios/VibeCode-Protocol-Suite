@@ -1,0 +1,146 @@
+#!/usr/bin/env node
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
+import assert from 'node:assert/strict';
+
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'takomi-skills-test-'));
+process.env.TAKOMI_HOME_DIR = path.join(tempRoot, '.takomi');
+process.env.TAKOMI_STORE_PATH = path.join(tempRoot, '.takomi');
+process.env.TAKOMI_SKILLS_ROOT = path.join(tempRoot, '.agents', 'skills');
+
+const catalog = await import('../src/skills-catalog.js');
+const installer = await import('../src/skills-installer.js');
+const store = await import('../src/store.js');
+const harness = await import('../src/harness.js');
+
+const skillPath = (name) => path.join(process.env.TAKOMI_SKILLS_ROOT, name);
+
+async function resetSkillsInstallState() {
+  await fs.remove(process.env.TAKOMI_SKILLS_ROOT);
+  await fs.remove(installer.SKILLS_MANIFEST_PATH);
+}
+
+try {
+  const core = await catalog.getValidCoreSkills();
+  assert.deepEqual(core, [
+    'takomi',
+    'sync-docs',
+    'code-review',
+    'security-audit',
+    'optimize-agent-context',
+    'agent-recovery',
+    'avoid-feature-creep',
+    'ai-sdk',
+    'git-commit-generation',
+  ]);
+  assert.equal(core.includes('context7'), false, 'context7 must not be core');
+  assert.equal(core.includes('spawn-task'), false, 'spawn-task must not be core');
+
+  const allSkills = await catalog.listBundledSkillNames();
+
+  // Manual folder with the same name as a bundled skill must not be overwritten
+  // or claimed in the ownership manifest, even on repeated installs.
+  await resetSkillsInstallState();
+  await fs.ensureDir(skillPath('takomi'));
+  await fs.writeFile(path.join(skillPath('takomi'), 'SKILL.md'), 'manual takomi collision');
+
+  let result = await installer.installBundledSkills('test', { mode: 'core', selectedSkills: core });
+  assert.equal(result.selectedCount, core.length, 'first core install selected count mismatch');
+  assert.deepEqual(result.preservedManual, ['takomi'], 'manual same-name skill should be preserved on first install');
+  assert.equal(await fs.readFile(path.join(skillPath('takomi'), 'SKILL.md'), 'utf8'), 'manual takomi collision');
+  assert.equal(await fs.pathExists(skillPath('sync-docs')), true, 'non-colliding core skill should install');
+
+  result = await installer.installBundledSkills('test', { mode: 'core', selectedSkills: core });
+  assert.deepEqual(result.preservedManual, ['takomi'], 'manual same-name skill should remain preserved on repeat install');
+  let manifest = await installer.readSkillsInstallManifest();
+  assert.equal(manifest.selectedSkills.includes('takomi'), true, 'manifest should remember selected manual collision');
+  assert.equal(Boolean(manifest.owned.takomi), false, 'manifest must not claim ownership of manual collision');
+
+  // Switching to none prunes only unmodified Takomi-owned skills. Modified owned
+  // skills and manual collisions are preserved and tracked consistently.
+  await fs.appendFile(path.join(skillPath('sync-docs'), 'SKILL.md'), '\nmanual edit');
+  result = await installer.installBundledSkills('test', { mode: 'none', selectedSkills: [] });
+  assert.equal(await fs.pathExists(skillPath('ai-sdk')), false, 'unmodified owned skill should be pruned when switching to none');
+  assert.equal(await fs.pathExists(skillPath('sync-docs')), true, 'modified owned skill should be preserved when switching to none');
+  assert.equal(await fs.pathExists(skillPath('takomi')), true, 'manual same-name skill should be preserved when switching to none');
+  assert.deepEqual(result.preservedModified, ['sync-docs'], 'modified owned skill should be reported');
+  manifest = await installer.readSkillsInstallManifest();
+  assert.deepEqual(manifest.selectedSkills, [], 'none mode should record no selected skills');
+  assert.equal(Boolean(manifest.owned['sync-docs']), true, 'modified owned skill should stay tracked for safe future pruning');
+  assert.equal(Boolean(manifest.owned.takomi), false, 'manual collision should remain unowned');
+
+  result = await installer.installBundledSkills('test', { mode: 'none', selectedSkills: [] });
+  assert.equal(await fs.pathExists(skillPath('sync-docs')), true, 'repeat none install should keep modified owned skill');
+  assert.equal(await fs.pathExists(skillPath('takomi')), true, 'repeat none install should keep manual collision');
+  manifest = await installer.readSkillsInstallManifest();
+  assert.deepEqual(manifest.selectedSkills, [], 'repeat none install should keep manifest selection consistent');
+  assert.equal(Object.keys(manifest.owned).sort().join(','), 'sync-docs', 'repeat none install should keep only modified owned entry');
+
+  // Refresh core after an all install should prune deselected optional skills while
+  // preserving unrelated manual skills.
+  await resetSkillsInstallState();
+  result = await installer.installBundledSkills('test', { mode: 'all', selectedSkills: allSkills });
+  assert.equal(result.selectedCount, allSkills.length, 'all mode should select every bundled skill');
+  assert.equal(await fs.pathExists(skillPath('ai-avatar-video')), true);
+
+  await fs.ensureDir(skillPath('my-manual-skill'));
+  await fs.writeFile(path.join(skillPath('my-manual-skill'), 'SKILL.md'), 'manual skill');
+
+  result = await installer.installBundledSkills('test', { mode: 'core', selectedSkills: core });
+  assert.equal(result.selectedCount, core.length, 'core mode selected count mismatch');
+  assert.equal(await fs.pathExists(skillPath('ai-avatar-video')), false, 'deselected Takomi-owned optional skill should be pruned');
+  assert.equal(await fs.pathExists(skillPath('my-manual-skill')), true, 'manual skill must be preserved');
+  assert.equal(await fs.pathExists(skillPath('ai-sdk')), true, 'ai-sdk should remain core');
+  assert.equal(await fs.pathExists(skillPath('git-commit-generation')), true, 'git-commit-generation should remain core');
+
+  manifest = await installer.readSkillsInstallManifest();
+  assert.equal(manifest.mode, 'core');
+  assert.equal(manifest.selectedSkills.includes('context7'), false);
+  assert.equal(manifest.selectedSkills.includes('spawn-task'), false);
+  assert.equal(manifest.selectedSkills.includes('ai-sdk'), true);
+  assert.equal(manifest.selectedSkills.includes('git-commit-generation'), true);
+
+  await store.initGlobalStore();
+  await store.populateSkills('all');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'skills', 'ai-avatar-video')), true, 'all store populate should copy optional skills');
+  await fs.ensureDir(path.join(store.STORE_PATH, 'skills', 'manual-store-skill'));
+  await fs.writeFile(path.join(store.STORE_PATH, 'skills', 'manual-store-skill', 'SKILL.md'), 'manual store skill');
+  await store.populateSkills('core');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'skills', 'ai-avatar-video')), false, 'store should prune deselected Takomi-owned optional skills');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'skills', 'manual-store-skill')), true, 'store should preserve manual skills');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'skills', 'ai-sdk')), true, 'store core should include ai-sdk');
+
+  await store.populateWorkflows('all');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'workflows', 'agent_reset.md')), true, 'all workflow populate should copy optional workflows');
+  await fs.writeFile(path.join(store.STORE_PATH, 'workflows', 'manual-workflow.md'), 'manual workflow');
+  await store.populateWorkflows('core');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'workflows', 'agent_reset.md')), false, 'store should prune deselected Takomi-owned workflows');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'workflows', 'manual-workflow.md')), true, 'store should preserve manual workflows');
+  assert.equal(await fs.pathExists(path.join(store.STORE_PATH, 'workflows', 'vibe-build.md')), true, 'store core should include vibe-build workflow');
+
+  const harnessTarget = path.join(tempRoot, 'harness-skills');
+  let syncResult = await harness.syncDirectory(path.join(store.STORE_PATH, 'skills'), harnessTarget, '', {
+    useOwnership: true,
+    preserveManual: true,
+    prune: true,
+    returnDetails: true,
+  });
+  assert.equal(await fs.pathExists(path.join(harnessTarget, 'ai-sdk')), true, 'harness sync should copy selected store skills');
+  await fs.ensureDir(path.join(harnessTarget, 'manual-harness-skill'));
+  await fs.writeFile(path.join(harnessTarget, 'manual-harness-skill', 'SKILL.md'), 'manual harness skill');
+  await store.populateSkills(['takomi']);
+  syncResult = await harness.syncDirectory(path.join(store.STORE_PATH, 'skills'), harnessTarget, '', {
+    owned: syncResult.owned,
+    preserveManual: true,
+    prune: true,
+    returnDetails: true,
+  });
+  assert.equal(await fs.pathExists(path.join(harnessTarget, 'ai-sdk')), false, 'harness sync should prune deselected Takomi-owned skills');
+  assert.equal(await fs.pathExists(path.join(harnessTarget, 'manual-harness-skill')), true, 'harness sync should preserve manual skills');
+  assert.equal(await fs.pathExists(path.join(harnessTarget, 'takomi')), true, 'harness sync should keep selected skills');
+
+  console.log('✓ skill selection installer tests passed');
+} finally {
+  await fs.remove(tempRoot);
+}

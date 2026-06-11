@@ -10,10 +10,10 @@ import {
   streamSimpleOpenAICodexResponses,
   streamSimpleOpenAICompletions,
   streamSimpleOpenAIResponses,
-} from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadRouterConfig } from "./config.ts";
-import { refreshAccountCredentials, getApiKeyForAccount } from "./oauth-flow.ts";
+import { refreshAccountCredentials, getApiKeyForAccount, refreshProviderUsageSnapshot } from "./oauth-flow.ts";
 import { RouterAccountStore } from "./oauth-store.ts";
 import { chooseEligibleAccount } from "./policies.ts";
 import { RouterStateStore } from "./state.ts";
@@ -25,6 +25,8 @@ import type {
   RouterErrorMessageInput,
   RouterModelConfig,
   RouterStatusRow,
+  RouterUiEvent,
+  RouterUiReporter,
   RouterUpstreamConfig,
   RoutingPolicyName,
   StoredRouterAccount,
@@ -41,6 +43,21 @@ function parseRetryAfterMs(value: string | undefined): number | undefined {
   const timestamp = Date.parse(value);
   if (Number.isFinite(timestamp)) return Math.max(0, timestamp - now());
   return undefined;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("Request was aborted"));
+      return;
+    }
+
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timeout);
+      reject(new Error("Request was aborted"));
+    }, { once: true });
+  });
 }
 
 function isMeaningfulEvent(event: AssistantMessageEvent): boolean {
@@ -82,6 +99,31 @@ function createErrorMessage({ model, message, stopReason = "error" }: RouterErro
   };
 }
 
+function isAbortLike(message?: string, signal?: AbortSignal, stopReason?: string): boolean {
+  if (signal?.aborted || stopReason === "aborted") return true;
+  const lower = (message ?? "").toLowerCase();
+  return lower.includes("abort") || lower.includes("cancelled") || lower.includes("canceled");
+}
+
+function isClientNetworkFailure(lower: string): boolean {
+  return [
+    "codex sse response headers timed out",
+    "response headers timed out",
+    "headers timeout",
+    "headers timed out",
+    "fetch failed",
+    "network",
+    "econnreset",
+    "etimedout",
+    "enotfound",
+    "eai_again",
+    "socket hang up",
+    "connection reset",
+    "connection terminated",
+    "und_err_headers_timeout",
+  ].some((token) => lower.includes(token));
+}
+
 function classifyFailure(
   status: number | undefined,
   headers: Record<string, string>,
@@ -99,13 +141,15 @@ function classifyFailure(
     return { kind: "auth", status: status ?? 401, message };
   }
 
-  if (
-    (status !== undefined && status >= 500) ||
-    lower.includes("network") ||
-    lower.includes("fetch failed") ||
-    lower.includes("connection") ||
-    lower.includes("timeout")
-  ) {
+  if (isClientNetworkFailure(lower)) {
+    return { kind: "client-network", status, message };
+  }
+
+  if (status !== undefined && status >= 500) {
+    return { kind: "transient", status, message };
+  }
+
+  if (lower.includes("timeout") || lower.includes("service unavailable") || lower.includes("overloaded")) {
     return { kind: "transient", status: status ?? 500, message };
   }
 
@@ -134,6 +178,7 @@ export class RouterRuntime {
   private config: RouterConfig;
   private accounts: RouterAccountStore;
   private state: RouterStateStore;
+  private uiReporter?: RouterUiReporter;
 
   constructor() {
     this.config = loadRouterConfig();
@@ -146,6 +191,18 @@ export class RouterRuntime {
     this.config = loadRouterConfig();
     this.accounts.reload();
     this.state.pruneAccountIds(this.accounts.list().map((account) => account.id));
+  }
+
+  setUiReporter(reporter?: RouterUiReporter) {
+    this.uiReporter = reporter;
+  }
+
+  private emitUi(event: RouterUiEvent) {
+    try {
+      this.uiReporter?.(event);
+    } catch {
+      // UI updates must never affect model streaming or retry behavior.
+    }
   }
 
   getConfig(): RouterConfig {
@@ -182,6 +239,10 @@ export class RouterRuntime {
     this.state.pruneAccountIds(this.accounts.list().map((account) => account.id));
   }
 
+  renameAccount(id: string, label: string) {
+    this.accounts.rename(id, label);
+  }
+
   setEnabled(id: string, enabled: boolean) {
     this.accounts.setEnabled(id, enabled);
     if (enabled) this.state.clearHealth(id);
@@ -189,6 +250,62 @@ export class RouterRuntime {
 
   setWeight(id: string, weight: number) {
     this.accounts.setWeight(id, weight);
+  }
+
+  clearAccountHealth(id: string) {
+    this.state.clearHealth(id);
+  }
+
+  getUsageSummaries() {
+    this.reloadConfig();
+    return this.accounts.list().map((account) => this.state.getUsageSummary(account.id));
+  }
+
+  getUsageSummary(id: string) {
+    this.reloadConfig();
+    if (!this.accounts.get(id)) throw new Error(`Unknown account: ${id}`);
+    return this.state.getUsageSummary(id);
+  }
+
+  async refreshUsageSnapshot(id: string) {
+    this.reloadConfig();
+    let account = this.accounts.get(id);
+    if (!account) throw new Error(`Unknown account: ${id}`);
+    const upstream = this.getUpstream(account.upstreamId);
+    if (!upstream) throw new Error(`Unknown upstream for account ${id}: ${account.upstreamId}`);
+
+    const refreshIfPossible = async (reason: string): Promise<boolean> => {
+      if (!account || account.provider === "api-key") return false;
+      try {
+        account = await refreshAccountCredentials(account);
+        this.accounts.update(account);
+        this.state.clearHealth(id);
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.state.markAuthFailure(id, 401, `Unable to refresh OAuth credentials for usage probe (${reason}): ${message}`);
+        throw error;
+      }
+    };
+
+    if (account.provider !== "api-key" && account.expires - this.config.tokenRefreshSkewMs <= now()) {
+      await refreshIfPossible("expired access token");
+    }
+
+    let snapshot = await refreshProviderUsageSnapshot(account, upstream);
+    if (account.provider !== "api-key" && (snapshot.status === 401 || snapshot.status === 403)) {
+      const refreshed = await refreshIfPossible(`provider quota probe returned HTTP ${snapshot.status}`);
+      if (refreshed) snapshot = await refreshProviderUsageSnapshot(account, upstream);
+    }
+
+    this.state.setProviderUsage(id, snapshot);
+    return snapshot;
+  }
+
+  resetUsage(id: string) {
+    this.reloadConfig();
+    if (!this.accounts.get(id)) throw new Error(`Unknown account: ${id}`);
+    this.state.resetUsage(id);
   }
 
   setPolicy(policy: RoutingPolicyName) {
@@ -241,6 +358,7 @@ export class RouterRuntime {
         rateLimitCount: state.rateLimitCount,
         authFailureCount: state.authFailureCount,
         successCount: state.successCount,
+        lastError: state.lastError,
         expires: account.expires,
       };
     });
@@ -336,9 +454,69 @@ export class RouterRuntime {
           failure.message,
         );
         break;
+      case "client-network":
+        if (this.config.clientNetworkPenaltyMs > 0) {
+          this.state.markTransientFailure(accountId, this.config.clientNetworkPenaltyMs, failure.status ?? 500, failure.message);
+        } else {
+          this.state.recordClientNetworkFailure(accountId, failure.status, failure.message);
+        }
+        break;
       case "fatal":
         this.state.markTransientFailure(accountId, this.config.transientPenaltyMs, failure.status ?? 500, failure.message);
         break;
+    }
+  }
+
+  private getClientNetworkRetryDelayMs(retryIndex: number): number {
+    const baseDelayMs = Math.max(0, this.config.clientNetworkRetryBaseDelayMs);
+    const uncappedDelayMs = baseDelayMs * 2 ** retryIndex;
+    const maxDelayMs = this.config.clientNetworkMaxRetryDelayMs;
+    return maxDelayMs > 0 ? Math.min(uncappedDelayMs, maxDelayMs) : uncappedDelayMs;
+  }
+
+  private async tryAccountWithClientNetworkRetries(
+    selection: DelegateSelection,
+    outerStream: ReturnType<typeof createAssistantMessageEventStream>,
+    context: Context,
+    modelId: string,
+    options?: SimpleStreamOptions,
+  ): Promise<{ completed: boolean; emittedMeaningfulOutput: boolean; failure?: FailureClassification }> {
+    for (let retryIndex = 0; ; retryIndex += 1) {
+      const result = await this.trySingleAccount(selection, outerStream, context, options);
+      const failure = result.failure;
+      const canRetry =
+        !result.completed &&
+        !result.emittedMeaningfulOutput &&
+        failure?.kind === "client-network" &&
+        retryIndex < this.config.clientNetworkMaxRetries;
+
+      if (!canRetry || !failure) return result;
+
+      const delayMs = this.getClientNetworkRetryDelayMs(retryIndex);
+      this.emitUi({
+        phase: "retry",
+        modelId,
+        accountId: selection.account.id,
+        accountLabel: selection.account.label,
+        upstreamId: selection.account.upstreamId,
+        failureKind: failure.kind,
+        status: failure.status,
+        message: failure.message,
+        retryAttempt: retryIndex + 1,
+        maxRetries: this.config.clientNetworkMaxRetries,
+        delayMs,
+      });
+      await sleep(delayMs, options?.signal);
+      this.state.markAttempt(selection.account.id, modelId);
+      this.emitUi({
+        phase: "attempt",
+        modelId,
+        accountId: selection.account.id,
+        accountLabel: selection.account.label,
+        upstreamId: selection.account.upstreamId,
+        retryAttempt: retryIndex + 2,
+        maxRetries: this.config.clientNetworkMaxRetries,
+      });
     }
   }
 
@@ -360,6 +538,8 @@ export class RouterRuntime {
         ...(options?.headers ?? {}),
         ...selection.headers,
       },
+      maxRetries: options?.maxRetries ?? this.config.upstreamMaxRetries,
+      maxRetryDelayMs: options?.maxRetryDelayMs ?? this.config.upstreamMaxRetryDelayMs,
       onResponse: async (response, responseModel) => {
         responseStatus = response.status;
         responseHeaders = response.headers;
@@ -372,7 +552,21 @@ export class RouterRuntime {
 
     for await (const event of inner) {
       if (event.type === "error") {
-        const failure = classifyFailure(responseStatus, responseHeaders, event.error.errorMessage || "Upstream request failed", this.config);
+        const message = event.error.errorMessage || "Upstream request failed";
+        if (isAbortLike(message, options?.signal, event.error.stopReason)) {
+          outerStream.push({
+            ...event,
+            reason: "aborted",
+            error: { ...event.error, stopReason: "aborted", errorMessage: message },
+          });
+          return {
+            completed: true,
+            emittedMeaningfulOutput,
+            failure: { kind: "fatal", status: responseStatus, message },
+          };
+        }
+
+        const failure = classifyFailure(responseStatus, responseHeaders, message, this.config);
         this.markFailure(selection.account.id, failure);
 
         if (!emittedMeaningfulOutput) {
@@ -400,6 +594,7 @@ export class RouterRuntime {
           for (const pending of buffered) outerStream.push(pending);
           buffered.length = 0;
         }
+        this.state.recordUsage(selection.account.id, selection.modelConfig.id, event.message.usage, responseStatus ?? 200);
         this.state.markSuccess(selection.account.id, responseStatus ?? 200);
         return { completed: true, emittedMeaningfulOutput };
       }
@@ -418,6 +613,7 @@ export class RouterRuntime {
 
   stream(model: Model<Api>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream {
     this.reloadConfig();
+    this.state.clearAbortHealth(this.accounts.list().map((account) => account.id));
     const outer = createAssistantMessageEventStream();
 
     (async () => {
@@ -427,6 +623,12 @@ export class RouterRuntime {
 
       try {
         while (true) {
+          if (options?.signal?.aborted) {
+            outer.push({ type: "error", reason: "aborted", error: createErrorMessage({ model, message: "Request was aborted", stopReason: "aborted" }) });
+            outer.end();
+            return;
+          }
+
           const eligible = this.getEligibleAccounts(model.id, tried);
           const policy = this.getPolicy();
           const cursor = this.state.getCursor(policy);
@@ -436,6 +638,13 @@ export class RouterRuntime {
             const message = lastFailure
               ? `No healthy oauth-router accounts remaining after failover. Last error: ${lastFailure.message}`
               : `No healthy oauth-router accounts are configured for model ${model.id}. Add accounts with /router-login add.`;
+            this.emitUi({
+              phase: "error",
+              modelId: model.id,
+              failureKind: lastFailure?.kind,
+              status: lastFailure?.status,
+              message,
+            });
             outer.push({ type: "error", reason: "error", error: createErrorMessage({ model, message }) });
             outer.end();
             return;
@@ -444,19 +653,59 @@ export class RouterRuntime {
           this.state.advanceCursor(policy, picked.nextCursor);
           tried.add(picked.selected.account.id);
           this.state.markAttempt(picked.selected.account.id, model.id);
+          this.emitUi({
+            phase: "attempt",
+            modelId: model.id,
+            accountId: picked.selected.account.id,
+            accountLabel: picked.selected.account.label,
+            upstreamId: picked.selected.account.upstreamId,
+          });
 
           let selection: DelegateSelection;
           try {
             selection = await this.prepareSelection(picked.selected, model, options);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            if (isAbortLike(message, options?.signal)) {
+              outer.push({ type: "error", reason: "aborted", error: createErrorMessage({ model, message, stopReason: "aborted" }) });
+              outer.end();
+              return;
+            }
             lastFailure = { kind: "auth", status: 401, message };
             this.markFailure(picked.selected.account.id, lastFailure);
+            this.emitUi({
+              phase: "failover",
+              modelId: model.id,
+              accountId: picked.selected.account.id,
+              accountLabel: picked.selected.account.label,
+              upstreamId: picked.selected.account.upstreamId,
+              failureKind: lastFailure.kind,
+              status: lastFailure.status,
+              message: lastFailure.message,
+            });
             continue;
           }
 
-          const result = await this.trySingleAccount(selection, outer, context, options);
+          const result = await this.tryAccountWithClientNetworkRetries(selection, outer, context, model.id, options);
           if (result.completed) {
+            this.emitUi(result.failure
+              ? {
+                phase: "error",
+                modelId: model.id,
+                accountId: selection.account.id,
+                accountLabel: selection.account.label,
+                upstreamId: selection.account.upstreamId,
+                failureKind: result.failure.kind,
+                status: result.failure.status,
+                message: result.failure.message,
+              }
+              : {
+                phase: "success",
+                modelId: model.id,
+                accountId: selection.account.id,
+                accountLabel: selection.account.label,
+                upstreamId: selection.account.upstreamId,
+              });
             outer.end();
             return;
           }
@@ -465,13 +714,42 @@ export class RouterRuntime {
           lastFailure = result.failure;
 
           if (emittedMeaningfulOutput) {
+            this.emitUi({
+              phase: "error",
+              modelId: model.id,
+              accountId: selection.account.id,
+              accountLabel: selection.account.label,
+              upstreamId: selection.account.upstreamId,
+              failureKind: lastFailure?.kind,
+              status: lastFailure?.status,
+              message: lastFailure?.message ?? "Upstream failed after partial output; failover is unsafe.",
+            });
             outer.end();
             return;
+          }
+
+          if (lastFailure) {
+            this.emitUi({
+              phase: "failover",
+              modelId: model.id,
+              accountId: selection.account.id,
+              accountLabel: selection.account.label,
+              upstreamId: selection.account.upstreamId,
+              failureKind: lastFailure.kind,
+              status: lastFailure.status,
+              message: lastFailure.message,
+            });
           }
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        outer.push({ type: "error", reason: "error", error: createErrorMessage({ model, message }) });
+        const aborted = isAbortLike(message, options?.signal);
+        this.emitUi({
+          phase: "error",
+          modelId: model.id,
+          message: aborted ? "Request was aborted" : message,
+        });
+        outer.push({ type: "error", reason: aborted ? "aborted" : "error", error: createErrorMessage({ model, message, stopReason: aborted ? "aborted" : "error" }) });
         outer.end();
       }
     })();

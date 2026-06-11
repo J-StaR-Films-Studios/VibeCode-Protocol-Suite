@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import pc from 'picocolors';
 
 // ─── Cross-Platform Home Directory ───────────────────────────────────────────
@@ -169,33 +170,122 @@ export function printHarnessStatus(detected) {
  * @param {string} label       - Human-readable label for logging
  * @returns {Promise<number>}  - Number of items copied
  */
-export async function syncDirectory(sourcePath, targetPath, label = '') {
-  if (!targetPath) return 0;
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+async function hashPath(targetPath) {
+  if (!await fs.pathExists(targetPath)) return null;
+  const stat = await fs.stat(targetPath);
+  if (stat.isFile()) return sha256(await fs.readFile(targetPath));
+
+  const entries = [];
+  async function walk(current, prefix = '') {
+    const names = (await fs.readdir(current)).sort();
+    for (const name of names) {
+      const full = path.join(current, name);
+      const rel = path.join(prefix, name).replace(/\\/g, '/');
+      const st = await fs.stat(full);
+      if (st.isDirectory()) {
+        entries.push(`dir:${rel}`);
+        await walk(full, rel);
+      } else {
+        entries.push(`file:${rel}:${sha256(await fs.readFile(full))}`);
+      }
+    }
+  }
+  await walk(targetPath);
+  return sha256(entries.join('\n'));
+}
+
+function normalizeOwnedMap(value) {
+  if (!value || typeof value !== 'object') return {};
+  const normalized = {};
+  for (const [name, entry] of Object.entries(value)) {
+    if (typeof entry === 'string') normalized[name] = { hash: entry };
+    else if (entry?.hash) normalized[name] = entry;
+  }
+  return normalized;
+}
+
+/**
+ * Syncs a directory to a target path. When ownership is supplied, it also
+ * prunes previous Takomi-owned items that are no longer in the source while
+ * preserving manual or modified files.
+ */
+export async function syncDirectory(sourcePath, targetPath, label = '', options = {}) {
+  if (!targetPath) return options.returnDetails ? { copied: 0, pruned: 0, preservedManual: [], preservedModified: [], owned: {} } : 0;
 
   try {
     await fs.ensureDir(targetPath);
 
-    const items = await fs.readdir(sourcePath);
-    let count = 0;
+    const items = (await fs.readdir(sourcePath)).sort();
+    const itemSet = new Set(items);
+    const previousOwned = normalizeOwnedMap(options.owned);
+    const nextOwned = {};
+    const preservedManual = [];
+    const preservedModified = [];
+    let copied = 0;
+    let pruned = 0;
+
+    if (options.prune && Object.keys(previousOwned).length > 0) {
+      for (const [item, ownedEntry] of Object.entries(previousOwned)) {
+        if (itemSet.has(item)) continue;
+        const dest = path.join(targetPath, item);
+        if (!await fs.pathExists(dest)) continue;
+        const currentHash = await hashPath(dest);
+        if (currentHash && currentHash === ownedEntry.hash) {
+          await fs.remove(dest);
+          pruned++;
+        } else {
+          preservedModified.push(item);
+          nextOwned[item] = ownedEntry;
+        }
+      }
+    }
 
     for (const item of items) {
       const src = path.join(sourcePath, item);
       const dest = path.join(targetPath, item);
+      const previous = previousOwned[item];
+
+      if (await fs.pathExists(dest)) {
+        const currentHash = await hashPath(dest);
+        if (options.preserveManual && !previous) {
+          preservedManual.push(item);
+          continue;
+        }
+        if (previous?.hash && currentHash && currentHash !== previous.hash) {
+          preservedModified.push(item);
+          nextOwned[item] = previous;
+          continue;
+        }
+        await fs.remove(dest);
+      }
 
       await fs.copy(src, dest, { overwrite: true });
-      count++;
+      nextOwned[item] = {
+        hash: await hashPath(dest),
+        targetPath: dest,
+        syncedAt: new Date().toISOString(),
+      };
+      copied++;
     }
 
     if (label) {
-      console.log(pc.green(`  ✔ ${label} (${count} items)`));
+      const suffix = pruned ? `, removed ${pruned}` : '';
+      console.log(pc.green(`  ✔ ${label} (${copied} items${suffix})`));
+      if (preservedManual.length) console.log(pc.yellow(`    Preserved manual items: ${preservedManual.join(', ')}`));
+      if (preservedModified.length) console.log(pc.yellow(`    Preserved modified Takomi-owned items: ${preservedModified.join(', ')}`));
     }
 
-    return count;
+    const details = { copied, pruned, preservedManual, preservedModified, owned: Object.fromEntries(Object.entries(nextOwned).sort(([a], [b]) => a.localeCompare(b))) };
+    return options.returnDetails ? details : copied;
   } catch (error) {
     if (label) {
       console.log(pc.red(`  ✗ ${label}: ${error.message}`));
     }
-    return 0;
+    return options.returnDetails ? { copied: 0, pruned: 0, preservedManual: [], preservedModified: [], owned: {} } : 0;
   }
 }
 
@@ -238,29 +328,55 @@ export async function syncFile(sourceFile, targetPaths, label = '') {
  * @param {string} storePath - Path to the global store (~/.takomi/)
  * @returns {Promise<{skills: number, workflows: number, yamls: number}>}
  */
-export async function syncToHarness(harness, storePath) {
-  const results = { skills: 0, workflows: 0, yamls: 0 };
+export async function syncToHarness(harness, storePath, options = {}) {
+  const results = { skills: 0, workflows: 0, yamls: 0, owned: { skills: {}, workflows: {} } };
+  const harnessOwned = options.owned?.[harness.id] || {};
+  const useOwnership = Boolean(options.useOwnership);
 
   console.log(pc.cyan(`\n  📡 Syncing to ${harness.name}...`));
 
   // Skills
   const skillsStore = path.join(storePath, 'skills');
   if (harness.targets.skills && await fs.pathExists(skillsStore)) {
-    results.skills = await syncDirectory(
+    const skillResult = await syncDirectory(
       skillsStore,
       harness.targets.skills,
-      `Skills → ${harness.name}`
+      `Skills → ${harness.name}`,
+      {
+        owned: harnessOwned.skills,
+        preserveManual: useOwnership,
+        prune: useOwnership,
+        returnDetails: useOwnership,
+      },
     );
+    if (useOwnership) {
+      results.skills = skillResult.copied;
+      results.owned.skills = skillResult.owned;
+    } else {
+      results.skills = skillResult;
+    }
   }
 
   // Workflows
   const workflowsStore = path.join(storePath, 'workflows');
   if (harness.targets.workflows && await fs.pathExists(workflowsStore)) {
-    results.workflows = await syncDirectory(
+    const workflowResult = await syncDirectory(
       workflowsStore,
       harness.targets.workflows,
-      `Workflows → ${harness.name}`
+      `Workflows → ${harness.name}`,
+      {
+        owned: harnessOwned.workflows,
+        preserveManual: useOwnership,
+        prune: useOwnership,
+        returnDetails: useOwnership,
+      },
     );
+    if (useOwnership) {
+      results.workflows = workflowResult.copied;
+      results.owned.workflows = workflowResult.owned;
+    } else {
+      results.workflows = workflowResult;
+    }
   }
 
   // YAMLs (KiloCode custom_modes.yaml dual-path)
@@ -283,11 +399,11 @@ export async function syncToHarness(harness, storePath) {
  * @param {string} storePath - Path to the global store (~/.takomi/)
  * @returns {Promise<object>} - Summary of sync results
  */
-export async function syncToAllHarnesses(harnesses, storePath) {
+export async function syncToAllHarnesses(harnesses, storePath, options = {}) {
   const summary = {};
 
   for (const harness of harnesses) {
-    summary[harness.id] = await syncToHarness(harness, storePath);
+    summary[harness.id] = await syncToHarness(harness, storePath, options);
   }
 
   return summary;

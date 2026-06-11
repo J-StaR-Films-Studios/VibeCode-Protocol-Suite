@@ -11,6 +11,21 @@ Follow the blueprints precisely. Verify constantly.
 
 ---
 
+## Build Orchestration Readiness
+
+If Build is being run through an orchestration session, do not start with bare board placeholders.
+Before dispatching Build subagents, each Build task packet must include:
+- exact FR IDs and mockup files covered
+- objective and concrete scope boundaries
+- dependencies and handoff assumptions
+- expected files/artifacts
+- definition of done and verification commands
+- privacy/payment/security constraints that apply
+
+If existing Build task packets say `Scope: None specified`, `Definition Of Done: None specified`, or `Expected Artifacts: None specified`, pause and repair the task packet before launching or continuing subagents.
+
+---
+
 ## Steps
 
 ### 1. Context Loading (MANDATORY)

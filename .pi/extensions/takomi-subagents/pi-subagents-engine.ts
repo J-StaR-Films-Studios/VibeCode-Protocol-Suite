@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   loadPiSubagentsInternals,
   type AgentConfig,
@@ -12,6 +12,7 @@ import {
   type SubagentState,
 } from "./pi-subagents-internal";
 import { resolveAgentName } from "./agent-aliases";
+import { applyTakomiRoutingDefaults, loadTakomiModelRoutingSnapshotSync } from "../takomi-runtime/model-routing-defaults";
 import type { TakomiSubagentToolParams, TakomiSubagentToolTask } from "./tool-runner";
 
 type ToolUpdate = (partial: AgentToolResult<Details>) => void;
@@ -108,6 +109,16 @@ function modelWithThinking(model: string | undefined, thinking: string | undefin
   return `${model}:${level}`;
 }
 
+function safeConversationSlug(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "conversation";
+}
+
+function stableConversationSessionDir(rootCwd: string, tasks: TakomiSubagentToolTask[]): string | undefined {
+  const ids = tasks.map((task) => task.conversationId).filter((id): id is string => Boolean(id));
+  if (!ids.length) return undefined;
+  return path.join(rootCwd, ".pi", "takomi", "subagent-conversations", safeConversationSlug(ids.join("__")));
+}
+
 function defaultChildExtensions(): string[] {
   // Child runs must not auto-load every user/project extension because this repo
   // currently has both global and project Takomi extensions, which causes tool
@@ -125,9 +136,18 @@ function defaultChildExtensions(): string[] {
   return candidates.filter((candidate) => fs.existsSync(candidate));
 }
 
-function withTakomiAgentDefaults(agent: AgentConfig): AgentConfig {
+function withTakomiAgentDefaults(agent: AgentConfig, cwd: string): AgentConfig {
+  const routed = applyTakomiRoutingDefaults({
+    agent: agent.name,
+    model: agent.model,
+    fallbackModels: agent.fallbackModels,
+    thinking: agent.thinking,
+  }, loadTakomiModelRoutingSnapshotSync(cwd));
   return {
     ...agent,
+    model: routed.model,
+    fallbackModels: routed.fallbackModels,
+    thinking: routed.thinking,
     systemPromptMode: agent.systemPromptMode ?? "replace",
     inheritProjectContext: agent.inheritProjectContext ?? true,
     inheritSkills: agent.inheritSkills ?? false,
@@ -137,7 +157,7 @@ function withTakomiAgentDefaults(agent: AgentConfig): AgentConfig {
 }
 
 function discoverUnifiedAgents(discoverPiAgents: any, cwd: string, scope: AgentScope): { agents: AgentConfig[] } {
-  return { agents: discoverPiAgents(cwd, scope).agents.map(withTakomiAgentDefaults) };
+  return { agents: discoverPiAgents(cwd, scope).agents.map((agent: AgentConfig) => withTakomiAgentDefaults(agent, cwd)) };
 }
 
 function agentNameSet(discoverPiAgents: any, cwd: string): Set<string> {
@@ -151,6 +171,7 @@ function mapSingleTask(task: TakomiSubagentToolTask, names: Set<string>) {
     task: buildTakomiTaskPrompt({ ...task, agent: resolvedAgent }),
     cwd: task.cwd,
     model: modelWithThinking(task.model, task.thinking),
+    skill: task.skills?.length ? task.skills : undefined,
   };
 }
 
@@ -167,6 +188,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
     async: false,
     clarify: false,
     includeProgress: true,
+    sessionDir: stableConversationSessionDir(rootCwd, tasks),
   };
 
   if (mode === "single") {
@@ -178,6 +200,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
       task: mapped.task,
       cwd: task.cwd ? path.resolve(rootCwd, task.cwd) : rootCwd,
       model: mapped.model,
+      skill: mapped.skill,
     };
   }
 
@@ -197,6 +220,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
         task: mapped.task,
         cwd: task.cwd,
         model: mapped.model,
+        skill: mapped.skill,
       };
     }),
   };

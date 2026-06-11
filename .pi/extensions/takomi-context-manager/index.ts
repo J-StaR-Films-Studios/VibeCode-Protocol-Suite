@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadConfig, DEFAULT_CONFIG } from "./config";
 import { createState } from "./state";
 import { collectSkillsFromOptions, collectSkillsFromXml, mergeSkills } from "./skill-registry";
@@ -11,6 +11,7 @@ import { registerDiagnostics } from "./diagnostics-tools";
 import { installPrerequisiteGates } from "./prerequisite-gates";
 import { installModelPolicyGate } from "./model-policy-gate";
 import { detectDuplicateTakomiExtensions } from "./extension-conflicts";
+import { loadTakomiModelRoutingSnapshot, renderCompactTakomiModelRoutingSummary } from "../takomi-runtime/model-routing-defaults";
 import type { ContextManagerConfig } from "./types";
 
 export default function takomiContextManager(pi: ExtensionAPI) {
@@ -33,6 +34,8 @@ export default function takomiContextManager(pi: ExtensionAPI) {
 
     const candidates = findCandidates(event.prompt, state.skills, config);
     const rewrite = rewritePrompt(event.systemPrompt, state.skills, candidates, config);
+    const routingSummary = renderCompactTakomiModelRoutingSummary(await loadTakomiModelRoutingSnapshot(ctx.cwd));
+    const rewrittenPrompt = routingSummary ? `${rewrite.prompt}\n\n${routingSummary}` : rewrite.prompt;
     state.report = {
       ...state.report,
       timestamp: new Date().toISOString(),
@@ -43,14 +46,14 @@ export default function takomiContextManager(pi: ExtensionAPI) {
       duplicateExtensionWarnings,
       promptRewrite: {
         attempted: true,
-        changed: rewrite.changed,
+        changed: rewrite.changed || Boolean(routingSummary),
         originalLength: event.systemPrompt.length,
-        rewrittenLength: rewrite.prompt.length,
+        rewrittenLength: rewrittenPrompt.length,
         removedSections: rewrite.removedSections,
         warnings: rewrite.warnings,
       },
     };
 
-    return { systemPrompt: rewrite.prompt };
+    return { systemPrompt: rewrittenPrompt };
   });
 }
