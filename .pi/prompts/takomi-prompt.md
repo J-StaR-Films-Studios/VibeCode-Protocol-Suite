@@ -27,6 +27,22 @@ Always-on Takomi behavior.
 - For implementation, verify before claiming completion.
 - For planning/review, produce actionable handoffs rather than vague commentary.
 
+## Large Generated Content / Bash Safety
+- Do not place large generated documents or long scripts directly inside a `bash` command.
+- If generating large content, use `write` for individual markdown/text files.
+- If many files need generated content, first `write` a small generator script to disk, then run it with a short `bash` command.
+- Keep `bash` commands short and focused on shell work: directory creation, running scripts, inspections, and verification.
+- Never use massive inline heredocs for multi-file generation; they can fail with OS command-length limits such as `ENAMETOOLONG`, especially on Windows.
+- If a command fails with `ENAMETOOLONG`, do not retry the same inline approach. Switch immediately to file-based writes or a written generator script.
+
+## Launch-Ready Orchestration Tasks
+- Never use `takomi_board` as a placeholder task generator for Design or Build stage work.
+- Before `takomi_board init_session` or `takomi_board expand_stage`, author launch-ready task packets or provide full `taskMarkdown` for every non-trivial task.
+- A launch-ready task packet must have non-empty Objective, Scope, Context, Definition of Done, Expected Artifacts, Dependencies, Verification/Review checkpoint, and exact prime-agent files to read.
+- JSON task fields are tracking metadata only; they must not replace the human-readable task packet.
+- If the subagent launch prompt is more detailed than the task packet, copy that launch prompt back into the task packet before or immediately after launch.
+- Do not move to the next lifecycle stage with `Scope: None specified`, `Definition Of Done: None specified`, or `Expected Artifacts: None specified` task files.
+
 ## Provider / Model Selection
 Before using `takomi_subagent`, setting a model override, or naming a provider/model:
 - use the injected Pi model-registry context and active Takomi routing policy

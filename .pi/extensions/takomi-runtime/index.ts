@@ -891,6 +891,8 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       "Session IDs must use the canonical timestamp format orch-YYYYMMDD-HHMMSS. Use the same sessionId for the authored docs folder and the board JSON state.",
       "For high-quality orchestration sessions, provide sessionId, masterPlanMarkdown, and taskMarkdown values that match the authored session folder. If you already wrote docs/tasks/orchestrator-sessions/<id>, call this tool with sessionId=<id>; do not create a second session id.",
       "JSON fields should carry IDs/status/roles/workflow/dependencies/checklists for tracking, not replace expressive markdown.",
+      "Do not use expand_stage as a placeholder generator. For Design/Build expansions, provide full taskMarkdown or complete objective/scope/definitionOfDone/expectedArtifacts/instructions for every task.",
+      "If a task packet would render with Scope/Definition Of Done/Expected Artifacts as None specified, repair it before launching subagents.",
       "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
       "If the request is small enough, do not force orchestration just because the tool exists.",
       "If a reviewed task needs more work, reuse the task conversationId when you call takomi_subagent again, then update the board with the new result.",
