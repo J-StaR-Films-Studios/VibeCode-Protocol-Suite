@@ -90,6 +90,22 @@ Task packets should be self-contained enough for a subagent to execute without g
 
 Keep human-readable markdown meaningful; keep JSON as tracking/continuity metadata.
 
+### Tool-Use Safety for Authored Plans
+- Do not pack large markdown plans, task packets, or generator scripts into one oversized `bash` command.
+- Prefer direct markdown authorship through the appropriate file-writing path, then register the same content with `takomi_board`.
+- If repeated files are needed, write a small generator script to disk first and run it with a short shell command.
+- If `ENAMETOOLONG` occurs, switch immediately to file-based writes or a written generator script instead of retrying the inline command.
+
+### Stage Expansion Quality Gate
+Before calling `takomi_board expand_stage`:
+- Write or provide full `taskMarkdown` for every expanded task.
+- Ensure each task has real Scope, Definition of Done, Expected Artifacts, Dependencies, and Verification/Review checkpoint.
+- Include exact prime-agent context paths and relevant FR/mockup/design docs.
+- For Build, decompose by implementation slice and FR coverage, not just broad labels like “school workflows.”
+- If a detailed subagent prompt is needed, the task packet should contain the same level of detail before launch.
+- Do not leave generated task files with `Scope: None specified`, `Definition Of Done: None specified`, or `Expected Artifacts: None specified`.
+- If `takomi_board` produced generic task packets, immediately repair them with detailed markdown before dispatching more work.
+
 ## Phase 4: Delegation
 When delegating:
 - send self-contained task instructions

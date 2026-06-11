@@ -138,3 +138,11 @@ Usually recommend:
 - make decisive recommendations when the evidence is clear
 - make the output strong enough that design/build can follow without guessing
 - keep FRs and issue files aligned 1:1
+
+## Tool-Use Safety for Genesis Artifacts
+- Do not generate PRDs, coding guidelines, builder prompts, issue packs, or session docs by embedding huge markdown strings inside a single `bash` command.
+- Prefer `write` for large markdown artifacts.
+- For many repeated issue files, `write` a compact generator script first, then run that script with `bash`.
+- Use `bash` for short filesystem commands, script execution, and verification only.
+- Avoid massive inline heredocs because they can hit command-length limits and fail before writing anything.
+- If `ENAMETOOLONG` appears, immediately switch to file-based writes or a written generator script; do not retry the same oversized inline command.
