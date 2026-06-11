@@ -213,6 +213,42 @@ function runCommand(command, args) {
   return spawnSync(command, args, { stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' });
 }
 
+function runCommandWithTimeout(command, args, timeoutMs) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+      windowsHide: true,
+    });
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ stdout, stderr, timedOut, ...result });
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { child.kill(); } catch {}
+      setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch {}
+      }, 1500).unref?.();
+    }, timeoutMs);
+    timer.unref?.();
+
+    child.stdout?.on('data', (chunk) => { stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('error', (error) => finish({ status: 1, error }));
+    child.on('close', (code) => finish({ status: timedOut ? null : code }));
+  });
+}
+
 export async function ensurePiInstalled() {
   const before = await detectPiCommand();
   if (before.installed) {
@@ -300,17 +336,28 @@ export function printPiSubagentsInstallResult(result) {
   if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
 }
 
-export async function updatePiManagedPackages() {
+export async function updatePiManagedPackages({ timeoutMs = 20_000 } = {}) {
+  if (process.env.TAKOMI_SKIP_PI_PACKAGE_UPDATE === '1') {
+    return { ok: true, changed: false, report: 'Skipped Pi package update because TAKOMI_SKIP_PI_PACKAGE_UPDATE=1.' };
+  }
+
   const pi = await detectPiCommand();
   if (!pi.installed) return { ok: false, changed: false, report: 'Pi is not installed.' };
 
-  // `pi update` reconciles every package listed in Pi settings, including
-  // user-installed npm/git/local packages. Keep this broad so Takomi refresh
-  // updates old, new, custom, and optional feature packages without needing to
-  // know their names ahead of time.
+  // `pi update` reconciles packages from Pi settings, including user-installed
+  // npm/git/local packages. Treat this as a best-effort follow-up: third-party
+  // packages or manual extension entries must never hang Takomi installation.
   const command = pi.path || 'pi';
-  const result = runCommand(command, ['update']);
+  const result = await runCommandWithTimeout(command, ['update'], timeoutMs);
   const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+  if (result.timedOut) {
+    return {
+      ok: false,
+      changed: false,
+      report: `Timed out after ${Math.round(timeoutMs / 1000)}s while running \`pi update\`. Takomi setup is complete; retry package updates later with \`pi update\` or skip this step with TAKOMI_SKIP_PI_PACKAGE_UPDATE=1. Last output:\n${output}`.trim(),
+    };
+  }
+
   return {
     ok: result.status === 0,
     changed: result.status === 0,

@@ -404,15 +404,13 @@ async function handleRouterLogin(pi: ExtensionAPI, runtime: RouterRuntime, args:
           updatedAt: Date.now(),
         });
         runtime.clearAccountHealth(duplicate.id);
-        await runtime.refreshUsageSnapshot(duplicate.id);
         setFooterStatus(ctx, runtime);
-        emitReport(pi, `Updated existing account ${duplicate.id} (${duplicate.label}) with fresh credentials instead of adding a duplicate.`);
+        emitReport(pi, `Updated existing account ${duplicate.id} (${duplicate.label}) with fresh credentials instead of adding a duplicate. Run /router-refresh-usage ${duplicate.id} to refresh provider quota metadata.`);
         return;
       }
       runtime.addAccount(account);
-      await runtime.refreshUsageSnapshot(account.id);
       setFooterStatus(ctx, runtime);
-      emitReport(pi, `Added account ${account.id} (${account.label}) for upstream ${upstream.id}.`);
+      emitReport(pi, `Added account ${account.id} (${account.label}) for upstream ${upstream.id}. Run /router-refresh-usage ${account.id} to refresh provider quota metadata.`);
       ctx.ui.notify(`Added ${account.id}`, "info");
       return;
     }
@@ -461,17 +459,15 @@ async function handleRouterLogin(pi: ExtensionAPI, runtime: RouterRuntime, args:
         updatedAt: Date.now(),
       });
       runtime.clearAccountHealth(existing.id);
-      await runtime.refreshUsageSnapshot(existing.id);
       setFooterStatus(ctx, runtime);
-      emitReport(pi, `Re-logged account ${existing.id} (${existing.label}) and cleared auth state.`);
+      emitReport(pi, `Re-logged account ${existing.id} (${existing.label}) and cleared auth state. Run /router-refresh-usage ${existing.id} to refresh provider quota metadata.`);
       return;
     }
     case "refresh": {
       const account = await pickAccount(runtime, ctx, first, "Choose account to refresh");
       const refreshed = await runtime.refreshAccount(account.id);
-      await runtime.refreshUsageSnapshot(refreshed.id);
       setFooterStatus(ctx, runtime);
-      emitReport(pi, `Refreshed account ${refreshed.id} (${refreshed.label}).`);
+      emitReport(pi, `Refreshed account ${refreshed.id} (${refreshed.label}). Run /router-refresh-usage ${refreshed.id} to refresh provider quota metadata.`);
       return;
     }
     case "help":
@@ -554,7 +550,7 @@ export function registerRouterCommands(pi: ExtensionAPI, runtime: RouterRuntime)
   });
 
   pi.registerCommand("router-refresh-usage", {
-    description: "Refresh oauth-router account metadata from token claims",
+    description: "Refresh oauth-router account metadata and best-effort provider quota",
     handler: async (args, ctx) => {
       const [requestedId] = parseArgs(args || "");
       const target = await pickUsageTarget(runtime, ctx, requestedId);

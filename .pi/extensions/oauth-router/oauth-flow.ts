@@ -331,6 +331,30 @@ function collectRateLimitHeaders(headers: Headers): Record<string, string> {
   return result;
 }
 
+const DEFAULT_USAGE_PROBE_TIMEOUT_MS = 2_500;
+
+function getUsageProbeTimeoutMs(upstream: RouterUpstreamConfig): number {
+  const configured = upstream.usageProbe?.timeoutMs;
+  return typeof configured === "number" && Number.isFinite(configured) && configured > 0
+    ? Math.min(configured, 10_000)
+    : DEFAULT_USAGE_PROBE_TIMEOUT_MS;
+}
+
+async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<{ response: Response; text: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const text = await response.text();
+    return { response, text };
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`timed out after ${Math.round(timeoutMs)}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function refreshProviderUsageSnapshot(account: StoredRouterAccount, upstream: RouterUpstreamConfig): Promise<RouterProviderUsageSnapshot> {
   const base = inspectAccountToken(account);
   if (account.provider !== "openai-codex" || upstream.usageProbe?.enabled === false) return base;
@@ -345,12 +369,20 @@ export async function refreshProviderUsageSnapshot(account: StoredRouterAccount,
   let lastEndpoint: string | undefined;
   let lastHeaders: Record<string, string> | undefined;
   const errors: string[] = [];
+  const startedAt = now();
+  const totalTimeoutMs = getUsageProbeTimeoutMs(upstream);
 
   for (const endpoint of endpoints) {
+    const remainingMs = totalTimeoutMs - (now() - startedAt);
+    if (remainingMs <= 0) {
+      errors.push(`probe timed out after ${Math.round(totalTimeoutMs)}ms`);
+      break;
+    }
+
     const url = resolveProbeUrl(upstream.baseUrl, endpoint);
     lastEndpoint = url;
     try {
-      const response = await fetch(url, {
+      const { response, text } = await fetchJsonWithTimeout(url, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${account.access}`,
@@ -361,10 +393,9 @@ export async function refreshProviderUsageSnapshot(account: StoredRouterAccount,
           "User-Agent": "codex_cli_rs/0.133.0 (Windows; x86_64) pi/oauth-router",
           accept: "application/json",
         },
-      });
+      }, Math.max(1, remainingMs));
       lastStatus = response.status;
       lastHeaders = collectRateLimitHeaders(response.headers);
-      const text = await response.text();
       const json = text ? JSON.parse(text) : undefined;
       const extracted = extractProviderUsage(json);
       const hasQuota = Boolean(extracted.fiveHour || extracted.weekly || extracted.planType);
