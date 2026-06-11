@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { renderTakomiSubagentCall, renderTakomiSubagentResult } from "./native-render";
-import { createTakomiPiSubagentsEngine } from "./pi-subagents-engine";
+import { executeTakomiSubagentTool } from "./tool-runner";
 
 const ChecklistItemSchema = Type.Object({
   text: Type.String(),
@@ -47,10 +47,10 @@ const SubagentParameters = Type.Object({
   chain: Type.Optional(Type.Array(TaskSchema, { description: "Sequential chain of subagent tasks" })),
   agentScope: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("project"), Type.Literal("both")])),
   confirmProjectAgents: Type.Optional(Type.Boolean({ description: "Prompt before running project-local agents. Default: true." })),
+  overrideUserBlock: Type.Optional(Type.Boolean({ description: "Only set true when the user explicitly approves retrying after a blocked/cancelled/review-gated launch." })),
 });
 
 function registerSubagentTool(pi: ExtensionAPI): void {
-  const engine = createTakomiPiSubagentsEngine(pi);
   pi.registerTool({
     name: "takomi_subagent",
     label: "Takomi",
@@ -61,10 +61,11 @@ function registerSubagentTool(pi: ExtensionAPI): void {
       "Use tasks for independent parallel work and chain for dependent handoffs with {previous}.",
       "Use model, fallbackModels, and thinking only when deliberate; otherwise let the agent/profile defaults apply.",
       "If review sends work back to the same agent, reuse the same conversationId for continuity.",
+      "If a launch is blocked, cancelled, paused, or review-gated, do not retry automatically; wait for the user's next prompt. Use overrideUserBlock only after explicit user approval.",
     ],
     parameters: SubagentParameters,
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      return engine.execute(toolCallId, params, signal, onUpdate as any, ctx);
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
+      return executeTakomiSubagentTool(pi, params, signal, onUpdate as any, ctx);
     },
     renderCall: renderTakomiSubagentCall,
     renderResult: renderTakomiSubagentResult,

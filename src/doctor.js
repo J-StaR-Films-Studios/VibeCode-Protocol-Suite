@@ -49,7 +49,7 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
   console.log(pc.cyan('\nRecommendations\n'));
 
   if (!report.pi.installed) {
-    console.log(pc.white('  - Install Pi first: npm install -g @mariozechner/pi-coding-agent'));
+    console.log(pc.white('  - Install Pi first: npm install -g @earendil-works/pi-coding-agent'));
   }
 
   if (!report.bundled.packageIncluded) {

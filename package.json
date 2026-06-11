@@ -1,6 +1,6 @@
 {
   "name": "takomi",
-  "version": "2.1.25",
+  "version": "2.1.32",
   "description": "🎯 Stop wrestling with AI. Start building with purpose. The artisan's toolkit for agent workflows, Codex skills, and original Takomi capabilities like 21st.dev integration.",
   "type": "module",
   "bin": {
@@ -22,7 +22,9 @@
     ".pi/takomi/policies"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "node src/postinstall.js",
+    "test": "node scripts/test-skill-selection.js",
+    "test:skills": "node scripts/test-skill-selection.js"
   },
   "repository": {
     "type": "git",
@@ -46,7 +48,7 @@
     "commander": "^13.1.0",
     "figlet": "^1.8.0",
     "fs-extra": "^11.3.0",
-    "pi-subagents": "0.24.0",
+    "pi-subagents": "0.28.0",
     "picocolors": "^1.1.1",
     "prompts": "^2.4.2"
   },
@@ -55,8 +57,10 @@
   },
   "homepage": "https://github.com/JStaRFilms/VibeCode-Protocol-Suite#readme",
   "devDependencies": {
-    "@mariozechner/pi-ai": "^0.70.2",
-    "@mariozechner/pi-coding-agent": "^0.70.2",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@earendil-works/pi-ai": "^0.79.1",
+    "@earendil-works/pi-coding-agent": "^0.79.1",
+    "@earendil-works/pi-tui": "^0.79.1",
     "@types/node": "^25.5.2",
     "typebox": "^1.1.33",
     "typescript": "^6.0.2"

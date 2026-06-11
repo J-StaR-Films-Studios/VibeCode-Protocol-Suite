@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { CREDENTIALS_PATH, writeJsonFile } from "./config.ts";
+import { CREDENTIALS_PATH, withJsonFileLock, writeJsonFile } from "./config.ts";
 import type { RouterCredentialStore, StoredRouterAccount } from "./types.ts";
 
 const EMPTY_STORE: RouterCredentialStore = {
@@ -73,6 +73,14 @@ export class RouterAccountStore {
     writeJsonFile(CREDENTIALS_PATH, this.data, true);
   }
 
+  private mutate(fn: () => void) {
+    withJsonFileLock(CREDENTIALS_PATH, () => {
+      this.data = this.load();
+      fn();
+      this.save();
+    });
+  }
+
   reload() {
     this.data = this.load();
   }
@@ -86,21 +94,33 @@ export class RouterAccountStore {
   }
 
   add(account: StoredRouterAccount) {
-    this.data.accounts.push(normalizeAccount(account));
-    this.save();
+    this.mutate(() => {
+      this.data.accounts.push(normalizeAccount(account));
+    });
   }
 
   update(account: StoredRouterAccount) {
-    const index = this.data.accounts.findIndex((item) => item.id === account.id);
-    if (index === -1) throw new Error(`Unknown account: ${account.id}`);
-    this.data.accounts[index] = normalizeAccount(account);
-    this.save();
+    this.mutate(() => {
+      const index = this.data.accounts.findIndex((item) => item.id === account.id);
+      if (index === -1) throw new Error(`Unknown account: ${account.id}`);
+      this.data.accounts[index] = normalizeAccount(account);
+    });
   }
 
   remove(id: string) {
-    const next = this.data.accounts.filter((account) => account.id !== id);
-    this.data.accounts = next;
-    this.save();
+    this.mutate(() => {
+      this.data.accounts = this.data.accounts.filter((account) => account.id !== id);
+    });
+  }
+
+  rename(id: string, label: string) {
+    const account = this.get(id);
+    if (!account) throw new Error(`Unknown account: ${id}`);
+    const nextLabel = label.trim();
+    if (!nextLabel) throw new Error("Account label cannot be empty");
+    account.label = nextLabel;
+    account.updatedAt = Date.now();
+    this.update(account);
   }
 
   setEnabled(id: string, enabled: boolean) {

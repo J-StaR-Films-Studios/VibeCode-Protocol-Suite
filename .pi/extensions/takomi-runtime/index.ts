@@ -1,8 +1,8 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { StringEnum } from "@mariozechner/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import {
   buildSessionState,
@@ -56,7 +56,7 @@ import {
   getProfileDefaults,
   loadTakomiProfile,
 } from "./profile";
-import { installTakomiRoutingPolicy, resolveTakomiRoutingPolicy } from "./routing-policy";
+import { installTakomiRoutingPolicy, previewTakomiRoutingPolicy, renderRoutingPolicyPreview, resolveTakomiRoutingPolicy } from "./routing-policy";
 
 type TakomiState = {
   enabled: boolean;
@@ -84,6 +84,9 @@ const STATE_ENTRY = "takomi-runtime-state";
 
 let activeProfile: TakomiProfile = DEFAULT_TAKOMI_PROFILE;
 let activeSubagentLabel: string | undefined;
+let activeSubagentAgent: string | undefined;
+let activeSubagentTask: string | undefined;
+let activeSubagentStatus: string | undefined;
 
 const ThinkingSchema = Type.Union([
   Type.Literal("off"),
@@ -335,6 +338,22 @@ function getCompletionGateError(task: Pick<OrchestratorTask, "id" | "title" | "c
   ].join("\n");
 }
 
+function assertSafeSessionId(sessionId: string): void {
+  if (!/^orch-\d{8}-\d{6}$/.test(sessionId)) {
+    throw new Error(`Invalid Takomi sessionId '${sessionId}'. Expected canonical format orch-YYYYMMDD-HHMMSS.`);
+  }
+}
+
+function assertSafeTaskId(taskId: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(taskId)) {
+    throw new Error(`Invalid Takomi task id '${taskId}'. Use only letters, numbers, '_' or '-' and do not include path separators.`);
+  }
+}
+
+function assertSafeTasks(tasks: OrchestratorTask[]): void {
+  for (const task of tasks) assertSafeTaskId(task.id);
+}
+
 function getTaskFolder(paths: ReturnType<typeof getSessionPaths>, status: OrchestratorTask["status"]) {
   switch (status) {
     case "in-progress":
@@ -375,6 +394,7 @@ async function hasGenesisArtifacts(cwd: string): Promise<boolean> {
 }
 
 async function loadSessionState(cwd: string, sessionId: string): Promise<{ state: OrchestratorSessionState; paths: ReturnType<typeof getSessionPaths> }> {
+  assertSafeSessionId(sessionId);
   const paths = getSessionPaths(cwd, sessionId);
   const raw = await readFile(paths.stateFile, "utf8");
   const parsed = JSON.parse(raw) as Partial<OrchestratorSessionState>;
@@ -452,6 +472,8 @@ async function writeTaskArtifact(paths: ReturnType<typeof getSessionPaths>, stat
 
 async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState) {
   const normalizedState = normalizeSessionState(session);
+  assertSafeSessionId(normalizedState.sessionId);
+  assertSafeTasks(normalizedState.tasks);
   const paths = getSessionPaths(cwd, normalizedState.sessionId);
   await mkdir(paths.pending, { recursive: true });
   await mkdir(paths.inProgress, { recursive: true });
@@ -527,6 +549,7 @@ async function materializeTasksFromInput(
   const nextTasks = [...currentTasks];
 
   for (const task of incoming) {
+    if (task.id) assertSafeTaskId(task.id);
     const stage = task.stage ?? stageOverride;
     const defaults = getProfileDefaults(activeProfile, task.role, stage);
     const fallbackModels = [
@@ -645,18 +668,27 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       launchMode: state.launchMode,
       planMode: state.planMode,
       activeSubagent: activeSubagentLabel,
+      activeSubagentAgent,
+      activeSubagentTask,
+      activeSubagentStatus,
     });
   }
 
   async function applySubagentRuntimeEvent(event: TakomiSubagentRuntimeEvent, ctx: ExtensionContext): Promise<void> {
     if (event.type === "start") {
       activeSubagentLabel = `${event.state.agent}: ${event.state.taskLabel}`;
+      activeSubagentAgent = event.state.agent;
+      activeSubagentTask = event.state.taskLabel;
+      activeSubagentStatus = event.state.status ?? "running";
       syncContextPanelState();
     } else if ((event.type === "update" || event.type === "complete" || event.type === "block") && event.patch) {
       const model = event.patch.model ? ` @ ${event.patch.model}` : "";
       const thinking = event.patch.thinking ? ` (${event.patch.thinking})` : "";
       const label = event.patch.summary?.split(/\r?\n/).find(Boolean);
       if (label) activeSubagentLabel = `${label}${model}${thinking}`;
+      if (event.patch.agent) activeSubagentAgent = event.patch.agent;
+      if (event.patch.taskLabel) activeSubagentTask = event.patch.taskLabel;
+      activeSubagentStatus = event.type === "complete" ? "completed" : event.type === "block" ? "blocked" : event.patch.status ?? activeSubagentStatus;
       syncContextPanelState();
     }
     switch (event.type) {
@@ -741,6 +773,9 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       await updateState(ctx, () => {
         state = cloneState(DEFAULT_STATE);
         activeSubagentLabel = undefined;
+        activeSubagentAgent = undefined;
+        activeSubagentTask = undefined;
+        activeSubagentStatus = undefined;
       }, "Takomi runtime state reset");
       subagentController.reset(ctx);
       contextPanel.resetSession();
@@ -780,6 +815,47 @@ export default function takomiRuntime(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "takomi_apply_routing_policy",
+    label: "Takomi Routing",
+    description: "Apply a Takomi model-routing policy after deterministic extraction and active-model review.",
+    promptSnippet: "Save reviewed Takomi model routing policy text to the active global or project policy file.",
+    promptGuidelines: [
+      "Use takomi_apply_routing_policy only after reviewing the deterministic extraction against the original routing policy text.",
+      "Do not call takomi_apply_routing_policy if the policy is ambiguous, invents providers, or maps to non-Takomi roles.",
+    ],
+    parameters: Type.Object({
+      policyText: Type.String({ description: "Original routing policy text to save" }),
+      scope: Type.Optional(StringEnum(["global", "project"] as const)),
+      reviewNotes: Type.Optional(Type.String({ description: "Brief notes from the active-model review" })),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const scope = params.scope ?? "global";
+      const preview = previewTakomiRoutingPolicy(ctx.cwd, params.policyText, { scope });
+      const result = await installTakomiRoutingPolicy(ctx.cwd, params.policyText, { scope });
+      const scopeNote = scope === "global"
+        ? "This global policy applies unless a project-local override exists."
+        : "This project-local policy overrides the global policy for the current project.";
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `Takomi routing policy saved (${scope}).`,
+            "",
+            `Policy: ${result.policyPath}`,
+            `Settings: ${result.settingsPath}`,
+            "",
+            renderRoutingPolicyPreview(preview),
+            params.reviewNotes ? `\nReview notes:\n${params.reviewNotes}` : "",
+            "",
+            scopeNote,
+          ].filter(Boolean).join("\n"),
+        }],
+        details: { result, preview, reviewNotes: params.reviewNotes },
+      };
+    },
+  });
+
+  pi.registerTool({
     name: "takomi_workflow",
     label: "Takomi Workflow",
     description: "Return embedded Takomi workflow playbooks for genesis, design, and build.",
@@ -815,6 +891,8 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       "Session IDs must use the canonical timestamp format orch-YYYYMMDD-HHMMSS. Use the same sessionId for the authored docs folder and the board JSON state.",
       "For high-quality orchestration sessions, provide sessionId, masterPlanMarkdown, and taskMarkdown values that match the authored session folder. If you already wrote docs/tasks/orchestrator-sessions/<id>, call this tool with sessionId=<id>; do not create a second session id.",
       "JSON fields should carry IDs/status/roles/workflow/dependencies/checklists for tracking, not replace expressive markdown.",
+      "Do not use expand_stage as a placeholder generator. For Design/Build expansions, provide full taskMarkdown or complete objective/scope/definitionOfDone/expectedArtifacts/instructions for every task.",
+      "If a task packet would render with Scope/Definition Of Done/Expected Artifacts as None specified, repair it before launching subagents.",
       "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
       "If the request is small enough, do not force orchestration just because the tool exists.",
       "If a reviewed task needs more work, reuse the task conversationId when you call takomi_subagent again, then update the board with the new result.",
@@ -880,6 +958,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         if (!params.sessionId) {
           return { content: [{ type: "text", text: "sessionId is required for show_session" }], details: {}, isError: true };
         }
+        assertSafeSessionId(params.sessionId);
         const paths = getSessionPaths(ctx.cwd, params.sessionId);
         const [masterPlan, stateJson] = await Promise.all([
           readFile(paths.masterPlan, "utf8").catch(() => "Master plan not found."),
@@ -898,6 +977,7 @@ ${stateJson}`
         if (!params.sessionId || !params.taskId) {
           return { content: [{ type: "text", text: "sessionId and taskId are required for update_task" }], details: {}, isError: true };
         }
+        assertSafeTaskId(params.taskId);
         const { state: sessionState } = await loadSessionState(ctx.cwd, params.sessionId);
         const idx = sessionState.tasks.findIndex((task) => task.id === params.taskId);
         if (idx === -1) {
@@ -992,6 +1072,7 @@ ${stateJson}`
       }
 
       const sessionId = params.sessionId || createSessionId();
+      assertSafeSessionId(sessionId);
       const title = params.title || "Takomi Session";
       const baseState = params.tasks?.length
         ? buildSessionState(sessionId, title, [], new Date())
@@ -1044,11 +1125,28 @@ ${stateJson}`
     if (routingUpdateMatch) {
       state.enabled = true;
       try {
-        const result = await installTakomiRoutingPolicy(runtimeCtx?.cwd ?? process.cwd(), text);
-        const detected = result.detectedDefaults.length ? `\n\nDetected defaults:\n- ${result.detectedDefaults.join("\n- ")}` : "\n\nNo model names were auto-detected; saved policy only.";
-        return { action: "transform", text: `Takomi routing policy has been updated.\n\nPolicy: ${result.policyPath}\nSettings: ${result.settingsPath}${detected}\n\nAcknowledge the update briefly and explain that future Takomi turns will load this policy.` };
+        const cwd = runtimeCtx?.cwd ?? process.cwd();
+        const preview = previewTakomiRoutingPolicy(cwd, text, { scope: "global" });
+        return { action: "transform", text: [
+          "Review this Takomi routing policy extraction before it is saved.",
+          "",
+          "Rules:",
+          "- Do not invent providers or model IDs not grounded in the policy.",
+          "- Providerless names like GPT-5.5 are routing intent unless a preferred provider/router is declared.",
+          "- Valid Takomi roles are: general, orchestrator, architect, designer, coder, reviewer.",
+          "- If the extraction is correct and safe, call takomi_apply_routing_policy with scope=global and the exact original policy text.",
+          "- If it is ambiguous or wrong, explain what the user should clarify and do not call the tool.",
+          "",
+          "Deterministic extraction:",
+          renderRoutingPolicyPreview(preview),
+          "",
+          "Original policy text:",
+          "```",
+          preview.policy,
+          "```",
+        ].join("\n") };
       } catch (error) {
-        return { action: "transform", text: `Takomi routing policy update failed: ${error instanceof Error ? error.message : String(error)}` };
+        return { action: "transform", text: `Takomi routing policy review failed: ${error instanceof Error ? error.message : String(error)}` };
       }
     }
 
@@ -1081,11 +1179,11 @@ ${stateJson}`
     return { action: "continue" };
   });
 
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", async (event, ctx) => {
     if (!state.enabled) return;
 
     let effectiveState = cloneState(state);
-    const runtimeCwd = typeof (event as { cwd?: string }).cwd === "string" ? (event as { cwd?: string }).cwd as string : process.cwd();
+    const runtimeCwd = ctx.cwd;
     const genesisExists = await hasGenesisArtifacts(runtimeCwd);
     const route = decideRoute(event.prompt);
     if (state.autoOrch && shouldAutoRoute(event.prompt)) {
@@ -1121,10 +1219,28 @@ ${stateJson}`
     }
 
     const routingPolicy = await resolveTakomiRoutingPolicy(runtimeCwd);
+    const optionalFeatureContext = (() => {
+      try {
+        const tools = typeof (pi as { getAllTools?: () => Array<{ name?: string }> }).getAllTools === "function"
+          ? (pi as { getAllTools: () => Array<{ name?: string }> }).getAllTools()
+          : [];
+        const toolNames = new Set(tools.map((tool) => tool.name).filter(Boolean));
+        const guidance: string[] = [];
+        if (toolNames.has("ask_user_question")) {
+          guidance.push("Takomi Interview is available: when Genesis, Design, or ambiguous planning would otherwise require guessing, use ask_user_question to ask concise structured questions before proceeding.");
+        }
+        if (toolNames.has("todo")) {
+          guidance.push("Takomi Todo is available as an optional live overlay. You may use todo for short-lived execution visibility, but takomi_board remains the durable lifecycle/task source of truth.");
+        }
+        return guidance.join("\n");
+      } catch {
+        return "";
+      }
+    })();
     const modelPreflightContext = (() => {
       try {
-        const available = typeof (runtimeCtx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } } | undefined)?.modelRegistry?.getAvailable === "function"
-          ? (runtimeCtx as { modelRegistry: { getAvailable: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry.getAvailable()
+        const available = typeof (ctx as { modelRegistry?: { getAvailable?: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry?.getAvailable === "function"
+          ? (ctx as { modelRegistry: { getAvailable: () => Array<{ provider?: string; id?: string; name?: string }> } }).modelRegistry.getAvailable()
           : [];
         if (!available.length) return "";
         return `Available model context from Pi registry: ${available.map((m) => `${m.provider ? `${m.provider}/` : ""}${m.id ?? m.name ?? "unknown"}`).slice(0, 80).join(", ")}`;
@@ -1142,6 +1258,7 @@ ${stateJson}`
       routingPolicy.text
         ? `${routingPolicy.source === "bundled" ? "Bundled" : "Project"} Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicy.text}`
         : "No Takomi routing policy file was found. Users can install one with `/takomi routing <policy>` or by saying `Update Takomi routing logic: \"\"\"...\"\"\"`.",
+      optionalFeatureContext,
       modelPreflightContext,
       `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       `Takomi execution gate: ${effectiveState.launchMode === "manual" ? "review" : "auto"}. In review gate mode, show the delegation plan before launching and return to the user after each task with results, verification guidance, and the recommended next step.`,
@@ -1163,12 +1280,23 @@ ${stateJson}`
     };
   });
 
+  pi.on("tool_call", async (event) => {
+    if (event.toolName !== "takomi_subagent") return;
+    if (state.subagentsEnabled) return;
+    return {
+      block: true,
+      reason: "Takomi subagents are disabled for this session. Run /takomi subagents on before calling takomi_subagent.",
+    };
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     runtimeCtx = ctx;
     activeProfile = await loadTakomiProfile(ctx.cwd);
     activeSubagentLabel = undefined;
+    activeSubagentAgent = undefined;
+    activeSubagentTask = undefined;
+    activeSubagentStatus = undefined;
     subagentController.reset(ctx);
-    contextPanel.resetSession();
     const entries = ctx.sessionManager.getEntries();
     for (let i = entries.length - 1; i >= 0; i--) {
       const entry = entries[i] as { type: string; customType?: string; data?: TakomiState };
@@ -1188,6 +1316,7 @@ ${stateJson}`
     }
 
     syncContextPanelState();
+    contextPanel.rebuildFromSession(ctx);
     await refreshUi(ctx, state);
     contextPanel.show(ctx);
     flushPendingSubagentEvents();

@@ -41,7 +41,7 @@ export function renderReport(state: ContextManagerState, verbose = false): strin
     lines.push("- Candidates: none");
   }
   if (report.duplicateExtensionWarnings.length > 0 || verbose) {
-    lines.push("", "Extension Conflict Diagnostics:", ...renderDuplicateExtensionGuidance(report.duplicateExtensionWarnings));
+    lines.push("", "Extension Conflict Diagnostics:", ...renderDuplicateExtensionGuidance(report.duplicateExtensionWarnings, report.cwd));
   }
   if (verbose) {
     lines.push("", "Skill Index:", ...sortedSkills(state.skills).map((skill) => `- ${skill.name}`));

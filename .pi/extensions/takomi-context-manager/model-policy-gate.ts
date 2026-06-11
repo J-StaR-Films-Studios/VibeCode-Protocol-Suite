@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ContextManagerState } from "./state";
 import { recordBlocked } from "./state";
 import { resolveTakomiRoutingPolicy } from "../takomi-runtime/routing-policy";
+import { approvedModelEquivalent, isTakomiModelApproved } from "../takomi-runtime/model-routing-defaults";
 
 type Settings = {
   takomi?: { modelRoutingPolicyFile?: string };
@@ -79,12 +80,21 @@ function isModelLike(value: string): boolean {
     || lower.includes("lmstudio/");
 }
 
+function extractPreferredProvider(text: string): string | undefined {
+  const match = text.match(/(?:preferred|default)\s+(?:provider|router)(?:\s*\/\s*(?:provider|router))?\s*:\s*([a-z0-9-]+)/i)
+    ?? text.match(/use\s+([a-z0-9-]+)\s+as\s+(?:the\s+)?(?:provider|router)/i);
+  return match?.[1];
+}
+
 function collectModelsFromPolicy(text: string): string[] {
+  // Providerless names such as "GPT-5.5" are intent labels unless the policy
+  // declares a preferred provider/router header.
   const explicit = (text.match(/[a-z0-9-]+\/[a-z0-9._-]+/gi) ?? []).filter(isModelLike);
+  const preferredProvider = extractPreferredProvider(text);
   const inferred: string[] = [];
-  if (/gpt[- ]?5\.5/i.test(text)) inferred.push("oauth-router/gpt-5.5");
-  if (/gpt[- ]?5\.4(?!\s*mini)/i.test(text)) inferred.push("oauth-router/gpt-5.4");
-  if (/gpt[- ]?5\.4\s*mini/i.test(text)) inferred.push("oauth-router/gpt-5.4-mini");
+  if (preferredProvider && /gpt[- ]?5\.5/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.5`);
+  if (preferredProvider && /gpt[- ]?5\.4(?!\s*mini)/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.4`);
+  if (preferredProvider && /gpt[- ]?5\.4\s*mini/i.test(text)) inferred.push(`${preferredProvider}/gpt-5.4-mini`);
   return unique([...explicit, ...inferred]);
 }
 
@@ -98,8 +108,8 @@ async function loadSnapshot(cwd: string): Promise<ModelPolicySnapshot> {
   return { approvedModels, preferredModels: settingsModels.length ? unique(settingsModels) : approvedModels, sourceFiles };
 }
 
-function collectRequestedModelRefs(input: unknown): Array<{ holder: Record<string, unknown>; key: string; value: string }> {
-  const refs: Array<{ holder: Record<string, unknown>; key: string; value: string }> = [];
+function collectRequestedModelRefs(input: unknown): Array<{ holder: Record<string, unknown>; key: string; value: string; index?: number }> {
+  const refs: Array<{ holder: Record<string, unknown>; key: string; value: string; index?: number }> = [];
   function visit(value: unknown): void {
     if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) {
@@ -111,7 +121,9 @@ function collectRequestedModelRefs(input: unknown): Array<{ holder: Record<strin
       if (typeof record[key] === "string") refs.push({ holder: record, key, value: record[key] });
     }
     if (Array.isArray(record.fallbackModels)) {
-      record.fallbackModels = record.fallbackModels.filter((item) => typeof item === "string");
+      const fallbackModels = record.fallbackModels.filter((item): item is string => typeof item === "string");
+      record.fallbackModels = fallbackModels;
+      fallbackModels.forEach((value: string, index: number) => refs.push({ holder: record, key: "fallbackModels", value, index }));
     }
     for (const key of ["tasks", "chain"]) visit(record[key]);
   }
@@ -119,9 +131,12 @@ function collectRequestedModelRefs(input: unknown): Array<{ holder: Record<strin
   return refs;
 }
 
-function approvedEquivalent(requested: string, approved: string[]): string | undefined {
-  const requestedFamily = modelFamily(requested);
-  return approved.find((candidate) => modelFamily(candidate) === requestedFamily);
+function setModelRef(ref: { holder: Record<string, unknown>; key: string; value: string; index?: number }, value: string): void {
+  if (ref.key === "fallbackModels" && typeof ref.index === "number" && Array.isArray(ref.holder.fallbackModels)) {
+    ref.holder.fallbackModels[ref.index] = value;
+    return;
+  }
+  ref.holder[ref.key] = value;
 }
 
 function isModelFailure(text: string): boolean {
@@ -170,16 +185,16 @@ export function installModelPolicyGate(pi: ExtensionAPI, state: ContextManagerSt
     const refs = collectRequestedModelRefs(event.input);
     const corrections: string[] = [];
     for (const ref of refs) {
-      if (approved.includes(ref.value)) continue;
-      const equivalent = approvedEquivalent(ref.value, approved);
+      if (isTakomiModelApproved(ref.value, approved)) continue;
+      const equivalent = approvedModelEquivalent(ref.value, approved);
       if (equivalent) {
-        ref.holder[ref.key] = equivalent;
+        setModelRef(ref, equivalent);
         corrections.push(`${ref.value} -> ${equivalent}`);
         continue;
       }
       const recovery = await askForInvalidModelRecovery(ctx, ref.value, approved);
       if (recovery.action === "retry") {
-        ref.holder[ref.key] = recovery.model;
+        setModelRef(ref, recovery.model);
         corrections.push(`${ref.value} -> ${recovery.model} (user selected recovery)`);
         continue;
       }

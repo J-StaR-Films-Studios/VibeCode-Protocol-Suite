@@ -56,6 +56,7 @@ takomi_subagent(params)
 - board/task/checklist context
 - model-routing policy values passed as `model` / `thinking`
 - workflow prompt overlays
+- stable Takomi `conversationId` values mapped to deterministic pi-subagents session directories
 - agent aliases such as `code -> coder`
 - launch preview/manual gate
 
@@ -74,7 +75,7 @@ takomi_subagent(params)
 
 The prior implementation used pi-subagents' renderer but fed it Takomi JSON-runner snapshots. Those snapshots could include planning/self-talk and cumulative text, causing duplicated or dirty live output.
 
-The new implementation returns native pi-subagents `AgentToolResult<Details>` directly, so the UI receives the data shape it was designed for.
+The implementation returns native pi-subagents `AgentToolResult<Details>` directly and delegates rendering to `renderSubagentResult()`, so the UI receives the data shape it was designed for while Takomi metadata is kept as a non-render-breaking `details.takomi` overlay. Takomi `skills` are mapped onto pi-subagents' native `skill` option, while workflow/checklist context remains in the task prompt.
 
 ## Package requirement
 
@@ -86,7 +87,7 @@ Current extension code imports pi-subagents internals through a single local ada
 import { createSubagentExecutor } from "./pi-subagents-internal";
 ```
 
-The adapter wraps internal-but-exported pi-subagents modules, and `package.json` pins `pi-subagents` to `0.24.0` so upstream internal path changes cannot arrive through a caret update. If upstream exposes a stable public entry point later, Takomi should update only `.pi/extensions/takomi-subagents/pi-subagents-internal.ts`.
+The adapter wraps internal-but-exported pi-subagents modules, and `package.json` pins `pi-subagents` to `0.28.0` so upstream internal path changes cannot arrive through a caret update. If upstream exposes a stable public entry point later, Takomi should update only `.pi/extensions/takomi-subagents/pi-subagents-internal.ts`.
 
 ## Files changed
 

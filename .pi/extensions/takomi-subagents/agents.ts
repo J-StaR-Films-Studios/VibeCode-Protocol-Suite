@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getAgentDir, parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 
 export type TakomiAgentScope = "user" | "project" | "both";

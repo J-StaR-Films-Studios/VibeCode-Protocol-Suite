@@ -7,7 +7,7 @@ Implement and maintain `oauth-router` as a Pi extension, not a separate service.
 - Extension entrypoint must remain `~/.pi/agent/extensions/oauth-router/index.ts`
 - Register the provider with `pi.registerProvider(...)`
 - Keep provider auth management extension-owned; do not depend on Pi’s single-provider OAuth slot for multi-account state
-- Reuse Pi OAuth adapters from `@mariozechner/pi-ai/oauth` where possible
+- Reuse Pi OAuth adapters from `@earendil-works/pi-ai/oauth` where possible
 - Prefer Node built-ins over extra dependencies
 - Keep secret storage and health state in separate files under `~/.pi/agent/oauth-router/`
 

@@ -22,7 +22,7 @@ The top-level `/takomi` experience should become the canonical entrypoint. The c
 - `docs/features/Pi_Takomi_Native_Subagent_Orchestration_Upgrade.md` already defines manual versus auto launch, delegation plans, and shared board/tool dispatch shape.
 - `docs/features/Pi_Takomi_Orchestration_Alignment.md` already defines the Genesis -> Design -> Build lifecycle, dynamic stage expansion, and shared-core ownership of orchestration policy.
 - `docs/features/Pi_Takomi_Subagent_Command_Stack.md` and `docs/features/Pi_Takomi_Command_Center.md` define the older single-controller bottom stack surface; this pass deprecates that visible surface in favor of Pi's native subagent result UI while keeping internal run tracking for status and board synchronization.
-- Pi's default subagent example in `node_modules/@mariozechner/pi-coding-agent/examples/extensions/subagent/` supports single, parallel, and chain modes with user/project/both agent discovery.
+- Pi's default subagent example in `node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/` supports single, parallel, and chain modes with user/project/both agent discovery.
 - Takomi's current `.pi/extensions/takomi-subagents/` path supports project-local agents, model preflight, thinking levels, fallback models, conversation IDs, checklists, lifecycle metadata, plan previews, and runtime UI events.
 
 ## Comparison
