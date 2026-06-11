@@ -28,6 +28,7 @@ Pi extension that auto-loads and registers an `oauth-router` provider with multi
   - 429 cooldowns
   - transient failure penalties
   - client/network transport failure tracking without default account cooldown
+  - live Pi UI footer/notification updates when an upstream attempt, retry delay, failover, or final router error happens
   - 5 router-level client/network retries by default before pre-output failover, starting at 5s and doubling
   - auth failure quarantine
   - safe pre-output failover
@@ -47,7 +48,7 @@ The extension ships with two default upstream profiles:
    - api: `openai-responses`
    - default models: `gpt-4o`, `gpt-4.1`, `o4-mini`
 
-Edit `~/.pi/agent/oauth-router/config.json` to add more upstreams, swap endpoints, change model catalogs, or tune retry behavior. By default client-side transport failures such as `Codex SSE response headers timed out after 10000ms` retry the same account 5 times with exponential backoff (`5s`, `10s`, `20s`, `40s`, then capped at `60s`) before router failover. These failures are recorded but do not cool down an account unless `clientNetworkPenaltyMs` is set above `0`.
+Edit `~/.pi/agent/oauth-router/config.json` to add more upstreams, swap endpoints, change model catalogs, or tune retry behavior. By default client-side transport failures such as `Codex SSE response headers timed out after 10000ms` retry the same account 5 times with exponential backoff (`5s`, `10s`, `20s`, `40s`, then capped at `60s`) before router failover. While this is happening, Pi's footer shows the active retry/failover/error state so the UI no longer looks frozen. These failures are recorded but do not cool down an account unless `clientNetworkPenaltyMs` is set above `0`.
 
 ## Setup
 

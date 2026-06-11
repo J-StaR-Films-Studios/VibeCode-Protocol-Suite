@@ -25,6 +25,8 @@ import type {
   RouterErrorMessageInput,
   RouterModelConfig,
   RouterStatusRow,
+  RouterUiEvent,
+  RouterUiReporter,
   RouterUpstreamConfig,
   RoutingPolicyName,
   StoredRouterAccount,
@@ -176,6 +178,7 @@ export class RouterRuntime {
   private config: RouterConfig;
   private accounts: RouterAccountStore;
   private state: RouterStateStore;
+  private uiReporter?: RouterUiReporter;
 
   constructor() {
     this.config = loadRouterConfig();
@@ -188,6 +191,18 @@ export class RouterRuntime {
     this.config = loadRouterConfig();
     this.accounts.reload();
     this.state.pruneAccountIds(this.accounts.list().map((account) => account.id));
+  }
+
+  setUiReporter(reporter?: RouterUiReporter) {
+    this.uiReporter = reporter;
+  }
+
+  private emitUi(event: RouterUiEvent) {
+    try {
+      this.uiReporter?.(event);
+    } catch {
+      // UI updates must never affect model streaming or retry behavior.
+    }
   }
 
   getConfig(): RouterConfig {
@@ -468,17 +483,40 @@ export class RouterRuntime {
   ): Promise<{ completed: boolean; emittedMeaningfulOutput: boolean; failure?: FailureClassification }> {
     for (let retryIndex = 0; ; retryIndex += 1) {
       const result = await this.trySingleAccount(selection, outerStream, context, options);
+      const failure = result.failure;
       const canRetry =
         !result.completed &&
         !result.emittedMeaningfulOutput &&
-        result.failure?.kind === "client-network" &&
+        failure?.kind === "client-network" &&
         retryIndex < this.config.clientNetworkMaxRetries;
 
-      if (!canRetry) return result;
+      if (!canRetry || !failure) return result;
 
       const delayMs = this.getClientNetworkRetryDelayMs(retryIndex);
+      this.emitUi({
+        phase: "retry",
+        modelId,
+        accountId: selection.account.id,
+        accountLabel: selection.account.label,
+        upstreamId: selection.account.upstreamId,
+        failureKind: failure.kind,
+        status: failure.status,
+        message: failure.message,
+        retryAttempt: retryIndex + 1,
+        maxRetries: this.config.clientNetworkMaxRetries,
+        delayMs,
+      });
       await sleep(delayMs, options?.signal);
       this.state.markAttempt(selection.account.id, modelId);
+      this.emitUi({
+        phase: "attempt",
+        modelId,
+        accountId: selection.account.id,
+        accountLabel: selection.account.label,
+        upstreamId: selection.account.upstreamId,
+        retryAttempt: retryIndex + 2,
+        maxRetries: this.config.clientNetworkMaxRetries,
+      });
     }
   }
 
@@ -521,7 +559,11 @@ export class RouterRuntime {
             reason: "aborted",
             error: { ...event.error, stopReason: "aborted", errorMessage: message },
           });
-          return { completed: true, emittedMeaningfulOutput };
+          return {
+            completed: true,
+            emittedMeaningfulOutput,
+            failure: { kind: "fatal", status: responseStatus, message },
+          };
         }
 
         const failure = classifyFailure(responseStatus, responseHeaders, message, this.config);
@@ -596,6 +638,13 @@ export class RouterRuntime {
             const message = lastFailure
               ? `No healthy oauth-router accounts remaining after failover. Last error: ${lastFailure.message}`
               : `No healthy oauth-router accounts are configured for model ${model.id}. Add accounts with /router-login add.`;
+            this.emitUi({
+              phase: "error",
+              modelId: model.id,
+              failureKind: lastFailure?.kind,
+              status: lastFailure?.status,
+              message,
+            });
             outer.push({ type: "error", reason: "error", error: createErrorMessage({ model, message }) });
             outer.end();
             return;
@@ -604,6 +653,13 @@ export class RouterRuntime {
           this.state.advanceCursor(policy, picked.nextCursor);
           tried.add(picked.selected.account.id);
           this.state.markAttempt(picked.selected.account.id, model.id);
+          this.emitUi({
+            phase: "attempt",
+            modelId: model.id,
+            accountId: picked.selected.account.id,
+            accountLabel: picked.selected.account.label,
+            upstreamId: picked.selected.account.upstreamId,
+          });
 
           let selection: DelegateSelection;
           try {
@@ -617,11 +673,39 @@ export class RouterRuntime {
             }
             lastFailure = { kind: "auth", status: 401, message };
             this.markFailure(picked.selected.account.id, lastFailure);
+            this.emitUi({
+              phase: "failover",
+              modelId: model.id,
+              accountId: picked.selected.account.id,
+              accountLabel: picked.selected.account.label,
+              upstreamId: picked.selected.account.upstreamId,
+              failureKind: lastFailure.kind,
+              status: lastFailure.status,
+              message: lastFailure.message,
+            });
             continue;
           }
 
           const result = await this.tryAccountWithClientNetworkRetries(selection, outer, context, model.id, options);
           if (result.completed) {
+            this.emitUi(result.failure
+              ? {
+                phase: "error",
+                modelId: model.id,
+                accountId: selection.account.id,
+                accountLabel: selection.account.label,
+                upstreamId: selection.account.upstreamId,
+                failureKind: result.failure.kind,
+                status: result.failure.status,
+                message: result.failure.message,
+              }
+              : {
+                phase: "success",
+                modelId: model.id,
+                accountId: selection.account.id,
+                accountLabel: selection.account.label,
+                upstreamId: selection.account.upstreamId,
+              });
             outer.end();
             return;
           }
@@ -630,13 +714,41 @@ export class RouterRuntime {
           lastFailure = result.failure;
 
           if (emittedMeaningfulOutput) {
+            this.emitUi({
+              phase: "error",
+              modelId: model.id,
+              accountId: selection.account.id,
+              accountLabel: selection.account.label,
+              upstreamId: selection.account.upstreamId,
+              failureKind: lastFailure?.kind,
+              status: lastFailure?.status,
+              message: lastFailure?.message ?? "Upstream failed after partial output; failover is unsafe.",
+            });
             outer.end();
             return;
+          }
+
+          if (lastFailure) {
+            this.emitUi({
+              phase: "failover",
+              modelId: model.id,
+              accountId: selection.account.id,
+              accountLabel: selection.account.label,
+              upstreamId: selection.account.upstreamId,
+              failureKind: lastFailure.kind,
+              status: lastFailure.status,
+              message: lastFailure.message,
+            });
           }
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const aborted = isAbortLike(message, options?.signal);
+        this.emitUi({
+          phase: "error",
+          modelId: model.id,
+          message: aborted ? "Request was aborted" : message,
+        });
         outer.push({ type: "error", reason: aborted ? "aborted" : "error", error: createErrorMessage({ model, message, stopReason: aborted ? "aborted" : "error" }) });
         outer.end();
       }

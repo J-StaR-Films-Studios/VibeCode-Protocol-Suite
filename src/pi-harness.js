@@ -209,8 +209,26 @@ export async function inspectInstalledTakomiPiHarness(home = HOME) {
   };
 }
 
-function runCommand(command, args) {
-  return spawnSync(command, args, { stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' });
+function quoteWindowsCommandArg(value) {
+  const text = String(value);
+  if (text.length === 0) return '""';
+  if (!/[\s"&|<>^()%!]/.test(text)) return text;
+  return `"${text.replace(/"/g, '\\"')}"`;
+}
+
+function resolveCommandForSpawn(command, args = []) {
+  if (process.platform !== 'win32') return { command, args };
+  if (/\.(exe|com)$/i.test(command)) return { command, args };
+
+  return {
+    command: 'cmd.exe',
+    args: ['/d', '/s', '/c', [command, ...args].map(quoteWindowsCommandArg).join(' ')],
+  };
+}
+
+export function runCommand(command, args) {
+  const resolved = resolveCommandForSpawn(command, args);
+  return spawnSync(resolved.command, resolved.args, { stdio: 'pipe', encoding: 'utf8', shell: false });
 }
 
 function runCommandWithTimeout(command, args, timeoutMs) {
@@ -220,9 +238,10 @@ function runCommandWithTimeout(command, args, timeoutMs) {
     let settled = false;
     let timedOut = false;
 
-    const child = spawn(command, args, {
+    const resolved = resolveCommandForSpawn(command, args);
+    const child = spawn(resolved.command, resolved.args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
+      shell: false,
       windowsHide: true,
     });
 
@@ -235,10 +254,17 @@ function runCommandWithTimeout(command, args, timeoutMs) {
 
     const timer = setTimeout(() => {
       timedOut = true;
-      try { child.kill(); } catch {}
-      setTimeout(() => {
-        try { child.kill('SIGKILL'); } catch {}
-      }, 1500).unref?.();
+      if (process.platform === 'win32' && child.pid) {
+        try { spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' }); } catch {}
+      } else {
+        try { child.kill(); } catch {}
+        setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch {}
+        }, 1500).unref?.();
+      }
+      try { child.stdout?.destroy(); } catch {}
+      try { child.stderr?.destroy(); } catch {}
+      finish({ status: null });
     }, timeoutMs);
     timer.unref?.();
 

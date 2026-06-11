@@ -1,8 +1,7 @@
 import fs from 'fs-extra';
-import { spawnSync } from 'child_process';
 import prompts from 'prompts';
 import pc from 'picocolors';
-import { detectPiCommand, getPiGlobalTargets } from './pi-harness.js';
+import { detectPiCommand, getPiGlobalTargets, runCommand } from './pi-harness.js';
 
 export const TAKOMI_PI_OPTIONAL_FEATURES = [
   {
@@ -42,10 +41,6 @@ export const TAKOMI_PI_OPTIONAL_FEATURES = [
     description: 'Markdown/LaTeX/browser/PDF previews for Takomi docs and handoffs.',
   },
 ];
-
-function runCommand(command, args) {
-  return spawnSync(command, args, { stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' });
-}
 
 function packageIdentity(packageSpec) {
   if (!packageSpec.startsWith('npm:')) return packageSpec;
