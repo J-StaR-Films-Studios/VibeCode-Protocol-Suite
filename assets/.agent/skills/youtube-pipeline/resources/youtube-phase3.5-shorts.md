@@ -16,9 +16,9 @@ Run this **after Phase 3 (Scripting)** is complete, or during Phase 3 if you wan
 
 ## Step 0: Load Source Knowledge
 
-Read the Phase 3 source document to get the full scripting framework:
+Read the Phase 3 source document to get the full scripting framework (packaged locally):
 ```
-View file: c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 3.md
+View file: knowledge/Phase 3.md
 ```
 
 This gives you access to:

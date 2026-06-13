@@ -124,21 +124,21 @@ Status: FULLY DISTRIBUTED
 ---
 
 ## Phase Workflow References
-Each phase has its own detailed workflow:
-- Phase 1: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-phase1-strategy.md`
-- Phase 2: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-phase2-packaging.md`
-- Phase 3: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-phase3-scripting.md`
-- Phase 3.5: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-phase3.5-shorts.md`
-- Phase 4: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-phase4-production.md`
-- Phase 5: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-phase5-repurposing.md`
+Each phase has its own detailed workflow (packaged locally):
+- Phase 1: `youtube-phase1-strategy.md`
+- Phase 2: `youtube-phase2-packaging.md`
+- Phase 3: `youtube-phase3-scripting.md`
+- Phase 3.5: `youtube-phase3.5-shorts.md`
+- Phase 4: `youtube-phase4-production.md`
+- Phase 5: `youtube-phase5-repurposing.md`
 
-Each workflow also reads from source knowledge:
-- Source 1: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 1.md`
-- Source 2: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 2.md`
-- Source 3: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 3.md`
-- Source 4: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 4.md`
-- Research: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Research.md`
-- Repurposing: `c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Repurposing.md`
+Each workflow also reads from local source knowledge:
+- Source 1: `knowledge/Phase 1.md`
+- Source 2: `knowledge/Phase 2.md`
+- Source 3: `knowledge/Phase 3.md`
+- Source 4: `knowledge/Phase 4.md`
+- Research: `knowledge/Research.md`
+- Repurposing: `knowledge/Repurposing.md`
 
 ---
 

@@ -5,7 +5,7 @@ description: Complete YouTube video production pipeline from ideation to distrib
 
 # YouTube Pipeline Skill
 
-This skill provides access to the complete YouTube video production pipeline. When activated, read the workflow files in the user's vault for the full, up-to-date instructions.
+This skill provides access to a complete YouTube video production pipeline. It is self-contained: when activated, resolve the folder containing this `SKILL.md` as `<skill-root>` and read the bundled workflow, knowledge, prompt, and script files from there.
 
 ## Quick Reference
 
@@ -21,40 +21,31 @@ This skill provides access to the complete YouTube video production pipeline. Wh
 
 ---
 
-## Source Files (Always Read These First)
+## Bundled Files (Always Read These First)
 
-The workflow docs are bundled in this skill's `resources/` folder for quick access:
+All runtime instructions are bundled in this skill. Do not require the user's vault, a global config folder, or a specific agent harness for normal use.
 
-**Workflow Files (Local):**
+**Workflow Files:**
 ```
-.agent/skills/youtube-pipeline/resources/youtube-pipeline.md
-.agent/skills/youtube-pipeline/resources/youtube-phase1-strategy.md
-.agent/skills/youtube-pipeline/resources/youtube-phase2-packaging.md
-.agent/skills/youtube-pipeline/resources/youtube-phase3-scripting.md
-.agent/skills/youtube-pipeline/resources/youtube-phase3.5-shorts.md
-.agent/skills/youtube-pipeline/resources/youtube-phase4-production.md
-.agent/skills/youtube-pipeline/resources/youtube-phase5-repurposing.md
-```
-
-**Source of Truth (User's Vault):**
-If you need to sync or check for updates, the authoritative files are:
-```
-c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\
-c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\
+<skill-root>/resources/youtube-pipeline.md
+<skill-root>/resources/youtube-phase1-strategy.md
+<skill-root>/resources/youtube-phase2-packaging.md
+<skill-root>/resources/youtube-phase3-scripting.md
+<skill-root>/resources/youtube-phase3.5-shorts.md
+<skill-root>/resources/youtube-phase4-production.md
+<skill-root>/resources/youtube-phase5-repurposing.md
 ```
 
-**Prompts (For External AI Use):**
+**Knowledge And Prompts:**
 ```
-c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📝 01-Prompt\Transcription Extraction Prompt v2.md
-c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📝 01-Prompt\Video QA Prompt.md
-c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📝 01-Prompt\Title Thumbnail Picker Prompt.md
-c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📝 01-Prompt\Shorts Bridge Protocol.md
+<skill-root>/resources/knowledge/
+<skill-root>/resources/prompts/
 ```
 
 **Automation Scripts (Phase 1):**
 ```
-.agent/skills/youtube-pipeline/scripts/parse_yt_studio.ps1  # Parse YT Studio Inspiration HTML
-.agent/skills/google-trends/scripts/search.js               # Google Trends CLI (separate skill)
+<skill-root>/scripts/parse_yt_studio.ps1
+<skill-root>/scripts/google-trends/search.js
 ```
 
 ---
@@ -72,16 +63,29 @@ Extracts topics and volume indicators from YouTube Studio's Inspiration tab.
 
 **Agent Command:**
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.gemini\antigravity\skills\youtube-pipeline\scripts\parse_yt_studio.ps1" -InputFile "topic.html" -OutputFile "parsed.md"
+$SkillRoot = "<path-to-installed-youtube-pipeline-skill>"
+powershell -ExecutionPolicy Bypass -File (Join-Path $SkillRoot "scripts/parse_yt_studio.ps1") -InputFile "topic.html" -OutputFile "parsed.md"
 ```
 
-### Google Trends CLI
-Uses the separate `google-trends` skill for automated trend searching.
+### Google Trends Research
+Google Trends validation is required. This skill bundles the local `google-trends` Node CLI so agents can run trends checks without relying on a separate global skill install.
+
+**First-Time Setup:**
+```powershell
+$SkillRoot = "<path-to-installed-youtube-pipeline-skill>"
+$TrendRoot = Join-Path $SkillRoot "scripts/google-trends"
+Push-Location $TrendRoot
+pnpm install
+Pop-Location
+```
 
 **Agent Command:**
 ```powershell
-node "$env:USERPROFILE\.gemini\antigravity\skills\google-trends\scripts\search.js" -k "Claude Cowork" -p youtube -t "now 7-d"
+$SkillRoot = "<path-to-installed-youtube-pipeline-skill>"
+node (Join-Path $SkillRoot "scripts/google-trends/search.js") -k "Claude Cowork" -p youtube -t "now 7-d"
 ```
+
+If Node dependencies are unavailable, use the manual Google Trends workflow in `resources/youtube-phase1-strategy.md`. Do not assume a Gemini, Codex, Pi, or other harness-specific path.
 
 ## How to Use This Skill
 
@@ -180,15 +184,22 @@ These are embedded in the Phase 3 workflow but summarized here for reference:
 
 ## Updating This Skill
 
-The workflow files in `resources/` are copies. The source of truth is the user's vault.
+The files in `resources/` are the packaged source used at runtime. If you refresh them from another workspace, copy into this skill folder and keep all references relative to `<skill-root>`.
 
 **To Sync (PowerShell):**
 ```powershell
-Copy-Item -Path "C:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\.agent\workflows\youtube-*.md" -Destination "$env:USERPROFILE\.gemini\antigravity\skills\youtube-pipeline\resources\" -Force
+$SkillRoot = "<path-to-installed-youtube-pipeline-skill>"
+$ExternalWorkflowDir = "<path-to-external-workflow-source>"
+$ExternalKnowledgeDir = "<path-to-external-knowledge-source>"
+$ExternalPromptDir = "<path-to-external-prompt-source>"
+
+Copy-Item -Path (Join-Path $ExternalWorkflowDir "youtube-*.md") -Destination (Join-Path $SkillRoot "resources") -Force
+Copy-Item -Path (Join-Path $ExternalKnowledgeDir "*.md") -Destination (Join-Path $SkillRoot "resources/knowledge") -Force
+Copy-Item -Path (Join-Path $ExternalPromptDir "*.md") -Destination (Join-Path $SkillRoot "resources/prompts") -Force
 ```
 
 **When to Sync:**
-- After updating any workflow in the vault
-- After adding new phases
-
-To add new phases: First create in the vault's `.agent/workflows/`, then sync here.
+- After updating any external workflow, processed note, or prompt source.
+- To add new phases, add the workflow to `resources/`, add supporting knowledge/prompts if needed, and update this `SKILL.md` quick reference.
+- If the Google Trends CLI changes, refresh `scripts/google-trends/search.js`, `package.json`, and `pnpm-lock.yaml` together.
+- After syncing, run a reference check for absolute local paths and harness-specific install paths.

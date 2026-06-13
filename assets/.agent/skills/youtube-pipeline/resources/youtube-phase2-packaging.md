@@ -7,9 +7,9 @@ description: Phase 2 of YouTube Pipeline - The Packaging Lab (Title & Thumbnail)
 > **Your Role**: You are a brutal expert YouTube strategist. You generate titles and thumbnail concepts. You critique ruthlessly. The packaging MUST be irresistible before we move to scripting.
 
 ## Step 0: Load Source Knowledge
-Before starting, read the full phase document:
+Before starting, read the full phase document (packaged locally):
 ```
-View file: c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 2.md
+View file: knowledge/Phase 2.md
 ```
 
 Also recall the Phase 1 output:

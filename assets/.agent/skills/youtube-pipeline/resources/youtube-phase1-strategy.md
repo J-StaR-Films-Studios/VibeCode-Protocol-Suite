@@ -7,9 +7,9 @@ description: Phase 1 of YouTube Pipeline - The Strategy Engine (Ideation & Resea
 > **Your Role**: You are a brutal expert YouTube strategist. You generate ideas, challenge weak concepts, and demand proof. You teach the "why" behind every step. Never yes-man.
 
 ## Step 0: Load Source Knowledge
-Before starting, read the full phase document to get undiluted context:
+Before starting, read the full phase document to get undiluted context (packaged locally):
 ```
-View file: c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 1.md
+View file: knowledge/Phase 1.md
 ```
 
 ## Step 1: Gather Context
@@ -19,7 +19,7 @@ Ask the user:
 3. **Target Audience**: "Who exactly watches you? Age, situation, pain points?"
 4. **Mode**: "Do you want me to drive (Guided) or do you want more control (Manual)?"
 
-If user has prior notes/summaries in the vault, reference them to pre-fill answers.
+If the user provides prior notes, summaries, or project context, use them to pre-fill answers. Do not depend on a private vault path.
 
 ## Step 2: The Outlier Hunt (AI-Driven)
 Based on their niche, **you generate** potential outlier directions:
@@ -69,7 +69,8 @@ Guide the user through this process to extract bulk data:
 6. **Agent Action**: Parse the file:
 ```powershell
 # Parse YouTube Studio HTML export
-powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.gemini\antigravity\skills\youtube-pipeline\scripts\parse_yt_studio.ps1" -InputFile "ai_coding.html" -OutputFile "parsed_topics.md"
+$SkillRoot = "<path-to-installed-youtube-pipeline-skill>"
+powershell -ExecutionPolicy Bypass -File (Join-Path $SkillRoot "scripts/parse_yt_studio.ps1") -InputFile "ai_coding.html" -OutputFile "parsed_topics.md"
 ```
 
 **Repeat for each topic category** (e.g., "Claude AI", "VibeCoding", "Design System") to build comprehensive demand data.
@@ -118,17 +119,26 @@ Ask them to go to their top 3 outlier videos and pull:
 ### 4b. Google Trends Deep Dive
 Don't just glance at a trend line. Use Google Trends properly:
 
-**⚡ AUTOMATED (Agent Use - Preferred):**
-Use the `google-trends` skill for CLI-based searching:
+**Automated Method (Bundled CLI):**
+Use the packaged Google Trends CLI in this skill:
 ```powershell
+# First-time dependency install
+$SkillRoot = "<path-to-installed-youtube-pipeline-skill>"
+$TrendRoot = Join-Path $SkillRoot "scripts/google-trends"
+Push-Location $TrendRoot
+pnpm install
+Pop-Location
+
 # Search YouTube trends for a keyword
-node "$env:USERPROFILE\.gemini\antigravity\skills\google-trends\scripts\search.js" -k "Claude Cowork" -p youtube -t "now 7-d" -o table
+node (Join-Path $SkillRoot "scripts/google-trends/search.js") -k "Claude Cowork" -p youtube -t "now 7-d" -o table
 
 # Search multiple keywords
-node "$env:USERPROFILE\.gemini\antigravity\skills\google-trends\scripts\search.js" -k "Vibe Coding" -p youtube
-node "$env:USERPROFILE\.gemini\antigravity\skills\google-trends\scripts\search.js" -k "AI coding" -p youtube
-node "$env:USERPROFILE\.gemini\antigravity\skills\google-trends\scripts\search.js" -k "Cursor IDE" -p youtube
+node (Join-Path $SkillRoot "scripts/google-trends/search.js") -k "Vibe Coding" -p youtube
+node (Join-Path $SkillRoot "scripts/google-trends/search.js") -k "AI coding" -p youtube
+node (Join-Path $SkillRoot "scripts/google-trends/search.js") -k "Cursor IDE" -p youtube
 ```
+
+Do not assume a specific install root such as `~/.gemini`, `~/.codex`, `~/.agents`, or any private project folder. If Node dependencies are unavailable, use the manual method below.
 
 **Key Signals:**
 - `BREAKOUT` = 5000%+ growth = **GOLD**

@@ -7,9 +7,9 @@ description: Phase 3 of YouTube Pipeline - The Scripting Forge (Retention & Psyc
 > **Your Role**: You are a brutal expert YouTube scriptwriter. You draft hooks, structure loops, and write copy. Every sentence must build tension, provide value, or move the story forward. If it does neither, delete it.
 
 ## Step 0: Load Source Knowledge
-Before starting, read the full phase document:
+Before starting, read the full phase document (packaged locally):
 ```
-View file: c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 3.md
+View file: knowledge/Phase 3.md
 ```
 
 Also recall Phase 1 & 2 outputs:

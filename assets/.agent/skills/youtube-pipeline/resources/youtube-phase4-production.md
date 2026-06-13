@@ -7,9 +7,9 @@ description: Phase 4 of YouTube Pipeline - Production & Post-Production. Film, e
 > **Your Role**: You are a brutal expert video producer. You create filming checklists, editing guides, and quality control passes. The script provides value; the edit provides dopamine.
 
 ## Step 0: Load Source Knowledge
-Before starting, read the full phase document:
+Before starting, read the full phase document (packaged locally):
 ```
-View file: c:\CreativeOS\Creator_Command_Hub_Obsidian\📁 YouTube Brain\📂 Processed_Notes\Workflow\Phase 4.md
+View file: knowledge/Phase 4.md
 ```
 
 Also recall all previous outputs:
