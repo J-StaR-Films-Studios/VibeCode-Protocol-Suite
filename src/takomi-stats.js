@@ -306,16 +306,65 @@ function uniqByPath(rows, field = 'root') {
   });
 }
 
+async function discoverProjectSessionRoots(projectRoots = []) {
+  const found = [];
+  const skip = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'coverage', 'venv', '.venv', '.turbo']);
+  const roots = Array.isArray(projectRoots) ? projectRoots : [projectRoots];
+  async function walk(dir) {
+    let entries = [];
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      if (!ent.isDirectory() || skip.has(ent.name)) continue;
+      const p = path.join(dir, ent.name);
+      const normalized = p.replace(/\\/g, '/');
+      if (normalized.endsWith('/.pi/takomi') || normalized.endsWith('/.pi/agent/sessions')) {
+        found.push(path.resolve(p));
+        continue;
+      }
+      await walk(p);
+    }
+  }
+  for (const root of roots.filter(Boolean)) await walk(path.resolve(root));
+  return [...new Set(found)];
+}
+
+async function discoverSessionLinkedRoots(sessionRows = []) {
+  const found = [];
+  const seenCwds = new Set();
+  for (const row of sessionRows) {
+    const cwd = row?.cwd ? path.resolve(row.cwd) : '';
+    if (!cwd || seenCwds.has(cwd)) continue;
+    seenCwds.add(cwd);
+    for (const root of [path.join(cwd, '.pi', 'takomi'), path.join(cwd, '.pi', 'agent', 'sessions')]) {
+      if (await exists(root)) found.push(path.resolve(root));
+    }
+  }
+  return [...new Set(found)];
+}
+
+async function readStatsConfigFile(file) {
+  if (!(await exists(file))) return null;
+  const parsed = safeJson(await fs.readFile(file, 'utf8').catch(() => ''));
+  return parsed && typeof parsed === 'object' ? { ...parsed, configFile: file } : null;
+}
+
 async function readStatsLocalConfig(cwd, home, explicitPath) {
   const candidates = explicitPath
     ? [path.resolve(expandHome(explicitPath, home))]
-    : [path.join(cwd, '.takomi-stats.local.json')];
+    : [path.join(home, '.takomi', 'stats.local.json'), path.join(cwd, '.takomi-stats.local.json')];
+  const configs = [];
   for (const file of candidates) {
-    if (!(await exists(file))) continue;
-    const parsed = safeJson(await fs.readFile(file, 'utf8').catch(() => ''));
-    if (parsed && typeof parsed === 'object') return { ...parsed, configFile: file };
+    const parsed = await readStatsConfigFile(file);
+    if (parsed) configs.push(parsed);
   }
-  return {};
+  return {
+    configFiles: configs.map(c => c.configFile),
+    sessionRoots: configs.flatMap(c => Array.isArray(c.sessionRoots) ? c.sessionRoots : c.sessionRoots ? [c.sessionRoots] : []),
+    sessionsRoot: configs.flatMap(c => Array.isArray(c.sessionsRoot) ? c.sessionsRoot : c.sessionsRoot ? [c.sessionsRoot] : []),
+    runHistory: configs.flatMap(c => Array.isArray(c.runHistory) ? c.runHistory : c.runHistory ? [c.runHistory] : []),
+    runHistoryFiles: configs.flatMap(c => Array.isArray(c.runHistoryFiles) ? c.runHistoryFiles : c.runHistoryFiles ? [c.runHistoryFiles] : []),
+    projectRoots: configs.flatMap(c => Array.isArray(c.projectRoots) ? c.projectRoots : c.projectRoots ? [c.projectRoots] : []),
+  };
 }
 
 export async function collectTakomiStats(opts = {}) {
@@ -325,6 +374,10 @@ export async function collectTakomiStats(opts = {}) {
   const rawEvents = [], rawSessions = [], rawTasks = [];
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
+  const configuredProjectRoots = [
+    ...splitPathList(localConfig.projectRoots, home),
+    ...splitPathList(opts.projectRoot || opts.projectRoots || process.env.TAKOMI_STATS_PROJECT_ROOTS, home),
+  ];
   const extraSessionRoots = [
     ...splitPathList(localConfig.sessionsRoot || localConfig.sessionRoots, home),
     ...splitPathList(opts.sessionsRoot || opts.sessionRoots || process.env.TAKOMI_STATS_SESSION_ROOTS, home),
@@ -336,11 +389,21 @@ export async function collectTakomiStats(opts = {}) {
     ...extraSessionRoots.map((root, index) => ({ source: `extra-session-${index + 1}`, root, default: false })),
   ]);
   const sourceRoots = [];
-  for (const source of sessionSources) {
+  const scannedRoots = new Set();
+  async function scanSource(source) {
+    const key = path.resolve(source.root);
+    if (scannedRoots.has(key)) return;
+    scannedRoots.add(key);
     const present = await exists(source.root);
     const filesScanned = present ? await scanPiSessions(source.root, source.source, rawEvents, rawSessions, rawTasks) : 0;
     sourceRoots.push({ ...source, exists: present, files: filesScanned });
   }
+  for (const source of sessionSources) await scanSource(source);
+
+  const linkedSessionRoots = await discoverSessionLinkedRoots(rawSessions);
+  const discoveredSessionRoots = await discoverProjectSessionRoots(configuredProjectRoots);
+  for (const root of linkedSessionRoots) await scanSource({ source: 'project-linked', root, default: false });
+  for (const [index, root] of discoveredSessionRoots.entries()) await scanSource({ source: `project-root-${index + 1}`, root, default: false });
   const sinceDay = parseSince(opts.since);
   const events = rawEvents.filter(e => !sinceDay || e.day >= sinceDay);
   const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
@@ -377,7 +440,7 @@ export async function collectTakomiStats(opts = {}) {
   const topSessions = [...sessionRows].sort((a,b)=>(b.activeMs||0)-(a.activeMs||0) || b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
   const topTasks = [...taskRows].sort((a,b)=>taskDuration(b)-taskDuration(a) || b.toolCalls-a.toolCalls).slice(0, 20);
   const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, statsConfigFile: localConfig.configFile || '', totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, statsConfigFiles: localConfig.configFiles || [], totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -598,7 +661,9 @@ function renderFullList(title, rows, renderRow, limit = 20) {
 
 function renderSourceDiagnostics(stats) {
   const lines = ['\n' + pc.bold(pc.magenta('Takomi Stats'))];
-  if (stats.statsConfigFile) lines.push('  ' + pc.dim(`Local config: ${stats.statsConfigFile}`));
+  if (stats.statsConfigFiles?.length) {
+    lines.push('  ' + pc.dim(`Local config: ${stats.statsConfigFiles.map(file => truncateMiddle(file, 54)).join(' · ')}`));
+  }
   lines.push(renderTable('Sources', stats.bySource, [
     { width: 22, align: 'left', get: r => pc.white(r.key) },
     { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
