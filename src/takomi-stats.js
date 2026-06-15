@@ -160,7 +160,9 @@ function pushTask(taskRows, task) {
 }
 
 async function scanPiSessions(root, source, events, sessionRows = [], taskRows = []) {
+  let scannedFiles = 0;
   for (const file of await files(root)) {
+    scannedFiles += 1;
     let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null, currentTaskTracker = null;
     const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [] };
     const rowTracker = createActivityTracker();
@@ -261,6 +263,7 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
     row.activeMs = activeDuration(rowTracker.intervals);
     if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
   }
+  return scannedFiles;
 }
 
 async function scanRunHistory(file) {
@@ -271,20 +274,73 @@ async function scanRunHistory(file) {
   return runs;
 }
 
+function expandHome(input, home = os.homedir()) {
+  const value = String(input || '').trim();
+  if (!value) return '';
+  if (value === '~') return home;
+  if (value.startsWith(`~${path.sep}`) || value.startsWith('~/') || value.startsWith('~\\')) return path.join(home, value.slice(2));
+  return value;
+}
+
+function splitPathList(value, home = os.homedir()) {
+  const values = Array.isArray(value) ? value : [value];
+  const out = [];
+  const delimiterPattern = path.delimiter === ';' ? /[;,]/g : /[:,]/g;
+  for (const item of values) {
+    if (!item) continue;
+    for (const raw of String(item).split(delimiterPattern)) {
+      const expanded = expandHome(raw, home);
+      if (expanded) out.push(path.resolve(expanded));
+    }
+  }
+  return out;
+}
+
+function uniqByPath(rows, field = 'root') {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = path.resolve(row[field] || row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
   const rawEvents = [], rawSessions = [], rawTasks = [];
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
-  await scanPiSessions(globalSessions, 'pi-global', rawEvents, rawSessions, rawTasks);
-  if (projectSessions !== globalSessions) await scanPiSessions(projectSessions, 'pi-project', rawEvents, rawSessions, rawTasks);
-  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions, rawTasks);
+  const extraSessionRoots = splitPathList(opts.sessionsRoot || opts.sessionRoots || process.env.TAKOMI_STATS_SESSION_ROOTS, home);
+  const sessionSources = uniqByPath([
+    { source: 'pi-global', root: globalSessions, default: true },
+    ...(projectSessions !== globalSessions ? [{ source: 'pi-project', root: projectSessions, default: true }] : []),
+    { source: 'takomi-project', root: path.resolve(path.join(cwd, '.pi', 'takomi')), default: true },
+    ...extraSessionRoots.map((root, index) => ({ source: `extra-session-${index + 1}`, root, default: false })),
+  ]);
+  const sourceRoots = [];
+  for (const source of sessionSources) {
+    const present = await exists(source.root);
+    const filesScanned = present ? await scanPiSessions(source.root, source.source, rawEvents, rawSessions, rawTasks) : 0;
+    sourceRoots.push({ ...source, exists: present, files: filesScanned });
+  }
   const sinceDay = parseSince(opts.since);
   const events = rawEvents.filter(e => !sinceDay || e.day >= sinceDay);
   const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
   const taskRows = rawTasks.filter(t => !sinceDay || dayOf(t.end || t.start) >= sinceDay);
-  const runs = await scanRunHistory(path.join(home, '.pi', 'agent', 'run-history.jsonl'));
+  const runHistoryFiles = uniqByPath([
+    { file: path.resolve(path.join(home, '.pi', 'agent', 'run-history.jsonl')), default: true },
+    ...splitPathList(opts.runHistory || process.env.TAKOMI_STATS_RUN_HISTORY, home).map((file) => ({ file, default: false })),
+  ], 'file');
+  const runs = [];
+  const runHistorySources = [];
+  for (const entry of runHistoryFiles) {
+    const present = await exists(entry.file);
+    const fileRuns = present ? await scanRunHistory(entry.file) : [];
+    runs.push(...fileRuns);
+    runHistorySources.push({ ...entry, exists: present, runs: fileRuns.length });
+  }
   const byDay = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
   let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
   for (const s of sessionRows) { totals.toolCalls += s.toolCalls; totals.turns += s.turns; }
@@ -304,7 +360,7 @@ export async function collectTakomiStats(opts = {}) {
   const topSessions = [...sessionRows].sort((a,b)=>(b.activeMs||0)-(a.activeMs||0) || b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
   const topTasks = [...taskRows].sort((a,b)=>taskDuration(b)-taskDuration(a) || b.toolCalls-a.toolCalls).slice(0, 20);
   const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -523,10 +579,39 @@ function renderFullList(title, rows, renderRow, limit = 20) {
   return lines.join('\n');
 }
 
+function renderSourceDiagnostics(stats) {
+  const lines = ['\n' + pc.bold(pc.magenta('Takomi Stats'))];
+  lines.push(renderTable('Sources', stats.bySource, [
+    { width: 22, align: 'left', get: r => pc.white(r.key) },
+    { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+    { width: 14, align: 'right', get: r => pc.dim(r.events + ' events') },
+  ]));
+  if (stats.sourceRoots?.length) {
+    lines.push('');
+    lines.push(renderTable('Checked Session Roots', stats.sourceRoots, [
+      { width: 18, align: 'left', get: r => pc.white(r.source) },
+      { width: 8, align: 'right', get: r => pc.cyan(String(r.files || 0)) },
+      { width: 8, align: 'left', get: r => pc.dim(r.exists ? 'files' : 'missing') },
+      { width: 48, align: 'left', get: r => pc.dim(truncateMiddle(r.root, 48)) },
+    ]));
+  }
+  if (stats.runHistorySources?.length) {
+    lines.push('');
+    lines.push(renderTable('Checked Run History', stats.runHistorySources, [
+      { width: 8, align: 'right', get: r => pc.cyan(String(r.runs || 0)) },
+      { width: 8, align: 'left', get: r => pc.dim(r.exists ? 'runs' : 'missing') },
+      { width: 58, align: 'left', get: r => pc.dim(truncateMiddle(r.file, 58)) },
+    ]));
+  }
+  lines.push('\n' + pc.dim('Privacy: metadata only · no raw prompts or transcripts'));
+  return lines.join('\n');
+}
+
 function renderFocusedView(stats, opts = {}) {
   const view = opts.view;
   const limit = opts.limit || 20;
   if (!view || view === 'overview') return null;
+  if (view === 'sources') return renderSourceDiagnostics(stats);
   if (view === 'projects-full' || view === 'project-full') return renderFullList('Top Projects — Full Names', stats.byProject, (r, i) => [
     `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.key)}`,
     `      ${pc.cyan(fmtTokens(r.total))}  ${pc.dim(fmtMoney(r.cost))}  ${pc.dim(r.events + ' calls')}`,
@@ -718,6 +803,20 @@ function renderTakomiStatsOverview(stats, opts = {}) {
 
   lines.push(renderProfileCard(stats, { width: W, topModel, peak, streaks, cacheRatio }));
   if (stats.since) lines.push('  ' + pc.dim(`Since: ${stats.since}`));
+
+  if (!stats.totals.events && !stats.sessions && !stats.runs?.length) {
+    lines.push('');
+    lines.push(sectionTitle('No stats found yet', 80));
+    lines.push('  ' + pc.white('Takomi did not find Pi session metadata in the default locations.'));
+    lines.push('  ' + pc.dim('Checked ~/.pi/agent/sessions, project .pi/agent/sessions, and project .pi/takomi.'));
+    lines.push('  ' + pc.dim('Use `takomi stats sources` for diagnostics or `--sessions-root` for custom/private roots.'));
+    lines.push('');
+    lines.push('  ' + pc.dim(hrule(W - 4)));
+    lines.push('  ' + pc.dim('Privacy: metadata only · no raw prompts or transcripts'));
+    lines.push('  ' + pc.dim('Costs are estimates when provider prices are unknown.'));
+    lines.push('');
+    return lines.join('\n');
+  }
 
   lines.push('');
   lines.push(sectionTitle('Activity', 80));

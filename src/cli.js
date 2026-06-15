@@ -1144,6 +1144,8 @@ program
   .option('--full', 'Print the detailed debug-style stats view')
   .option('--home <path>', 'Override home directory for Pi history scanning')
   .option('--cwd <path>', 'Override project directory for project-local stats')
+  .option('--sessions-root <paths>', 'Additional session JSONL root(s), separated by ; on Windows or : on POSIX')
+  .option('--run-history <path>', 'Additional subagent run-history JSONL file')
   .option('--since <date|range>', 'Filter from YYYY-MM-DD or relative range like 7d, 4w, 3m')
   .option('--limit <n>', 'Rows per section', '8')
   .action((view, options) => printTakomiStats({ ...options, view, limit: Number(options.limit) || 8 }));
