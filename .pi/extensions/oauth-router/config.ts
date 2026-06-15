@@ -9,6 +9,10 @@ export const CONFIG_PATH = join(DATA_ROOT, "config.json");
 export const CREDENTIALS_PATH = join(DATA_ROOT, "credentials.json");
 export const STATE_PATH = join(DATA_ROOT, "state.json");
 
+const LEGACY_CODEX_CONTEXT_WINDOW = 272000;
+const SAFE_CODEX_CONTEXT_WINDOW = 240000;
+const CODEX_MODEL_IDS = new Set(["gpt-5.1", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5"]);
+
 const DEFAULT_MODELS: RouterModelConfig[] = [
   {
     id: "gpt-4o",
@@ -43,7 +47,7 @@ const DEFAULT_MODELS: RouterModelConfig[] = [
     reasoning: true,
     input: ["text", "image"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 272000,
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
     maxTokens: 128000,
   },
   {
@@ -52,7 +56,7 @@ const DEFAULT_MODELS: RouterModelConfig[] = [
     reasoning: true,
     input: ["text", "image"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 272000,
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
     maxTokens: 128000,
   },
   {
@@ -61,7 +65,7 @@ const DEFAULT_MODELS: RouterModelConfig[] = [
     reasoning: true,
     input: ["text", "image"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 272000,
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
     maxTokens: 128000,
   },
   {
@@ -70,7 +74,7 @@ const DEFAULT_MODELS: RouterModelConfig[] = [
     reasoning: true,
     input: ["text", "image"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 272000,
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
     maxTokens: 128000,
   },
 ];
@@ -210,7 +214,12 @@ function mergeModelConfigs(candidateModels: RouterModelConfig[] | undefined): Ro
     const previous = merged.get(model.id) ?? ({} as RouterModelConfig);
     merged.set(model.id, { ...previous, ...deepClone(model), id: model.id });
   }
-  return Array.from(merged.values());
+  return Array.from(merged.values()).map((model) => {
+    if (CODEX_MODEL_IDS.has(model.id) && model.contextWindow === LEGACY_CODEX_CONTEXT_WINDOW) {
+      return { ...model, contextWindow: SAFE_CODEX_CONTEXT_WINDOW };
+    }
+    return model;
+  });
 }
 
 function mergeUpstreamConfigs(candidateUpstreams: RouterUpstreamConfig[] | undefined): RouterUpstreamConfig[] {

@@ -11,3 +11,5 @@
    takomi doctor
    takomi --version
    takomi
+
+npm install -g

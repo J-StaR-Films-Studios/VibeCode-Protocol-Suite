@@ -124,6 +124,20 @@ function isClientNetworkFailure(lower: string): boolean {
   ].some((token) => lower.includes(token));
 }
 
+function isContextOverflowFailure(lower: string): boolean {
+  return [
+    "context_length_exceeded",
+    "context length exceeded",
+    "context window exceeded",
+    "exceeds the context window",
+    "exceeds the model's maximum context length",
+    "exceeds model's maximum context length",
+    "maximum context length",
+    "too many tokens",
+    "token limit exceeded",
+  ].some((token) => lower.includes(token));
+}
+
 function classifyFailure(
   status: number | undefined,
   headers: Record<string, string>,
@@ -135,6 +149,10 @@ function classifyFailure(
 
   if (status === 429 || lower.includes("rate limit") || lower.includes("too many requests")) {
     return { kind: "rate-limit", status: status ?? 429, retryAfterMs, message };
+  }
+
+  if (isContextOverflowFailure(lower)) {
+    return { kind: "context-overflow", status, message };
   }
 
   if (status === 401 || status === 403 || lower.includes("unauthorized") || lower.includes("forbidden")) {
@@ -461,6 +479,11 @@ export class RouterRuntime {
           this.state.recordClientNetworkFailure(accountId, failure.status, failure.message);
         }
         break;
+      case "context-overflow":
+        // Context-size failures are request-level, not account-health failures.
+        // Do not cool down or quarantine accounts; Pi needs the overflow error surfaced
+        // directly so its built-in compaction recovery can compact and retry.
+        break;
       case "fatal":
         this.state.markTransientFailure(accountId, this.config.transientPenaltyMs, failure.status ?? 500, failure.message);
         break;
@@ -567,6 +590,12 @@ export class RouterRuntime {
         }
 
         const failure = classifyFailure(responseStatus, responseHeaders, message, this.config);
+
+        if (failure.kind === "context-overflow") {
+          outerStream.push(event);
+          return { completed: true, emittedMeaningfulOutput, failure };
+        }
+
         this.markFailure(selection.account.id, failure);
 
         if (!emittedMeaningfulOutput) {
