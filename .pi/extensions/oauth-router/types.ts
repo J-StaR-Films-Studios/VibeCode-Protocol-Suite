@@ -213,7 +213,7 @@ export interface DelegateSelection {
 }
 
 export interface FailureClassification {
-  kind: "rate-limit" | "auth" | "transient" | "client-network" | "fatal";
+  kind: "rate-limit" | "auth" | "transient" | "client-network" | "context-overflow" | "fatal";
   status?: number;
   retryAfterMs?: number;
   message: string;
