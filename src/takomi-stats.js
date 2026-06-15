@@ -306,13 +306,29 @@ function uniqByPath(rows, field = 'root') {
   });
 }
 
+async function readStatsLocalConfig(cwd, home, explicitPath) {
+  const candidates = explicitPath
+    ? [path.resolve(expandHome(explicitPath, home))]
+    : [path.join(cwd, '.takomi-stats.local.json')];
+  for (const file of candidates) {
+    if (!(await exists(file))) continue;
+    const parsed = safeJson(await fs.readFile(file, 'utf8').catch(() => ''));
+    if (parsed && typeof parsed === 'object') return { ...parsed, configFile: file };
+  }
+  return {};
+}
+
 export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
+  const localConfig = await readStatsLocalConfig(cwd, home, opts.statsConfig || process.env.TAKOMI_STATS_CONFIG);
   const rawEvents = [], rawSessions = [], rawTasks = [];
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
-  const extraSessionRoots = splitPathList(opts.sessionsRoot || opts.sessionRoots || process.env.TAKOMI_STATS_SESSION_ROOTS, home);
+  const extraSessionRoots = [
+    ...splitPathList(localConfig.sessionsRoot || localConfig.sessionRoots, home),
+    ...splitPathList(opts.sessionsRoot || opts.sessionRoots || process.env.TAKOMI_STATS_SESSION_ROOTS, home),
+  ];
   const sessionSources = uniqByPath([
     { source: 'pi-global', root: globalSessions, default: true },
     ...(projectSessions !== globalSessions ? [{ source: 'pi-project', root: projectSessions, default: true }] : []),
@@ -331,6 +347,7 @@ export async function collectTakomiStats(opts = {}) {
   const taskRows = rawTasks.filter(t => !sinceDay || dayOf(t.end || t.start) >= sinceDay);
   const runHistoryFiles = uniqByPath([
     { file: path.resolve(path.join(home, '.pi', 'agent', 'run-history.jsonl')), default: true },
+    ...splitPathList(localConfig.runHistory || localConfig.runHistoryFiles, home).map((file) => ({ file, default: false })),
     ...splitPathList(opts.runHistory || process.env.TAKOMI_STATS_RUN_HISTORY, home).map((file) => ({ file, default: false })),
   ], 'file');
   const runs = [];
@@ -360,7 +377,7 @@ export async function collectTakomiStats(opts = {}) {
   const topSessions = [...sessionRows].sort((a,b)=>(b.activeMs||0)-(a.activeMs||0) || b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
   const topTasks = [...taskRows].sort((a,b)=>taskDuration(b)-taskDuration(a) || b.toolCalls-a.toolCalls).slice(0, 20);
   const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, statsConfigFile: localConfig.configFile || '', totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -581,6 +598,7 @@ function renderFullList(title, rows, renderRow, limit = 20) {
 
 function renderSourceDiagnostics(stats) {
   const lines = ['\n' + pc.bold(pc.magenta('Takomi Stats'))];
+  if (stats.statsConfigFile) lines.push('  ' + pc.dim(`Local config: ${stats.statsConfigFile}`));
   lines.push(renderTable('Sources', stats.bySource, [
     { width: 22, align: 'left', get: r => pc.white(r.key) },
     { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },

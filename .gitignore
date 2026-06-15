@@ -3,6 +3,7 @@ node_modules
 dist
 coverage
 .env
+.takomi-stats.local.json
 .idea
 .vscode
 *.log

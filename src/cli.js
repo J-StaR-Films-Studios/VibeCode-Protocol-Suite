@@ -1146,6 +1146,7 @@ program
   .option('--cwd <path>', 'Override project directory for project-local stats')
   .option('--sessions-root <paths>', 'Additional session JSONL root(s), separated by ; on Windows or : on POSIX')
   .option('--run-history <path>', 'Additional subagent run-history JSONL file')
+  .option('--stats-config <path>', 'Local stats config JSON file (defaults to .takomi-stats.local.json when present)')
   .option('--since <date|range>', 'Filter from YYYY-MM-DD or relative range like 7d, 4w, 3m')
   .option('--limit <n>', 'Rows per section', '8')
   .action((view, options) => printTakomiStats({ ...options, view, limit: Number(options.limit) || 8 }));
