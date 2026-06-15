@@ -72,28 +72,34 @@ function activeDuration(intervals) {
   return mergeIntervals(intervals).reduce((total, interval) => total + (interval.end - interval.start), 0);
 }
 function createActivityTracker(sessionStart) {
-  return { intervals: [], lastActivityAt: sessionStart ?? 0, toolStarts: new Map() };
+  return { intervals: [], lastActivityAt: timestampMs(sessionStart) ?? 0, toolStarts: new Map() };
 }
 function noteActivity(tracker, timestamp, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
+  const current = timestampMs(timestamp);
+  if (current === null) return;
   const previous = tracker.lastActivityAt;
-  const delta = timestamp - previous;
-  if (delta > 0 && delta <= maxGapMs) tracker.intervals.push({ start: previous, end: timestamp });
-  tracker.lastActivityAt = Math.max(previous, timestamp);
+  const delta = current - previous;
+  if (previous > 0 && delta > 0 && delta <= maxGapMs) tracker.intervals.push({ start: previous, end: current });
+  tracker.lastActivityAt = Math.max(previous, current);
 }
 function noteToolStart(tracker, toolCallId, timestamp, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
-  noteActivity(tracker, timestamp, maxGapMs);
-  if (toolCallId) tracker.toolStarts.set(toolCallId, timestamp);
+  const current = timestampMs(timestamp);
+  if (current === null) return;
+  noteActivity(tracker, current, maxGapMs);
+  if (toolCallId) tracker.toolStarts.set(toolCallId, current);
 }
 function noteToolEnd(tracker, toolCallId, timestamp, maxGapMs = ACTIVE_GAP_THRESHOLD_MS) {
+  const current = timestampMs(timestamp);
+  if (current === null) return;
   const start = toolCallId ? tracker.toolStarts.get(toolCallId) : undefined;
   if (start !== undefined) {
     noteActivity(tracker, start, maxGapMs);
-    tracker.intervals.push({ start, end: timestamp });
+    if (current > start) tracker.intervals.push({ start, end: current });
     tracker.toolStarts.delete(toolCallId);
   } else {
-    noteActivity(tracker, timestamp, maxGapMs);
+    noteActivity(tracker, current, maxGapMs);
   }
-  tracker.lastActivityAt = Math.max(tracker.lastActivityAt, timestamp);
+  tracker.lastActivityAt = Math.max(tracker.lastActivityAt, current);
 }
 function parseSince(value) {
   if (!value) return null;
@@ -178,6 +184,20 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         const ts = obj.timestamp || msg.timestamp || '';
         if (!ts) continue;
 
+        const msgProvider = msg.provider || msg.api || provider;
+        const msgModel = msg.model || msg.modelId || model;
+        provider = msgProvider || provider;
+        model = msgModel || model;
+
+        const u = msg.usage;
+        if (u) {
+          const input = +u.input || +u.inputTokens || 0;
+          const cache = +u.cacheRead || +u.cachedInput || +u.cache_read || 0;
+          const output = +u.output || +u.outputTokens || 0;
+          const total = +u.totalTokens || +u.total || (input + cache + output);
+          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, output, total, cost: cost(msgModel, input, cache, output, true) });
+        }
+
         if (msg.role === 'user') {
           pushTask(taskRows, currentTask);
           currentTask = null;
@@ -228,8 +248,6 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         if (currentTask) currentTask.end = ts;
       }
 
-      const u = msg && msg.usage;
-      if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: +u.input||0, cache: +u.cacheRead||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, true) });
     }
     pushTask(taskRows, currentTask);
     if (currentTaskTracker && currentTask) {
