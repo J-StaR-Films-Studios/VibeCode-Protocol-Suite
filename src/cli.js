@@ -1141,6 +1141,7 @@ program
   .command('stats [view]')
   .description('Show Takomi token, model, project, session, tool, and subagent usage stats')
   .option('--json', 'Print machine-readable JSON')
+  .option('--full', 'Print the detailed debug-style stats view')
   .option('--home <path>', 'Override home directory for Pi history scanning')
   .option('--cwd <path>', 'Override project directory for project-local stats')
   .option('--since <date|range>', 'Filter from YYYY-MM-DD or relative range like 7d, 4w, 3m')

@@ -11,6 +11,7 @@ const pc = {
   gray: ansi(90, 39),
   cyan: ansi(36, 39),
   blue: ansi(34, 39),
+  yellow: ansi(33, 39),
   magenta: ansi(35, 39),
 };
 
@@ -38,7 +39,10 @@ function dayOf(ts) { return typeof ts === 'string' && ts.length >= 10 ? ts.slice
 function add(map, key, patch) { const row = map.get(key) || { key, input: 0, cache: 0, output: 0, total: 0, cost: 0, events: 0 }; for (const [k,v] of Object.entries(patch)) row[k] = (row[k] || 0) + (Number(v) || 0); if (!Object.prototype.hasOwnProperty.call(patch, 'events')) row.events += 1; map.set(key, row); }
 function cost(model, input, cache, output, additiveCache = true) { const p = PRICES[model]; if (!p) return 0; const nonCached = additiveCache ? input : Math.max(input - cache, 0); return (nonCached*p[0] + cache*p[1] + output*p[2]) / 1_000_000; }
 function fmtTokens(n) { if (n >= 1e9) return `${(n/1e9).toFixed(2)}B`; if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
+function fmtCount(n) { if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
+function fmtPercent(n) { const value = Number(n) || 0; return `${(value * 100).toFixed(value >= 0.995 ? 1 : 0)}%`; }
 function fmtMoney(n) { return `$${(n || 0).toFixed(n > 100 ? 0 : 2)}`; }
+function fmtMoneyShort(n) { if (n >= 1000) return `$${(n/1000).toFixed(n >= 10_000 ? 0 : 1)}K`; return fmtMoney(n); }
 function ms(n) { if (!n) return '-'; const s = Math.round(n/1000); if (s < 60) return `${s}s`; const m = Math.floor(s/60); if (m < 60) return `${m}m ${s%60}s`; const h = Math.floor(m/60); return `${h}h ${m%60}m`; }
 const ACTIVE_GAP_THRESHOLD_MS = 15 * 60 * 1000;
 function timestampMs(value) {
@@ -424,6 +428,43 @@ function center(text, width) {
   return ' '.repeat(pad) + text;
 }
 
+function truncateMiddle(text, width) {
+  const value = String(text || '');
+  if (visLen(value) <= width) return value;
+  if (width <= 1) return '…';
+  const keep = width - 1;
+  const left = Math.ceil(keep / 2);
+  const right = Math.floor(keep / 2);
+  return value.slice(0, left) + '…' + value.slice(-right);
+}
+
+function shortDate(day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ''))) return day || '-';
+  const d = new Date(`${day}T00:00:00Z`);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+function cleanProjectName(value, width = 36) {
+  let label = String(value || 'unknown').replace(/\\/g, '/').split('/').filter(Boolean).pop() || String(value || 'unknown');
+  label = label.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+  label = label.replace(/^.*?\b20\d{2}\s+\d{2}\s+\d{2}\s*/u, '').trim() || label;
+  return truncateMiddle(label, width);
+}
+
+function bar(value, max, width = 18) {
+  const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const exact = ratio * width;
+  if (value <= 0 || exact <= 0) return pc.dim('░'.repeat(width));
+  if (exact < 1) return pc.blue('▏') + pc.dim('░'.repeat(Math.max(0, width - 1)));
+  const filled = Math.max(1, Math.round(exact));
+  return pc.blue('█'.repeat(filled)) + pc.dim('░'.repeat(Math.max(0, width - filled)));
+}
+
+function sectionTitle(title, width) {
+  return ['  ' + pc.bold(pc.cyan(title)), '  ' + pc.dim(hrule(width - 4))].join('\n');
+}
+
 function statCard(value, label, color = pc.white) {
   return { value: String(value), label, color };
 }
@@ -563,7 +604,164 @@ function renderFocusedView(stats, opts = {}) {
 }
 
 // ── Main Render ─────────────────────────────────────────────────────────────
-export function renderTakomiStats(stats, opts = {}) {
+function renderProfileCard(stats, { width, topModel, peak, streaks, cacheRatio }) {
+  const user = process.env.USERNAME || process.env.USER || 'local';
+  const outer = Math.max(68, Math.min(width - 2, 84));
+  const inner = outer - 2;
+  const line = (left, right = '') => {
+    const leftText = String(left || '');
+    const rightText = String(right || '');
+    const gap = Math.max(1, inner - 2 - visLen(leftText) - visLen(rightText));
+    return `  │ ${ansiPadEnd(leftText + ' '.repeat(gap) + rightText, inner - 2)} │`;
+  };
+  const solo = (text) => `  │ ${ansiPadEnd(text, inner - 2)} │`;
+  const updated = shortDate(stats.generatedAt.slice(0, 10));
+  const metricLine = [
+    `${pc.bold(pc.blue(fmtTokens(stats.totals.total)))} Tokens`,
+    `${pc.bold(pc.cyan(fmtPercent(cacheRatio)))} Cached`,
+    `${pc.bold(pc.yellow(fmtMoneyShort(stats.totals.cost)))} Est. Cost`,
+    `${pc.bold(pc.white(String(stats.sessions)))} Sessions`,
+    `${pc.bold(pc.blue(fmtCount(stats.totals.toolCalls)))} Tool Calls`,
+  ].join(pc.dim('  '));
+  const contextLine = [
+    `Peak: ${peak ? `${fmtTokens(peak.total)} on ${shortDate(peak.key)}` : '-'}`,
+    `Top model: ${topModel}`,
+    `Streak: ${streaks.current}d / ${streaks.longest}d`,
+  ].join('        ');
+  return [
+    `  ╭${hrule(inner)}╮`,
+    line(pc.bold(pc.white('Takomi')), pc.dim(`@${user}`)),
+    line(pc.dim('Coding activity dashboard'), pc.dim(`Updated ${updated}`)),
+    `  ├${hrule(inner)}┤`,
+    solo(metricLine),
+    solo(pc.dim(contextLine)),
+    `  ╰${hrule(inner)}╯`,
+  ].join('\n');
+}
+
+function renderHighlights(stats, { peak, longestSession, longestTask, cacheRatio }) {
+  const topProject = stats.byProject[0] || null;
+  const rows = [
+    ['Peak day', peak ? `${fmtTokens(peak.total)} tokens · ${shortDate(peak.key)}` : '-'],
+    ['Longest session', longestSession ? `${ms(sessionDuration(longestSession))} · ${longestSession.turns} turns · ${longestSession.toolCalls} tools` : '-'],
+    ['Longest turn', longestTask ? `${ms(taskDuration(longestTask))} · ${longestTask.toolCalls} tools` : '-'],
+    ['Top project', topProject ? `${cleanProjectName(topProject.key, 34)} · ${fmtTokens(topProject.total)}` : '-'],
+    ['Cache efficiency', `${fmtPercent(cacheRatio)} · ${fmtTokens(stats.totals.cache)} cached`],
+  ];
+  const labelW = 16;
+  return [
+    sectionTitle('Highlights', 80),
+    ...rows.map(([label, value]) => `  ${pc.dim(ansiPadEnd(label, labelW))} ${pc.white(value)}`),
+  ].join('\n');
+}
+
+function renderSignals(stats) {
+  const topModel = stats.byModel[0] || null;
+  const topProject = stats.byProject[0] || null;
+  const readCalls = stats.byTool.find(t => t.key === 'read')?.events || 0;
+  const bashCalls = stats.byTool.find(t => t.key === 'bash')?.events || 0;
+  const topAgent = stats.byAgent[0] || null;
+  const lines = [];
+  if (topProject) lines.push(`Heaviest project: ${cleanProjectName(topProject.key, 42)} at ${fmtTokens(topProject.total)} tokens`);
+  if (topModel) lines.push(`Dominant model: ${topModel.key} handles ${fmtPercent(stats.totals.total ? topModel.total / stats.totals.total : 0)} of token volume`);
+  if (readCalls || bashCalls) lines.push(`Tool-heavy behavior: read + bash = ${fmtCount(readCalls + bashCalls)} calls`);
+  if (topAgent) lines.push(`Most-used subagent: ${topAgent.key} with ${fmtCount(topAgent.events)} runs`);
+  if (!lines.length) return '';
+  return [sectionTitle('Signals', 80), ...lines.slice(0, 4).map(line => `  ${pc.dim('•')} ${pc.white(line)}`)].join('\n');
+}
+
+function renderRankedBars(title, rows, { name, value, right, limit = 5, width = 18 }) {
+  const visible = rows.slice(0, limit);
+  if (!visible.length) return '';
+  const max = Math.max(1, ...visible.map(value));
+  const nameW = 32;
+  const lines = [sectionTitle(title, 80)];
+  for (const row of visible) {
+    const rowName = ansiPadEnd(pc.white(name(row)), nameW);
+    const amount = ansiPadStart(pc.cyan(fmtTokens(value(row))), 9);
+    const suffix = right ? `  ${pc.dim(right(row))}` : '';
+    lines.push(`  ${rowName} ${amount}  ${bar(value(row), max, width)}${suffix}`);
+  }
+  return lines.join('\n');
+}
+
+function renderCompactSessions(stats, limit = 4) {
+  const rows = stats.topSessions.slice(0, limit);
+  if (!rows.length) return '';
+  const lines = [sectionTitle('Sessions', 80)];
+  for (const row of rows) {
+    lines.push(`  ${pc.dim(sessionDay(row))}  ${ansiPadEnd(pc.white(cleanProjectName(row.project || row.cwd || row.key, 34)), 34)}  ${ansiPadStart(pc.cyan(ms(sessionDuration(row))), 8)}  ${pc.dim(`${row.turns} turns · ${row.toolCalls} tools`)}`);
+  }
+  return lines.join('\n');
+}
+
+function renderCompactTools(stats, limit = 6) {
+  const tools = stats.byTool.slice(0, limit);
+  const agents = stats.byAgent.slice(0, 4);
+  if (!tools.length && !agents.length) return '';
+  const lines = [sectionTitle('Tools / Subagents', 80)];
+  if (tools.length) lines.push(`  ${pc.dim('Tools')}      ${tools.map(t => `${pc.white(t.key)} ${pc.cyan(fmtCount(t.events))}`).join(pc.dim('  ·  '))}`);
+  if (agents.length) lines.push(`  ${pc.dim('Subagents')}  ${agents.map(a => `${pc.white(a.key)} ${pc.cyan(fmtCount(a.events))}`).join(pc.dim('  ·  '))}`);
+  return lines.join('\n');
+}
+
+function renderTakomiStatsOverview(stats, opts = {}) {
+  const W = Math.min(process.stdout.columns || 80, 88);
+  const topModel = stats.byModel[0]?.key || 'unknown';
+  const peak = stats.byDay.reduce((a,b) => b.total > (a?.total||0) ? b : a, null);
+  const streaks = calcStreaks(stats.byDay);
+  const longestSession = stats.topSessions[0] || null;
+  const longestTask = stats.topTasks?.[0] || null;
+  const cacheRatio = stats.totals.total ? stats.totals.cache / stats.totals.total : 0;
+  const limit = opts.limit || 5;
+  const lines = [''];
+
+  lines.push(renderProfileCard(stats, { width: W, topModel, peak, streaks, cacheRatio }));
+  if (stats.since) lines.push('  ' + pc.dim(`Since: ${stats.since}`));
+
+  lines.push('');
+  lines.push(sectionTitle('Activity', 80));
+  lines.push(heatmapGrid(stats.byDay));
+
+  lines.push('');
+  lines.push(renderHighlights(stats, { peak, longestSession, longestTask, cacheRatio }));
+
+  const signals = renderSignals(stats);
+  if (signals) { lines.push(''); lines.push(signals); }
+
+  lines.push('');
+  lines.push(renderRankedBars('Models', stats.byModel, {
+    limit,
+    name: r => truncateMiddle(r.key, 32),
+    value: r => r.total,
+    right: r => fmtMoneyShort(r.cost),
+  }));
+
+  if (stats.byProject.length) {
+    lines.push('');
+    lines.push(renderRankedBars('Projects', stats.byProject, {
+      limit: Math.min(limit, 6),
+      name: r => cleanProjectName(r.key, 32),
+      value: r => r.total,
+    }));
+  }
+
+  const sessions = renderCompactSessions(stats, Math.min(limit, 5));
+  if (sessions) { lines.push(''); lines.push(sessions); }
+
+  const tools = renderCompactTools(stats, Math.min(limit, 5));
+  if (tools) { lines.push(''); lines.push(tools); }
+
+  lines.push('');
+  lines.push('  ' + pc.dim(hrule(W - 4)));
+  lines.push('  ' + pc.dim('Privacy: metadata only · no raw prompts or transcripts'));
+  lines.push('  ' + pc.dim('Costs are estimates when provider prices are unknown.'));
+  lines.push('  ' + pc.dim('Use `takomi stats --full` for the detailed debug-style view.'));
+  lines.push('');
+  return lines.join('\n');
+}
+
+function renderTakomiStatsFull(stats, opts = {}) {
   const focused = renderFocusedView(stats, opts);
   if (focused) return focused;
   const W = Math.min(process.stdout.columns || 80, 86);
@@ -586,29 +784,30 @@ export function renderTakomiStats(stats, opts = {}) {
 
   // ── Stat Cards Row 1 ─────────────────────────────────────────────────
   const cards1 = [
-    statCard(fmtTokens(stats.totals.total), 'Lifetime Tokens'),
-    statCard(fmtTokens(stats.totals.cache), 'Cache Tokens'),
+    statCard(fmtTokens(stats.totals.total), 'Tokens'),
+    statCard(fmtPercent(stats.totals.total ? stats.totals.cache / stats.totals.total : 0), 'Cache Eff.'),
     statCard(fmtMoney(stats.totals.cost), 'Est. Cost'),
     statCard(String(stats.sessions), 'Sessions'),
     statCard(String(stats.totals.turns), 'Main Turns'),
   ];
 
-  const cardW = Math.floor((W - 4) / cards1.length);
-
-
   function buildCardLines(cards) {
+    const gap = '  ';
+    const cardW = Math.max(10, Math.floor((W - 4 - gap.length * (cards.length - 1)) / cards.length));
     let vStr = '  ';
     let lStr = '  ';
-    for (const c of cards) {
-      const vPad = Math.max(0, Math.floor((cardW - c.value.length) / 2));
-      const lPad = Math.max(0, Math.floor((cardW - c.label.length) / 2));
+    cards.forEach((c, index) => {
+      const value = truncateMiddle(c.value, cardW);
+      const label = truncateMiddle(c.label, cardW);
+      const vPad = Math.max(0, Math.floor((cardW - visLen(value)) / 2));
+      const lPad = Math.max(0, Math.floor((cardW - visLen(label)) / 2));
       const color = c.color || pc.white;
-      const vContent = ' '.repeat(vPad) + pc.bold(color(c.value));
-      const lContent = ' '.repeat(lPad) + pc.dim(color(c.label));
-      // Pad to cardW visible chars
+      const vContent = ' '.repeat(vPad) + pc.bold(color(value));
+      const lContent = ' '.repeat(lPad) + pc.dim(color(label));
       vStr += ansiPadEnd(vContent, cardW);
       lStr += ansiPadEnd(lContent, cardW);
-    }
+      if (index < cards.length - 1) { vStr += gap; lStr += gap; }
+    });
     return [vStr, lStr];
   }
 
@@ -623,8 +822,8 @@ export function renderTakomiStats(stats, opts = {}) {
     statCard(peak ? fmtTokens(peak.total) : '-', 'Peak Day'),
     statCard(topModel, 'Top Model'),
     statCard(String(stats.totals.toolCalls), 'Tool Calls'),
-    statCard(`${streaks.current} days`, 'Current Streak'),
-    statCard(`${streaks.longest} days`, 'Longest Streak'),
+    statCard(`${streaks.current} days`, 'Current'),
+    statCard(`${streaks.longest} days`, 'Best Streak'),
   ];
 
   const [v2, l2] = buildCardLines(cards2);
@@ -634,10 +833,10 @@ export function renderTakomiStats(stats, opts = {}) {
   // ── Duration Cards ────────────────────────────────────────────────────
   lines.push('');
   const cards3 = [
-    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Top Active Session', pc.cyan),
-    statCard(longestSession ? String(longestSession.turns) : '-', 'Turns in Session', pc.cyan),
-    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Active Turn', pc.magenta),
-    statCard(longestTask ? String(longestTask.toolCalls) : '-', 'Tools in Task', pc.magenta),
+    statCard(longestSession ? ms(sessionDuration(longestSession)) : '-', 'Longest Sess', pc.cyan),
+    statCard(longestSession ? String(longestSession.turns) : '-', 'Max Turns', pc.cyan),
+    statCard(longestTask ? ms(taskDuration(longestTask)) : '-', 'Longest Turn', pc.magenta),
+    statCard(longestTask ? String(longestTask.toolCalls) : '-', 'Max Tools', pc.magenta),
     statCard(stats.mostSubagentsSession ? String(stats.mostSubagentsSession.subagentCalls) : '0', 'Max Subagents', pc.blue),
   ];
   const [v3, l3] = buildCardLines(cards3);
@@ -759,6 +958,14 @@ export function renderTakomiStats(stats, opts = {}) {
   lines.push('');
 
   return lines.join('\n');
+}
+
+export function renderTakomiStats(stats, opts = {}) {
+  const full = opts.full || opts.view === 'full';
+  if (full) return renderTakomiStatsFull(stats, { ...opts, view: opts.view === 'full' ? undefined : opts.view });
+  const focused = renderFocusedView(stats, opts);
+  if (focused) return focused;
+  return renderTakomiStatsOverview(stats, opts);
 }
 
 export async function printTakomiStats(options = {}) {
