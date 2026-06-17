@@ -28,6 +28,7 @@ export type TakomiSubagentToolParams = Partial<TakomiSubagentToolTask> & {
   chain?: TakomiSubagentToolTask[];
   confirmLaunch?: boolean;
   previewOnly?: boolean;
+  clarify?: boolean;
   agentScope?: TakomiAgentScope;
   confirmProjectAgents?: boolean;
   overrideUserBlock?: boolean;

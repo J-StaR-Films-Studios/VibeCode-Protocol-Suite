@@ -44,6 +44,7 @@ const SubagentParameters = Type.Object({
   tasks: Type.Optional(Type.Array(TaskSchema, { description: "Parallel subagent tasks" })),
   confirmLaunch: Type.Optional(Type.Boolean({ description: "Required to launch immediately in manual Takomi launch mode" })),
   previewOnly: Type.Optional(Type.Boolean({ description: "Return the delegation plan without launching" })),
+  clarify: Type.Optional(Type.Boolean({ description: "Show the native pi-subagents TUI to preview/edit before execution. Especially useful for chains; requires an interactive Pi TUI." })),
   chain: Type.Optional(Type.Array(TaskSchema, { description: "Sequential chain of subagent tasks" })),
   agentScope: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("project"), Type.Literal("both")])),
   confirmProjectAgents: Type.Optional(Type.Boolean({ description: "Prompt before running project-local agents. Default: true." })),
@@ -59,6 +60,7 @@ function registerSubagentTool(pi: ExtensionAPI): void {
     promptGuidelines: [
       "Use this tool during orchestration when a specialist should handle a task.",
       "Use tasks for independent parallel work and chain for dependent handoffs with {previous}.",
+      "Set clarify=true when the user asks to preview/edit a subagent run in the native Pi TUI before launch.",
       "Use model, fallbackModels, and thinking only when deliberate; otherwise let the agent/profile defaults apply.",
       "If review sends work back to the same agent, reuse the same conversationId for continuity.",
       "If a launch is blocked, cancelled, paused, or review-gated, do not retry automatically; wait for the user's next prompt. Use overrideUserBlock only after explicit user approval.",

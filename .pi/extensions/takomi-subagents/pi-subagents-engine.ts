@@ -186,7 +186,7 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
     cwd: rootCwd,
     context: "fresh" as const,
     async: false,
-    clarify: false,
+    clarify: params.clarify === true,
     includeProgress: true,
     sessionDir: stableConversationSessionDir(rootCwd, tasks),
   };
