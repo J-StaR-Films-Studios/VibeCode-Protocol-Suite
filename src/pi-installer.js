@@ -1,46 +1,14 @@
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import crypto from 'crypto';
 import pc from 'picocolors';
 import { PATHS } from './utils.js';
 import { getPiGlobalTargets } from './pi-harness.js';
+import { hashPath, copyOwnedTree } from './owned-tree.js';
 
 const HOME = os.homedir();
 const TAKOMI_HOME = path.join(HOME, '.takomi');
 export const PI_MANIFEST_PATH = path.join(TAKOMI_HOME, 'pi-manifest.json');
-
-function sha256(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
-
-async function hashPath(targetPath) {
-  if (!await fs.pathExists(targetPath)) return null;
-  const stat = await fs.stat(targetPath);
-  if (stat.isFile()) {
-    const buf = await fs.readFile(targetPath);
-    return sha256(buf);
-  }
-
-  const entries = [];
-  async function walk(dir, prefix = '') {
-    const names = (await fs.readdir(dir)).sort();
-    for (const name of names) {
-      const full = path.join(dir, name);
-      const rel = path.join(prefix, name).replace(/\\/g, '/');
-      const st = await fs.stat(full);
-      if (st.isDirectory()) {
-        entries.push(`dir:${rel}`);
-        await walk(full, rel);
-      } else {
-        const buf = await fs.readFile(full);
-        entries.push(`file:${rel}:${sha256(buf)}`);
-      }
-    }
-  }
-  await walk(targetPath);
-  return sha256(entries.join('\n'));
-}
 
 async function pathIsSameSymlink(dest, src) {
   try {
@@ -69,7 +37,7 @@ async function copyOwnedDirectory(src, dest) {
   await fs.ensureDir(path.dirname(dest));
   const mode = await prepareOwnedTarget(src, dest);
   if (mode === 'symlink') return hashPath(src);
-  await fs.copy(src, dest, { overwrite: true });
+  await copyOwnedTree(src, dest);
   return hashPath(dest);
 }
 
@@ -77,7 +45,7 @@ async function copyOwnedFile(src, dest) {
   await fs.ensureDir(path.dirname(dest));
   const mode = await prepareOwnedTarget(src, dest);
   if (mode === 'symlink') return hashPath(src);
-  await fs.copy(src, dest, { overwrite: true });
+  await copyOwnedTree(src, dest);
   return hashPath(dest);
 }
 
@@ -96,6 +64,8 @@ export async function writePiInstallManifest(manifest) {
 export async function installPiHarnessAssets(version = 'unknown') {
   const srcRoot = PATHS.pi;
   const targets = getPiGlobalTargets();
+  const previousSettingsHash = await hashPath(targets.settings);
+  const previousRoutingPolicyHash = await hashPath(targets.routingPolicy);
 
   const copied = {};
 
@@ -153,7 +123,9 @@ export async function installPiHarnessAssets(version = 'unknown') {
     owned: copied,
     preserved: {
       settings: targets.settings,
+      settingsHash: previousSettingsHash,
       routingPolicy: targets.routingPolicy,
+      routingPolicyHash: previousRoutingPolicyHash,
       userStateDir: targets.takomi,
     },
   };
@@ -168,6 +140,9 @@ export async function syncPiHarnessAssets(version = 'unknown') {
 
 export async function validatePiHarnessInstall() {
   const targets = getPiGlobalTargets();
+  const manifest = await readPiInstallManifest();
+  const currentSettingsHash = await hashPath(targets.settings);
+  const currentRoutingPolicyHash = await hashPath(targets.routingPolicy);
   return {
     runtime: await fs.pathExists(path.join(targets.extensions, 'takomi-runtime')),
     subagents: await fs.pathExists(path.join(targets.extensions, 'takomi-subagents')),
@@ -180,7 +155,8 @@ export async function validatePiHarnessInstall() {
     readme: await fs.pathExists(path.join(targets.root, 'README.md')),
     core: await fs.pathExists(path.join(path.dirname(targets.root), 'src', 'pi-takomi-core')),
     piSubagentsModule: await fs.pathExists(path.join(targets.root, 'node_modules', 'pi-subagents')),
-    settingsPreserved: !await fs.pathExists(path.join(PATHS.pi, 'settings.json')) || true,
+    settingsPreserved: !manifest || manifest.preserved?.settingsHash === currentSettingsHash,
+    routingPolicyPreserved: !manifest || manifest.preserved?.routingPolicyHash === currentRoutingPolicyHash,
   };
 }
 

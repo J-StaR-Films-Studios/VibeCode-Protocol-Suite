@@ -1,4 +1,5 @@
-import { promises as fs } from 'node:fs';
+import { createReadStream, promises as fs } from 'node:fs';
+import readline from 'node:readline';
 import os from 'os';
 import path from 'path';
 
@@ -167,9 +168,16 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
     const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [] };
     const rowTracker = createActivityTracker();
     const toolCalls = new Map();
-    const text = await fs.readFile(file, 'utf8').catch(() => '');
 
-    for (const line of text.split(/\r?\n/)) {
+    let lines;
+    try {
+      lines = readline.createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+    } catch {
+      continue;
+    }
+
+    try {
+      for await (const line of lines) {
       const obj = safeJson(line); if (!obj) continue;
       if (obj.timestamp) { row.start ||= obj.timestamp; row.end = obj.timestamp; }
       if (obj.type === 'session') { session = obj.id || session; cwd = obj.cwd || cwd; row.key = session; row.session = session; row.cwd = cwd; }
@@ -254,6 +262,9 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         if (currentTask) currentTask.end = ts;
       }
 
+      }
+    } catch {
+      continue;
     }
     pushTask(taskRows, currentTask);
     if (currentTaskTracker && currentTask) {

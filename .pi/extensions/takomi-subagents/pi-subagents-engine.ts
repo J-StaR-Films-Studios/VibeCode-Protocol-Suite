@@ -75,7 +75,7 @@ function resolveTasks(params: TakomiSubagentToolParams): TakomiSubagentToolTask[
       fallbackModels: params.fallbackModels,
       thinking: params.thinking,
       conversationId: params.conversationId,
-      cwd: params.cwd,
+      cwd: undefined,
       checklist: params.checklist,
     }];
   }
@@ -107,6 +107,26 @@ function modelWithThinking(model: string | undefined, thinking: string | undefin
   if (!model || !level || level === "off") return model;
   if (new RegExp(`:(${THINKING_LEVELS.join("|")})$`, "i").test(model)) return model;
   return `${model}:${level}`;
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function resolveRelativeCwd(root: string, value: string | undefined, label: string): string {
+  const lexicalRoot = path.resolve(root);
+  const lexicalCandidate = value
+    ? path.isAbsolute(value) ? path.resolve(value) : path.resolve(lexicalRoot, value)
+    : lexicalRoot;
+  if (!isPathInside(lexicalRoot, lexicalCandidate)) throw new Error(`${label} escapes the current workspace.`);
+
+  const realRoot = fs.realpathSync(lexicalRoot);
+  const realCandidate = fs.realpathSync(lexicalCandidate);
+  const stat = fs.statSync(realCandidate);
+  if (!stat.isDirectory()) throw new Error(`${label} must be a directory inside the current workspace.`);
+  if (!isPathInside(realRoot, realCandidate)) throw new Error(`${label} escapes the current workspace.`);
+  return realCandidate;
 }
 
 function safeConversationSlug(value: string): string {
@@ -164,13 +184,14 @@ function agentNameSet(discoverPiAgents: any, cwd: string): Set<string> {
   return new Set(discoverUnifiedAgents(discoverPiAgents, cwd, "both").agents.map((agent) => agent.name));
 }
 
-function mapSingleTask(task: TakomiSubagentToolTask, names: Set<string>) {
+function mapSingleTask(task: TakomiSubagentToolTask, names: Set<string>, rootCwd: string) {
   const resolvedAgent = resolveAgentName(task.agent, new Map([...names].map((name) => [name, { name } as any])));
   return {
     agent: resolvedAgent,
     task: buildTakomiTaskPrompt({ ...task, agent: resolvedAgent }),
-    cwd: task.cwd,
+    cwd: resolveRelativeCwd(rootCwd, task.cwd, "task.cwd"),
     model: modelWithThinking(task.model, task.thinking),
+    fallbackModels: task.fallbackModels,
     skill: task.skills?.length ? task.skills : undefined,
   };
 }
@@ -193,13 +214,14 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
 
   if (mode === "single") {
     const task = tasks[0]!;
-    const mapped = mapSingleTask(task, names);
+    const mapped = mapSingleTask(task, names, rootCwd);
     return {
       ...base,
       agent: mapped.agent,
       task: mapped.task,
-      cwd: task.cwd ? path.resolve(rootCwd, task.cwd) : rootCwd,
+      cwd: mapped.cwd,
       model: mapped.model,
+      fallbackModels: mapped.fallbackModels,
       skill: mapped.skill,
     };
   }
@@ -207,19 +229,20 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
   if (mode === "parallel") {
     return {
       ...base,
-      tasks: tasks.map((task) => mapSingleTask(task, names)),
+      tasks: tasks.map((task) => mapSingleTask(task, names, rootCwd)),
     };
   }
 
   return {
     ...base,
     chain: tasks.map((task) => {
-      const mapped = mapSingleTask(task, names);
+      const mapped = mapSingleTask(task, names, rootCwd);
       return {
         agent: mapped.agent,
         task: mapped.task,
-        cwd: task.cwd,
+        cwd: mapped.cwd,
         model: mapped.model,
+        fallbackModels: mapped.fallbackModels,
         skill: mapped.skill,
       };
     }),
@@ -264,7 +287,7 @@ export function createTakomiPiSubagentsEngine(pi: ExtensionAPI) {
       onUpdate: ToolUpdate | undefined,
       ctx: ExtensionContext,
     ): Promise<AgentToolResult<Details>> {
-      const rootCwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
+      const rootCwd = resolveRelativeCwd(ctx.cwd, params.cwd, "cwd");
       const { executor, discoverPiAgents } = await getExecutor();
       const subagentParams = toSubagentParams(params, rootCwd, discoverPiAgents);
       return executor.execute(id, subagentParams, signal ?? NEVER_ABORT, onUpdate, ctx);

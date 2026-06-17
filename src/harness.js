@@ -1,8 +1,8 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import crypto from 'crypto';
 import pc from 'picocolors';
+import { hashPath, normalizeOwnedMap, copyOwnedTree } from './owned-tree.js';
 
 // ─── Cross-Platform Home Directory ───────────────────────────────────────────
 const HOME = os.homedir();
@@ -170,44 +170,6 @@ export function printHarnessStatus(detected) {
  * @param {string} label       - Human-readable label for logging
  * @returns {Promise<number>}  - Number of items copied
  */
-function sha256(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
-
-async function hashPath(targetPath) {
-  if (!await fs.pathExists(targetPath)) return null;
-  const stat = await fs.stat(targetPath);
-  if (stat.isFile()) return sha256(await fs.readFile(targetPath));
-
-  const entries = [];
-  async function walk(current, prefix = '') {
-    const names = (await fs.readdir(current)).sort();
-    for (const name of names) {
-      const full = path.join(current, name);
-      const rel = path.join(prefix, name).replace(/\\/g, '/');
-      const st = await fs.stat(full);
-      if (st.isDirectory()) {
-        entries.push(`dir:${rel}`);
-        await walk(full, rel);
-      } else {
-        entries.push(`file:${rel}:${sha256(await fs.readFile(full))}`);
-      }
-    }
-  }
-  await walk(targetPath);
-  return sha256(entries.join('\n'));
-}
-
-function normalizeOwnedMap(value) {
-  if (!value || typeof value !== 'object') return {};
-  const normalized = {};
-  for (const [name, entry] of Object.entries(value)) {
-    if (typeof entry === 'string') normalized[name] = { hash: entry };
-    else if (entry?.hash) normalized[name] = entry;
-  }
-  return normalized;
-}
-
 /**
  * Syncs a directory to a target path. When ownership is supplied, it also
  * prunes previous Takomi-owned items that are no longer in the source while
@@ -263,7 +225,7 @@ export async function syncDirectory(sourcePath, targetPath, label = '', options 
         await fs.remove(dest);
       }
 
-      await fs.copy(src, dest, { overwrite: true });
+      await copyOwnedTree(src, dest);
       nextOwned[item] = {
         hash: await hashPath(dest),
         targetPath: dest,
@@ -285,7 +247,7 @@ export async function syncDirectory(sourcePath, targetPath, label = '', options 
     if (label) {
       console.log(pc.red(`  ✗ ${label}: ${error.message}`));
     }
-    return options.returnDetails ? { copied: 0, pruned: 0, preservedManual: [], preservedModified: [], owned: {} } : 0;
+    return options.returnDetails ? { copied: 0, pruned: 0, preservedManual: [], preservedModified: [], owned: normalizeOwnedMap(options.owned), ok: false, error: error.message } : 0;
   }
 }
 
@@ -329,8 +291,8 @@ export async function syncFile(sourceFile, targetPaths, label = '') {
  * @returns {Promise<{skills: number, workflows: number, yamls: number}>}
  */
 export async function syncToHarness(harness, storePath, options = {}) {
-  const results = { skills: 0, workflows: 0, yamls: 0, owned: { skills: {}, workflows: {} } };
   const harnessOwned = options.owned?.[harness.id] || {};
+  const results = { skills: 0, workflows: 0, yamls: 0, owned: { skills: normalizeOwnedMap(harnessOwned.skills), workflows: normalizeOwnedMap(harnessOwned.workflows) }, ok: true, errors: [] };
   const useOwnership = Boolean(options.useOwnership);
 
   console.log(pc.cyan(`\n  📡 Syncing to ${harness.name}...`));
@@ -352,6 +314,10 @@ export async function syncToHarness(harness, storePath, options = {}) {
     if (useOwnership) {
       results.skills = skillResult.copied;
       results.owned.skills = skillResult.owned;
+      if (skillResult.ok === false) {
+        results.ok = false;
+        results.errors.push(skillResult.error);
+      }
     } else {
       results.skills = skillResult;
     }
@@ -374,6 +340,10 @@ export async function syncToHarness(harness, storePath, options = {}) {
     if (useOwnership) {
       results.workflows = workflowResult.copied;
       results.owned.workflows = workflowResult.owned;
+      if (workflowResult.ok === false) {
+        results.ok = false;
+        results.errors.push(workflowResult.error);
+      }
     } else {
       results.workflows = workflowResult;
     }

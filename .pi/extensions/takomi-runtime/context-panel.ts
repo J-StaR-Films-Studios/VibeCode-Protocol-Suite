@@ -206,6 +206,18 @@ function calculateActiveMs(intervals: ActivityInterval[]): number {
   return mergeIntervals(intervals).reduce((total, interval) => total + (interval.end - interval.start), 0);
 }
 
+function clampActiveMs(activeMs: number, sessionStart: number, now = Date.now()): number {
+  if (!Number.isFinite(activeMs) || activeMs <= 0) return 0;
+  const ageMs = Math.max(0, now - sessionStart);
+  return Math.min(activeMs, ageMs);
+}
+
+function boundedPendingStart(starts: number[], sessionStart: number, now = Date.now()): number | undefined {
+  const valid = starts.filter((start) => Number.isFinite(start) && start <= now);
+  if (valid.length === 0) return undefined;
+  return Math.max(sessionStart, Math.min(...valid));
+}
+
 function formatDisplayPath(filePath: string, cwd?: string): string {
   const normalized = filePath.replace(/^@/, "");
   const absolute = path.isAbsolute(normalized) ? normalized : undefined;
@@ -312,11 +324,13 @@ class ContextPanelComponent implements Component {
     lines.push("");
 
     if (ctx) {
-      const age = formatDuration(Date.now() - state.sessionStart);
+      const now = Date.now();
+      const ageMs = Math.max(0, now - state.sessionStart);
+      const age = formatDuration(ageMs);
       const pendingStarts = Object.values(state.pendingToolStarts ?? {});
-      const pendingStart = pendingStarts.length > 0 ? Math.min(...pendingStarts) : undefined;
-      const activeMs = pendingStart !== undefined ? state.activeMs + Math.max(0, Date.now() - pendingStart) : state.activeMs;
-      const active = formatDuration(activeMs);
+      const pendingStart = boundedPendingStart(pendingStarts, state.sessionStart, now);
+      const rawActiveMs = pendingStart !== undefined ? state.activeMs + Math.max(0, now - pendingStart) : state.activeMs;
+      const active = formatDuration(clampActiveMs(rawActiveMs, state.sessionStart, now));
       lines.push(`${pad}${theme.fg("dim", "Age:")}     ${theme.fg("muted", age)}`);
       lines.push(`${pad}${theme.fg("dim", "Active:")}  ${theme.fg("muted", active)}`);
 
@@ -417,15 +431,18 @@ export class TakomiContextPanel {
     this.requestRender?.();
   }
 
-  private recomputeActiveMs(): void {
-    this.state.activeMs = calculateActiveMs(this.state.activityIntervals);
+  private recomputeActiveMs(now = Date.now()): void {
+    this.state.activeMs = clampActiveMs(calculateActiveMs(this.state.activityIntervals), this.state.sessionStart, now);
   }
 
   private addActivityInterval(start: number, end: number): void {
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
-    this.state.activityIntervals.push({ start, end });
-    this.recomputeActiveMs();
-    this.state.lastActivityAt = Math.max(this.state.lastActivityAt, end);
+    const now = Date.now();
+    const boundedStart = Math.max(this.state.sessionStart, start);
+    const boundedEnd = Math.min(now, end);
+    if (!Number.isFinite(boundedStart) || !Number.isFinite(boundedEnd) || boundedEnd <= boundedStart) return;
+    this.state.activityIntervals.push({ start: boundedStart, end: boundedEnd });
+    this.recomputeActiveMs(now);
+    this.state.lastActivityAt = Math.max(this.state.lastActivityAt, boundedEnd);
   }
 
   private noteActivity(timestamp = Date.now(), allowLongGap = false): void {
@@ -564,10 +581,13 @@ export class TakomiContextPanel {
       lastActivityPoint = ts;
     }
 
+    const now = Date.now();
     next.sessionStart = firstSessionTs ?? next.sessionStart;
-    next.activityIntervals = intervals;
-    next.activeMs = calculateActiveMs(intervals);
-    next.lastActivityAt = lastActivityPoint ?? next.sessionStart;
+    next.activityIntervals = intervals
+      .map((interval) => ({ start: Math.max(next.sessionStart, interval.start), end: Math.min(now, interval.end) }))
+      .filter((interval) => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start);
+    next.activeMs = clampActiveMs(calculateActiveMs(next.activityIntervals), next.sessionStart, now);
+    next.lastActivityAt = Math.min(now, Math.max(next.sessionStart, lastActivityPoint ?? next.sessionStart));
 
     this.state = next;
     this.requestRender?.();
@@ -668,6 +688,10 @@ export function wireContextPanel(pi: ExtensionAPI, panel: TakomiContextPanel): v
   });
 
   pi.on("session_start", (_event, ctx) => {
+    panel.rebuildFromSession(ctx);
+  });
+
+  pi.on("session_compact", (_event, ctx) => {
     panel.rebuildFromSession(ctx);
   });
 

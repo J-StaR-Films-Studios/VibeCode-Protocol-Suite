@@ -1,52 +1,15 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import crypto from 'crypto';
 import pc from 'picocolors';
 import { PATHS } from './utils.js';
 import { CORE_SKILLS } from './skills-catalog.js';
+import { hashPath as hashDirectory, normalizeOwnedMap, copyOwnedTree } from './owned-tree.js';
 
 // ─── Global Store Path ───────────────────────────────────────────────────────
 const HOME = os.homedir();
 export const STORE_PATH = process.env.TAKOMI_STORE_PATH || process.env.TAKOMI_HOME_DIR || path.join(HOME, '.takomi');
 export const MANIFEST_PATH = path.join(STORE_PATH, 'manifest.json');
-
-function sha256(value) {
-    return crypto.createHash('sha256').update(value).digest('hex');
-}
-
-async function hashDirectory(dir) {
-    if (!await fs.pathExists(dir)) return null;
-    const rootStat = await fs.stat(dir);
-    if (rootStat.isFile()) return sha256(await fs.readFile(dir));
-    const entries = [];
-    async function walk(current, prefix = '') {
-        const names = (await fs.readdir(current)).sort();
-        for (const name of names) {
-            const full = path.join(current, name);
-            const rel = path.join(prefix, name).replace(/\\/g, '/');
-            const stat = await fs.stat(full);
-            if (stat.isDirectory()) {
-                entries.push(`dir:${rel}`);
-                await walk(full, rel);
-            } else {
-                entries.push(`file:${rel}:${sha256(await fs.readFile(full))}`);
-            }
-        }
-    }
-    await walk(dir);
-    return sha256(entries.join('\n'));
-}
-
-function normalizeOwnedMap(value) {
-    if (!value || typeof value !== 'object') return {};
-    const normalized = {};
-    for (const [name, entry] of Object.entries(value)) {
-        if (typeof entry === 'string') normalized[name] = { hash: entry };
-        else if (entry?.hash) normalized[name] = entry;
-    }
-    return normalized;
-}
 
 function createDefaultManifest() {
     return {
@@ -250,7 +213,7 @@ export async function populateSkills(mode) {
                 await fs.remove(dest);
             }
 
-            await fs.copy(src, dest, { overwrite: true });
+            await copyOwnedTree(src, dest);
             nextOwned[skill] = {
                 hash: await hashDirectory(dest),
                 targetPath: dest,
@@ -327,7 +290,7 @@ export async function populateWorkflows(mode) {
                 await fs.remove(dest);
             }
 
-            await fs.copy(src, dest, { overwrite: true });
+            await copyOwnedTree(src, dest);
             nextOwned[workflow] = {
                 hash: await hashDirectory(dest),
                 targetPath: dest,

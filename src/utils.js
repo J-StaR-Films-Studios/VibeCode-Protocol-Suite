@@ -2,10 +2,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Reduced timeout to fail fast on bad connections
 const FETCH_TIMEOUT = 10000;
@@ -17,9 +17,18 @@ const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
 
 // GitHub repository configuration
-const GITHUB_REPO = 'JStaRFilms/VibeCode-Protocol-Suite';
+const GITHUB_REPO = 'J-StaR-Films-Studios/VibeCode-Protocol-Suite';
 const GITHUB_BRANCH = 'main';
-const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}`;
+
+function githubRef(options = {}) {
+  const repo = options.repo || GITHUB_REPO;
+  const branch = options.branch || GITHUB_BRANCH;
+  return {
+    repo,
+    branch,
+    rawBaseUrl: `https://raw.githubusercontent.com/${repo}/${branch}`,
+  };
+}
 
 export const PATHS = {
   root: PACKAGE_ROOT,
@@ -134,9 +143,10 @@ function delay(ms) {
  * @param {number} retries - Number of retries (default: 3)
  * @returns {Promise<string>} File content
  */
-export async function fetchFromGitHub(relativePath, retries = 3) {
+export async function fetchFromGitHub(relativePath, retries = 3, options = {}) {
   // Use raw GitHub content URL to avoid API rate limits
-  const rawUrl = `${GITHUB_RAW_URL}/${relativePath}`;
+  const { rawBaseUrl } = githubRef(options);
+  const rawUrl = `${rawBaseUrl}/${relativePath}`;
 
   return new Promise((resolve, reject) => {
     const attempt = (remainingRetries) => {
@@ -146,6 +156,19 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
           'User-Agent': 'takomi-cli'
         }
       }, (res) => {
+        if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+          res.resume();
+          const redirectedUrl = new URL(res.headers.location, rawUrl).toString();
+          https.get(redirectedUrl, {
+            timeout: FETCH_TIMEOUT,
+            headers: { 'User-Agent': 'takomi-cli' }
+          }, (redirectRes) => {
+            let redirectedData = '';
+            redirectRes.on('data', chunk => redirectedData += chunk);
+            redirectRes.on('end', () => redirectRes.statusCode === 200 ? resolve(redirectedData) : reject(new Error(`HTTP ${redirectRes.statusCode}`)));
+          }).on('error', reject);
+          return;
+        }
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
@@ -167,8 +190,8 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
         } else {
           // Fallback to curl if Node https fails (e.g. proxy/network issues)
           try {
-            // Ensure we use a timeout with curl too
-            const { stdout } = await execAsync(`curl -sL --max-time ${CURL_TIMEOUT} "${rawUrl}"`);
+            // Ensure we use a timeout with curl too, without invoking a shell.
+            const { stdout } = await execFileAsync('curl', ['-sL', '--max-time', String(CURL_TIMEOUT), rawUrl]);
             if (stdout) resolve(stdout);
             else reject(err);
           } catch (curlErr) {
@@ -192,36 +215,49 @@ export async function fetchFromGitHub(relativePath, retries = 3) {
  * @param {string} relativePath - Path relative to repo root
  * @returns {Promise<Array>} Array of file objects
  */
-export async function fetchDirectoryListing(relativePath) {
-  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${relativePath}?ref=${GITHUB_BRANCH}`;
+export async function fetchDirectoryListing(relativePath, options = {}) {
+  const { repo, branch } = githubRef(options);
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${relativePath}?ref=${branch}`;
 
   return new Promise((resolve, reject) => {
-    https.get(apiUrl, {
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'takomi-cli',
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          if (res.statusCode === 200) {
-            const items = JSON.parse(data);
-            resolve(Array.isArray(items) ? items : []);
-          } else if (res.statusCode === 404) {
-            resolve([]);
-          } else if (res.statusCode === 403) {
-            reject(new Error('GitHub API rate limit exceeded. Please try again later.'));
-          } else {
-            reject(new Error(`GitHub API error: ${res.statusCode}`));
-          }
-        } catch (e) {
-          reject(new Error('Failed to parse GitHub API response'));
+    const requestUrl = (url, redirectsRemaining = 3) => {
+      const req = https.get(url, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'takomi-cli',
+          'Accept': 'application/vnd.github.v3+json'
         }
+      }, (res) => {
+        if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsRemaining > 0) {
+          res.resume();
+          requestUrl(new URL(res.headers.location, url).toString(), redirectsRemaining - 1);
+          return;
+        }
+
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const items = JSON.parse(data);
+              resolve(Array.isArray(items) ? items : []);
+            } else if (res.statusCode === 404) {
+              resolve([]);
+            } else if (res.statusCode === 403) {
+              reject(new Error('GitHub API rate limit exceeded. Please try again later.'));
+            } else {
+              reject(new Error(`GitHub API error: ${res.statusCode}`));
+            }
+          } catch (e) {
+            reject(new Error('Failed to parse GitHub API response'));
+          }
+        });
       });
-    }).on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Request timed out')));
+      req.on('error', reject);
+    };
+
+    requestUrl(apiUrl);
   });
 }
 
@@ -231,9 +267,9 @@ export async function fetchDirectoryListing(relativePath) {
  * @param {string} destPath - Local destination path
  * @returns {Promise<boolean>} Success status
  */
-export async function downloadFromGitHub(relativePath, destPath) {
+export async function downloadFromGitHub(relativePath, destPath, options = {}) {
   try {
-    const content = await fetchFromGitHub(relativePath);
+    const content = await fetchFromGitHub(relativePath, 3, options);
     await fs.ensureDir(path.dirname(destPath));
     await fs.writeFile(destPath, content, 'utf8');
     return true;
@@ -265,11 +301,11 @@ export async function downloadFromGitHub(relativePath, destPath) {
  * @param {number} delayMs - Delay between file downloads in ms (default: 100)
  * @returns {Promise<number>} Number of files downloaded
  */
-export async function downloadDirectoryFromGitHub(relativePath, destPath, filter = null, delayMs = 250) {
+export async function downloadDirectoryFromGitHub(relativePath, destPath, filter = null, delayMs = 250, options = {}) {
   let count = 0;
 
   try {
-    const items = await fetchDirectoryListing(relativePath);
+    const items = await fetchDirectoryListing(relativePath, options);
 
     for (const item of items) {
       if (!useGitHub) break; // Allow aborting if we disabled GitHub midway
@@ -277,7 +313,7 @@ export async function downloadDirectoryFromGitHub(relativePath, destPath, filter
 
       if (item.type === 'file') {
         const fileDest = path.join(destPath, item.name);
-        const success = await downloadFromGitHub(item.path, fileDest);
+        const success = await downloadFromGitHub(item.path, fileDest, options);
         if (success) {
           count++;
           // Add small delay between file downloads to be nice to GitHub
@@ -287,12 +323,13 @@ export async function downloadDirectoryFromGitHub(relativePath, destPath, filter
         }
       } else if (item.type === 'dir') {
         const subDirDest = path.join(destPath, item.name);
-        const subCount = await downloadDirectoryFromGitHub(item.path, subDirDest, filter, delayMs);
+        const subCount = await downloadDirectoryFromGitHub(item.path, subDirDest, filter, delayMs, options);
         count += subCount;
       }
     }
   } catch (error) {
     console.error(`Error downloading directory ${relativePath}: ${error.message}`);
+    if (options.throwOnError) throw error;
   }
 
   return count;
@@ -459,7 +496,7 @@ export async function copyLegacyManual(destFolder) {
 export async function updateWorkflows(destFolder) {
   console.log('📡 Fetching latest workflows from GitHub...');
   await fs.ensureDir(destFolder);
-  await downloadDirectoryFromGitHub('.agent/workflows', destFolder);
+  return downloadDirectoryFromGitHub('assets/.agent/workflows', destFolder, null, 250, { throwOnError: true });
 }
 
 /**
@@ -468,7 +505,7 @@ export async function updateWorkflows(destFolder) {
 export async function updateSkills(destFolder) {
   console.log('📡 Fetching latest skills from GitHub...');
   await fs.ensureDir(destFolder);
-  await downloadDirectoryFromGitHub('.agent/skills', destFolder);
+  return downloadDirectoryFromGitHub('assets/.agent/skills', destFolder, null, 250, { throwOnError: true });
 }
 
 /**
@@ -477,7 +514,7 @@ export async function updateSkills(destFolder) {
 export async function updateAgentYamls(destFolder) {
   console.log('📡 Fetching latest Agent YAMLs from GitHub...');
   await fs.ensureDir(destFolder);
-  await downloadDirectoryFromGitHub('Takomi-Agents', destFolder);
+  return downloadDirectoryFromGitHub('assets/Takomi-Agents', destFolder, null, 250, { throwOnError: true });
 }
 
 /**
@@ -486,5 +523,5 @@ export async function updateAgentYamls(destFolder) {
 export async function updateLegacyManual(destFolder) {
   console.log('📡 Fetching latest Legacy Protocols from GitHub...');
   await fs.ensureDir(destFolder);
-  await downloadDirectoryFromGitHub('Legacy (Manual Method)', destFolder);
+  return downloadDirectoryFromGitHub('assets/Legacy', destFolder, null, 250, { throwOnError: true });
 }

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,8 @@ export const BUNDLED_TAKOMI_ROUTING_POLICY_PATH = path.resolve(
   "takomi",
   "model-routing.md",
 );
+const PROJECT_TAKOMI_POLICY_ROOT_RELATIVE = path.join(".pi", "takomi");
+const MAX_POLICY_BYTES = 128 * 1024;
 
 export type RoutingPolicyInstallResult = {
   policyPath: string;
@@ -56,10 +58,34 @@ async function readJsonObject(filePath: string): Promise<JsonObject> {
 
 async function readPolicyText(filePath: string): Promise<string | undefined> {
   try {
+    const info = await stat(filePath);
+    if (!info.isFile() || info.size > MAX_POLICY_BYTES) return undefined;
     const text = (await readFile(filePath, "utf8")).trim();
     return text || undefined;
   } catch {
     return undefined;
+  }
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function resolveSafeProjectPolicyPath(cwd: string, configured: string): Promise<string | undefined> {
+  if (!configured) return undefined;
+
+  const projectPolicyRoot = path.resolve(cwd, PROJECT_TAKOMI_POLICY_ROOT_RELATIVE);
+  const resolvedPath = path.isAbsolute(configured) ? path.resolve(configured) : path.resolve(cwd, configured);
+  if (!isPathInside(projectPolicyRoot, resolvedPath)) return undefined;
+
+  try {
+    const [realCwd, realRoot, realFile] = await Promise.all([realpath(cwd), realpath(projectPolicyRoot), realpath(resolvedPath)]);
+    if (!isPathInside(realCwd, realRoot)) return undefined;
+    if (!isPathInside(realRoot, realFile)) return undefined;
+    return realFile;
+  } catch {
+    return resolvedPath;
   }
 }
 
@@ -133,14 +159,16 @@ export async function resolveTakomiRoutingPolicy(cwd: string): Promise<ResolvedR
   const configuredProject = typeof projectTakomi.modelRoutingPolicyFile === "string"
     ? projectTakomi.modelRoutingPolicyFile
     : TAKOMI_ROUTING_POLICY_RELATIVE;
-  const configuredProjectPath = path.isAbsolute(configuredProject) ? configuredProject : path.join(cwd, configuredProject);
-  const configuredProjectText = await readPolicyText(configuredProjectPath);
-  if (configuredProjectText) {
-    return { source: "project", policyPath: configuredProjectPath, text: configuredProjectText };
+  const configuredProjectPath = await resolveSafeProjectPolicyPath(cwd, configuredProject);
+  if (configuredProjectPath) {
+    const configuredProjectText = await readPolicyText(configuredProjectPath);
+    if (configuredProjectText) {
+      return { source: "project", policyPath: configuredProjectPath, text: configuredProjectText };
+    }
   }
 
-  const defaultProjectPath = path.join(cwd, TAKOMI_ROUTING_POLICY_RELATIVE);
-  if (path.resolve(defaultProjectPath) !== path.resolve(configuredProjectPath)) {
+  const defaultProjectPath = await resolveSafeProjectPolicyPath(cwd, TAKOMI_ROUTING_POLICY_RELATIVE);
+  if (defaultProjectPath && path.resolve(defaultProjectPath) !== path.resolve(configuredProjectPath ?? "")) {
     const defaultProjectText = await readPolicyText(defaultProjectPath);
     if (defaultProjectText) {
       return { source: "project", policyPath: defaultProjectPath, text: defaultProjectText };

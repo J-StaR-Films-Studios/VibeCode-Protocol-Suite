@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
@@ -30,8 +31,6 @@ export type TakomiSubagentToolParams = Partial<TakomiSubagentToolTask> & {
   previewOnly?: boolean;
   clarify?: boolean;
   agentScope?: TakomiAgentScope;
-  confirmProjectAgents?: boolean;
-  overrideUserBlock?: boolean;
 };
 
 type ToolUpdate = (partial: {
@@ -64,6 +63,10 @@ function textResult<TDetails extends Record<string, unknown>>(text: string, deta
 
 function hasProjectAgents(tasks: Array<{ agent: string }>, agents: Map<string, TakomiAgentConfig>): boolean {
   return tasks.some((task) => agents.get(task.agent)?.source === "project");
+}
+
+function hostTrustsProjectAgents(): boolean {
+  return /^(1|true|yes)$/i.test(process.env.TAKOMI_TRUST_PROJECT_AGENTS || "");
 }
 
 function hardStopStore(pi: ExtensionAPI): Map<string, HardStopRecord> {
@@ -113,6 +116,31 @@ function consumeExpiredHardStop(pi: ExtensionAPI, fingerprint: string): HardStop
     return undefined;
   }
   return record;
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function resolveRelativeCwd(root: string, value: string | undefined, label: string): Promise<string> {
+  const lexicalRoot = path.resolve(root);
+  const lexicalCandidate = value
+    ? path.isAbsolute(value) ? path.resolve(value) : path.resolve(lexicalRoot, value)
+    : lexicalRoot;
+  if (!isPathInside(lexicalRoot, lexicalCandidate)) throw new Error(`${label} escapes the current workspace.`);
+
+  const [realRoot, realCandidate] = await Promise.all([fs.realpath(lexicalRoot), fs.realpath(lexicalCandidate)]);
+  const stat = await fs.stat(realCandidate);
+  if (!stat.isDirectory()) throw new Error(`${label} must be a directory inside the current workspace.`);
+  if (!isPathInside(realRoot, realCandidate)) throw new Error(`${label} escapes the current workspace.`);
+  return realCandidate;
+}
+
+async function validateTaskCwds(root: string, tasks: TakomiSubagentToolTask[]): Promise<void> {
+  for (const [index, task] of tasks.entries()) {
+    await resolveRelativeCwd(root, task.cwd, `tasks[${index}].cwd`);
+  }
 }
 
 function getTextContent(result: any): string {
@@ -184,7 +212,7 @@ function resolveTasks(params: TakomiSubagentToolParams): TakomiSubagentToolTask[
       fallbackModels: params.fallbackModels,
       thinking: params.thinking,
       conversationId: params.conversationId,
-      cwd: params.cwd,
+      cwd: undefined,
       checklist: params.checklist,
     }];
   }
@@ -198,17 +226,31 @@ export async function executeTakomiSubagentTool(
   ctx: ExtensionContext,
 ) {
   const engine = getEngine(pi);
-  const rootCwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
+  let rootCwd: string;
+  try {
+    rootCwd = await resolveRelativeCwd(ctx.cwd, params.cwd, "cwd");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return textResult(message, { results: [], agentScope: params.agentScope ?? "both" }, true);
+  }
   const profile = await loadTakomiProfile(rootCwd);
   const agentScope = params.agentScope ?? "both";
   const agents = discoverTakomiAgents(rootCwd, agentScope);
   const byName = new Map<string, TakomiAgentConfig>(agents.map((agent) => [agent.name, agent]));
   const mode = resolveMode(params);
   const routingSnapshot = await loadTakomiModelRoutingSnapshot(rootCwd);
-  const tasks = resolveTasks(params).map((task) => applyTakomiRoutingDefaults({
-    ...task,
-    agent: resolveAgentName(task.agent, byName),
-  }, routingSnapshot));
+  let tasks: TakomiSubagentToolTask[];
+  try {
+    const rawTasks = resolveTasks(params);
+    await validateTaskCwds(rootCwd, rawTasks);
+    tasks = rawTasks.map((task) => applyTakomiRoutingDefaults({
+      ...task,
+      agent: resolveAgentName(task.agent, byName),
+    }, routingSnapshot));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return textResult(message, { results: [], availableAgents: agents.map((agent) => agent.name), agentScope }, true);
+  }
 
   if (!mode) {
     return textResult(
@@ -223,19 +265,23 @@ export async function executeTakomiSubagentTool(
 
   const fingerprint = createRunFingerprint(rootCwd, mode, tasks);
   const recentHardStop = consumeExpiredHardStop(pi, fingerprint);
-  if (recentHardStop && !params.overrideUserBlock) {
+  if (recentHardStop) {
     return hardStopResult(
       `Subagent launch blocked: the same request was already stopped (${recentHardStop.reason}).\n${recentHardStop.message}`,
       { results: [], availableAgents: agents.map((agent) => agent.name), agentScope, mode, blockedAt: recentHardStop.at, reason: recentHardStop.reason },
     );
   }
-  if (params.overrideUserBlock) {
-    hardStopStore(pi).delete(fingerprint);
-  }
 
-  if (params.confirmProjectAgents !== false && ctx.hasUI && hasProjectAgents(tasks, byName)) {
+  const projectAgentsTrusted = hostTrustsProjectAgents();
+  if (!projectAgentsTrusted && hasProjectAgents(tasks, byName)) {
     const names = tasks.map((task) => byName.get(task.agent)).filter((agent): agent is TakomiAgentConfig => agent?.source === "project").map((agent) => agent.name);
-    const ok = await ctx.ui.confirm("Run project-local Takomi agents?", `Agents: ${[...new Set(names)].join(", ")}\n\nProject agents are repo-controlled. Continue only for trusted repositories.`);
+    const uniqueNames = [...new Set(names)].join(", ");
+    if (!ctx.hasUI) {
+      const message = `Blocked: project-local Takomi agents require interactive approval. Agents: ${uniqueNames}`;
+      rememberHardStop(pi, fingerprint, "project-agent-approval-required", message);
+      return hardStopResult(message, { results: [], agentScope, mode });
+    }
+    const ok = await ctx.ui.confirm("Run project-local Takomi agents?", `Agents: ${uniqueNames}\n\nProject agents are repo-controlled. Continue only for trusted repositories.`);
     if (!ok) {
       const message = "Canceled: project-local agents not approved.";
       rememberHardStop(pi, fingerprint, "project-agent-denied", message);
@@ -270,7 +316,7 @@ export async function executeTakomiSubagentTool(
   }
   try {
     const nativeParams: TakomiSubagentToolParams = mode === "single"
-      ? { ...params, agent: tasks[0]!.agent, task: tasks[0]!.task, agentScope }
+      ? { ...params, ...tasks[0]!, agentScope }
       : mode === "parallel"
         ? { ...params, tasks, agentScope }
         : { ...params, chain: tasks, agentScope };

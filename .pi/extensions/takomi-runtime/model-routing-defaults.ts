@@ -11,6 +11,8 @@ import {
 } from "./routing-policy";
 
 export const TAKOMI_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const PROJECT_TAKOMI_POLICY_ROOT_RELATIVE = path.join(".pi", "takomi");
+const MAX_POLICY_BYTES = 128 * 1024;
 
 type Settings = {
   takomi?: { modelRoutingPolicyFile?: string };
@@ -140,10 +142,36 @@ function collectModelsFromPolicy(text: string): string[] {
 
 function readPolicyTextSync(filePath: string): string | undefined {
   try {
+    const info = fs.statSync(filePath);
+    if (!info.isFile() || info.size > MAX_POLICY_BYTES) return undefined;
     const text = fs.readFileSync(filePath, "utf8").trim();
     return text || undefined;
   } catch {
     return undefined;
+  }
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function resolveSafeProjectPolicyPathSync(cwd: string, configured: string): string | undefined {
+  if (!configured) return undefined;
+
+  const projectPolicyRoot = path.resolve(cwd, PROJECT_TAKOMI_POLICY_ROOT_RELATIVE);
+  const resolvedPath = path.isAbsolute(configured) ? path.resolve(configured) : path.resolve(cwd, configured);
+  if (!isPathInside(projectPolicyRoot, resolvedPath)) return undefined;
+
+  try {
+    const realCwd = fs.realpathSync(cwd);
+    const realRoot = fs.realpathSync(projectPolicyRoot);
+    const realFile = fs.realpathSync(resolvedPath);
+    if (!isPathInside(realCwd, realRoot)) return undefined;
+    if (!isPathInside(realRoot, realFile)) return undefined;
+    return realFile;
+  } catch {
+    return resolvedPath;
   }
 }
 
@@ -153,12 +181,14 @@ function resolvePolicySync(cwd: string): { policyPath?: string; text?: string } 
   const configuredProject = typeof projectTakomi.modelRoutingPolicyFile === "string"
     ? projectTakomi.modelRoutingPolicyFile
     : TAKOMI_ROUTING_POLICY_RELATIVE;
-  const configuredProjectPath = path.isAbsolute(configuredProject) ? configuredProject : path.join(cwd, configuredProject);
-  const configuredProjectText = readPolicyTextSync(configuredProjectPath);
-  if (configuredProjectText) return { policyPath: configuredProjectPath, text: configuredProjectText };
+  const configuredProjectPath = resolveSafeProjectPolicyPathSync(cwd, configuredProject);
+  if (configuredProjectPath) {
+    const configuredProjectText = readPolicyTextSync(configuredProjectPath);
+    if (configuredProjectText) return { policyPath: configuredProjectPath, text: configuredProjectText };
+  }
 
-  const defaultProjectPath = path.join(cwd, TAKOMI_ROUTING_POLICY_RELATIVE);
-  if (path.resolve(defaultProjectPath) !== path.resolve(configuredProjectPath)) {
+  const defaultProjectPath = resolveSafeProjectPolicyPathSync(cwd, TAKOMI_ROUTING_POLICY_RELATIVE);
+  if (defaultProjectPath && path.resolve(defaultProjectPath) !== path.resolve(configuredProjectPath ?? "")) {
     const defaultProjectText = readPolicyTextSync(defaultProjectPath);
     if (defaultProjectText) return { policyPath: defaultProjectPath, text: defaultProjectText };
   }

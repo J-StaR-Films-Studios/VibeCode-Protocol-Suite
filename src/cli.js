@@ -928,11 +928,14 @@ async function add(url) {
   console.log(pc.cyan('📡 Fetching from GitHub...\n'));
 
   // Try assets/.agent/skills/ first (Takomi structure)
+  const githubOptions = { repo: repoSlug };
+
   let skillCount = await downloadDirectoryFromGitHub(
     'assets/.agent/skills',
     skillsDest,
     null,
-    250
+    250,
+    githubOptions
   );
 
   // Fallback: try .agent/skills/
@@ -941,7 +944,8 @@ async function add(url) {
       '.agent/skills',
       skillsDest,
       null,
-      250
+      250,
+      githubOptions
     );
   }
 
@@ -950,7 +954,8 @@ async function add(url) {
     'assets/.agent/workflows',
     workflowsDest,
     (item) => item.name.endsWith('.md'),
-    250
+    250,
+    githubOptions
   );
 
   if (workflowCount === 0) {
@@ -958,7 +963,8 @@ async function add(url) {
       '.agent/workflows',
       workflowsDest,
       (item) => item.name.endsWith('.md'),
-      250
+      250,
+      githubOptions
     );
   }
 
@@ -1050,19 +1056,30 @@ async function updateProjectResources() {
   if (!response.components || response.components.length === 0) return;
 
   const destRoot = process.cwd();
+  let remoteDownloadCount = 0;
+  let remoteUpdateRequested = false;
+  const remoteFailures = [];
+  const runRemoteUpdate = async (label, updater) => {
+    remoteUpdateRequested = true;
+    try {
+      remoteDownloadCount += await updater();
+    } catch (error) {
+      remoteFailures.push(`${label}: ${error.message}`);
+    }
+  };
 
   if (response.components.includes('agent')) {
     const agentDest = path.join(destRoot, '.agent');
-    await updateWorkflows(path.join(agentDest, 'workflows'));
-    await updateSkills(path.join(agentDest, 'skills'));
+    await runRemoteUpdate('workflows', () => updateWorkflows(path.join(agentDest, 'workflows')));
+    await runRemoteUpdate('skills', () => updateSkills(path.join(agentDest, 'skills')));
   }
 
   if (response.components.includes('yamls')) {
-    await updateAgentYamls(path.join(destRoot, 'Takomi-Agents'));
+    await runRemoteUpdate('agent YAMLs', () => updateAgentYamls(path.join(destRoot, 'Takomi-Agents')));
   }
 
   if (response.components.includes('legacy')) {
-    await updateLegacyManual(path.join(destRoot, 'Legacy-Protocols'));
+    await runRemoteUpdate('legacy protocols', () => updateLegacyManual(path.join(destRoot, 'Legacy-Protocols')));
   }
 
   // Update global store if selected
@@ -1087,6 +1104,19 @@ async function updateProjectResources() {
     manifest.installed.skills = await getStoreSkills();
     manifest.installed.workflows = await getStoreWorkflows();
     await writeManifest(manifest);
+  }
+
+  if (remoteFailures.length) {
+    console.log(pc.red('\nSome project resources failed to download from GitHub:'));
+    for (const failure of remoteFailures) console.log(pc.dim(`  - ${failure}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (remoteUpdateRequested && remoteDownloadCount === 0) {
+    console.log(pc.red('\nNo project resources were downloaded from GitHub. Check the network or repository paths.'));
+    process.exitCode = 1;
+    return;
   }
 
   console.log(pc.magenta('\n✨ Your toolkit is fresh and ready to ship.'));
@@ -1116,7 +1146,7 @@ Examples:
   takomi refresh pi   Refresh only Pi-related pieces
 
 Legacy aliases still work:
-  install -> setup, sync/upgrade -> refresh, init -> setup project,
+  install -> setup, sync -> sync, upgrade -> refresh, init -> setup project,
   harnesses -> status, update -> refresh project
 `);
 
@@ -1171,8 +1201,8 @@ program
 // Re-sync (legacy alias)
 program
   .command('sync [target]', { hidden: true })
-  .description('Legacy alias: use "takomi refresh [target]"')
-  .action(refresh);
+  .description('Legacy alias for global store sync')
+  .action(sync);
 
 // Add remote skills (NEW)
 program
