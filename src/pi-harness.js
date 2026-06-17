@@ -275,9 +275,9 @@ function runCommandWithTimeout(command, args, timeoutMs) {
   });
 }
 
-export async function ensurePiInstalled() {
+async function installOrUpdatePiCli({ force = false } = {}) {
   const before = await detectPiCommand();
-  if (before.installed) {
+  if (before.installed && !force) {
     return { ok: true, changed: false, report: 'Pi already available.' };
   }
 
@@ -295,7 +295,9 @@ export async function ensurePiInstalled() {
         return {
           ok: true,
           changed: true,
-          report: (result.stdout || result.stderr || 'Installed Pi.').trim(),
+          report: (result.stdout || result.stderr || (force ? 'Updated Pi.' : 'Installed Pi.')).trim(),
+          version: after.version,
+          action: force ? 'Updated' : 'Installed',
         };
       }
       lastError = 'npm install reported success, but pi was still not detected.';
@@ -307,9 +309,17 @@ export async function ensurePiInstalled() {
   return { ok: false, changed: false, report: lastError };
 }
 
+export async function ensurePiInstalled() {
+  return installOrUpdatePiCli({ force: false });
+}
+
+export async function updatePiCliPackage() {
+  return installOrUpdatePiCli({ force: true });
+}
+
 export function printPiInstallResult(result) {
   if (result.ok) {
-    console.log(pc.green(`✔ ${result.changed ? 'Installed' : 'Validated'} Pi`));
+    console.log(pc.green(`✔ ${result.action || (result.changed ? 'Installed' : 'Validated')} Pi`));
     if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-4).join('\n')));
     return;
   }
@@ -359,42 +369,54 @@ export function printPiSubagentsInstallResult(result) {
   if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
 }
 
-export async function updatePiManagedPackages({ timeoutMs = 20_000 } = {}) {
+function getPiPackageUpdateTimeoutMs(timeoutMs) {
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) return timeoutMs;
+  const envValue = Number(process.env.TAKOMI_PI_PACKAGE_UPDATE_TIMEOUT_MS || '');
+  if (Number.isFinite(envValue) && envValue > 0) return envValue;
+  return 180_000;
+}
+
+export async function updatePiManagedPackages({ timeoutMs } = {}) {
   if (process.env.TAKOMI_SKIP_PI_PACKAGE_UPDATE === '1') {
-    return { ok: true, changed: false, report: 'Skipped Pi package update because TAKOMI_SKIP_PI_PACKAGE_UPDATE=1.' };
+    return { ok: true, changed: false, report: 'Skipped Pi extension package update because TAKOMI_SKIP_PI_PACKAGE_UPDATE=1.' };
   }
 
   const pi = await detectPiCommand();
   if (!pi.installed) return { ok: false, changed: false, report: 'Pi is not installed.' };
 
-  // `pi update` reconciles packages from Pi settings, including user-installed
-  // npm/git/local packages. Treat this as a best-effort follow-up: third-party
-  // packages or manual extension entries must never hang Takomi installation.
+  // Only reconcile Pi-managed extension/package entries here. Plain `pi update`
+  // also self-updates the Pi CLI (`npm install -g @earendil-works/pi-coding-agent`).
+  // If Takomi times out and kills that process, npm can leave the global `pi`
+  // shim temporarily removed on Windows. `--extensions` avoids touching the Pi
+  // executable while still updating optional/user package packs.
+  const effectiveTimeoutMs = getPiPackageUpdateTimeoutMs(timeoutMs);
   const command = pi.path || 'pi';
-  const result = await runCommandWithTimeout(command, ['update'], timeoutMs);
+  const updateArgs = ['update', '--extensions'];
+  const updateCommandText = `pi ${updateArgs.join(' ')}`;
+  const result = await runCommandWithTimeout(command, updateArgs, effectiveTimeoutMs);
   const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
   if (result.timedOut) {
     return {
       ok: false,
       changed: false,
-      report: `Timed out after ${Math.round(timeoutMs / 1000)}s while running \`pi update\`. Takomi setup is complete; retry package updates later with \`pi update\` or skip this step with TAKOMI_SKIP_PI_PACKAGE_UPDATE=1. Last output:\n${output}`.trim(),
+      report: `Timed out after ${Math.round(effectiveTimeoutMs / 1000)}s while running \`${updateCommandText}\`. Takomi setup is complete; retry package updates later with \`${updateCommandText}\` or skip this step with TAKOMI_SKIP_PI_PACKAGE_UPDATE=1. Increase the timeout with TAKOMI_PI_PACKAGE_UPDATE_TIMEOUT_MS=<ms>. Last output:\n${output}`.trim(),
     };
   }
 
   return {
     ok: result.status === 0,
     changed: result.status === 0,
-    report: output || (result.status === 0 ? 'All Pi-managed packages are up to date.' : 'pi update failed.'),
+    report: output || (result.status === 0 ? 'All Pi-managed extension packages are up to date.' : `${updateCommandText} failed.`),
   };
 }
 
 export function printPiManagedPackageUpdateResult(result) {
   if (result.ok) {
-    console.log(pc.green('✔ Updated all Pi-managed packages'));
+    console.log(pc.green('✔ Updated all Pi-managed extension packages'));
     if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
     return;
   }
-  console.log(pc.yellow('⚠ Could not update Pi-managed packages'));
+  console.log(pc.yellow('⚠ Could not update Pi-managed extension packages'));
   if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-8).join('\n')));
 }
 

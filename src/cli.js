@@ -43,7 +43,7 @@ import {
   isStoreInitialized,
 } from './store.js';
 import { runDoctor } from './doctor.js';
-import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
+import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiCliPackage, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { offerPiOptionalFeatures } from './pi-optional-features.js';
 import {
@@ -459,7 +459,7 @@ async function installPiTarget(options = {}) {
       console.log(pc.cyan('\n🧩 Optional Takomi Pi feature packs...\n'));
       await offerPiOptionalFeatures({ interactive: true });
     }
-    console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+    console.log(pc.cyan('\n📦 Checking Pi-managed extension package updates...\n'));
     printPiManagedPackageUpdateResult(await updatePiManagedPackages());
     console.log(pc.dim('\nNext: cd <project> && takomi\n'));
   } catch (error) {
@@ -474,7 +474,7 @@ async function installPiOptionalFeaturesTarget() {
   printPiInstallResult(pi);
   if (!pi.ok) return;
   await offerPiOptionalFeatures({ interactive: true });
-  console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+  console.log(pc.cyan('\n📦 Checking Pi-managed extension package updates...\n'));
   printPiManagedPackageUpdateResult(await updatePiManagedPackages());
 }
 
@@ -484,7 +484,7 @@ async function syncPiTarget() {
     const result = await syncPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
-    console.log(pc.cyan('\n📦 Checking Pi-managed package updates...\n'));
+    console.log(pc.cyan('\n📦 Checking Pi-managed extension package updates...\n'));
     printPiManagedPackageUpdateResult(await updatePiManagedPackages());
   } catch (error) {
     console.log(pc.red('\nPi sync failed.'));
@@ -558,6 +558,8 @@ async function upgrade(target = 'all') {
   }
 
   if (normalizedTarget === 'pi') {
+    console.log(pc.cyan('\n📦 Updating Pi CLI...\n'));
+    printPiInstallResult(await updatePiCliPackage());
     await installPiTarget({ offerOptionalFeatures: false });
     return;
   }
@@ -567,6 +569,8 @@ async function upgrade(target = 'all') {
     return;
   }
 
+  console.log(pc.cyan('\n📦 Updating Pi CLI...\n'));
+  printPiInstallResult(await updatePiCliPackage());
   await installAllTargets({ offerOptionalFeatures: false });
   console.log(pc.magenta('\n✨ Fully upgraded. Next: run `takomi` from your project.\n'));
 }
