@@ -27,6 +27,8 @@ export type RuntimeHudState = {
   activeSessionId?: string;
   launchMode?: string;
   subagentsEnabled?: boolean;
+  modeSource?: "idle" | "manual" | "model" | "board";
+  modeReason?: string;
 };
 
 type Tone = "accent" | "warning" | "success" | "error" | "muted" | "dim" | "thinkingMinimal";
@@ -70,24 +72,30 @@ function badge(theme: Theme, label: string, tone: Tone): string {
 }
 
 export function renderRuntimeStatus(theme: Theme, state: RuntimeHudState): string {
+  const source = state.modeSource ?? "idle";
+  if (!state.enabled) return [theme.fg("accent", "Takomi"), theme.fg("dim", "off")].join(" ");
+  if (source === "idle") return [theme.fg("accent", "Takomi"), theme.fg("dim", "idle")].join(" ");
+
   const primary = state.stage ?? state.role;
   const stageBadge = badge(theme, primary, stageTone(state.stage));
-  const auto = state.autoOrch ? theme.fg("accent", "auto") : theme.fg("dim", "manual");
-  const gate = state.launchMode === "manual" ? theme.fg("warning", "review-gate") : theme.fg("accent", "auto-gate");
+  const sourceLabel = source === "manual" ? theme.fg("warning", "manual") : theme.fg("success", source);
+  const role = state.stage && state.role !== state.stage ? theme.fg("dim", state.role) : "";
   const plan = state.planMode ? theme.fg("warning", "plan") : theme.fg("dim", "direct");
-  const subagents = state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : theme.fg("dim", "subagents:on");
-  return [theme.fg("accent", "Takomi"), stageBadge, theme.fg("dim", `role:${state.role}`), auto, gate, plan, subagents].join(" ");
+  const gate = state.launchMode === "manual" ? theme.fg("warning", "review-gate") : "";
+  const subagents = state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : "";
+  return [theme.fg("accent", "Takomi"), sourceLabel, stageBadge, role, gate || plan, subagents].filter(Boolean).join(" ");
 }
 
 export function renderRuntimeWidget(theme: Theme, state: RuntimeHudState): string[] {
-  if (!state.enabled) return [];
+  if (!state.enabled || (state.modeSource ?? "idle") === "idle") return [];
   const primary = state.stage ?? state.role;
+  const sourceLabel = state.modeSource === "manual" ? theme.fg("warning", "manual") : theme.fg("success", state.modeSource ?? "model");
   const parts = [
     theme.fg("accent", "Takomi"),
+    sourceLabel,
     badge(theme, primary, stageTone(state.stage)),
-    theme.fg("dim", `role:${state.role}`),
-    state.autoOrch ? theme.fg("accent", "auto") : theme.fg("dim", "manual"),
-    state.launchMode === "manual" ? theme.fg("warning", "review-gate") : theme.fg("accent", "auto-gate"),
+    state.stage && state.role !== state.stage ? theme.fg("dim", `role:${state.role}`) : "",
+    state.launchMode === "manual" ? theme.fg("warning", "review-gate") : "",
     state.planMode ? theme.fg("warning", "plan") : theme.fg("dim", "direct"),
     state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : theme.fg("dim", "subagents:on"),
     state.workflow ? theme.fg("dim", `wf:${state.workflow}`) : "",
@@ -115,7 +123,7 @@ export class TakomiFooterComponent implements Component {
     this.unsubscribeBranchChange();
   }
 
-  invalidate(): void {}
+  invalidate(): void { }
 
   render(width: number): string[] {
     const state = this.getState();
@@ -141,8 +149,7 @@ export class TakomiFooterComponent implements Component {
       .filter(([key]) => key !== "takomi-runtime")
       .map(([, value]) => value)
       .filter(Boolean);
-    const runtimeStatus = renderRuntimeStatus(this.theme, state);
-    const left = [runtimeStatus, ...extensionStatuses].join(this.theme.fg("dim", "  |  "));
+    const left = extensionStatuses.join(this.theme.fg("dim", "  |  "));
     const branch = this.footerData.getGitBranch();
     const rightText = [this.ctx.model?.id || "no-model", branch ? `git:${branch}` : ""].filter(Boolean).join(" | ");
     const right = this.theme.fg("dim", rightText);

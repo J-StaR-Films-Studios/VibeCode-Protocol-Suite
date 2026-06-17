@@ -58,6 +58,8 @@ import {
 } from "./profile";
 import { installTakomiRoutingPolicy, previewTakomiRoutingPolicy, renderRoutingPolicyPreview, resolveTakomiRoutingPolicy } from "./routing-policy";
 
+type TakomiModeSource = "idle" | "manual" | "model" | "board";
+
 type TakomiState = {
   enabled: boolean;
   autoOrch: boolean;
@@ -69,15 +71,18 @@ type TakomiState = {
   activeSessionId?: string;
   subagentsEnabled: boolean;
   lastFullPromptKey?: string;
+  modeSource?: TakomiModeSource;
+  modeReason?: string;
 };
 
 const DEFAULT_STATE: TakomiState = {
   enabled: true,
-  autoOrch: true,
+  autoOrch: false,
   launchMode: "auto",
   planMode: false,
   role: "general",
   subagentsEnabled: true,
+  modeSource: "idle",
 };
 
 const STATE_ENTRY = "takomi-runtime-state";
@@ -97,6 +102,8 @@ const ThinkingSchema = Type.Union([
   Type.Literal("xhigh"),
 ]);
 
+const TakomiModeSchema = StringEnum(["idle", "code", "orchestrate", "review", "genesis", "design", "build"] as const);
+
 function cloneState(state: TakomiState): TakomiState {
   return { ...state };
 }
@@ -111,6 +118,8 @@ function formatState(state: TakomiState): string {
     `launch=${state.launchMode}`,
     `plan=${state.planMode ? "on" : "off"}`,
     `subagents=${state.subagentsEnabled ? "on" : "off"}`,
+    `source=${state.modeSource ?? "idle"}`,
+    state.modeReason ? `reason=${state.modeReason}` : "",
     state.activeSessionId ? `session=${state.activeSessionId}` : "",
   ].filter(Boolean).join(" | ");
 }
@@ -766,6 +775,8 @@ export default function takomiRuntime(pi: ExtensionAPI) {
         state.stage = "genesis";
         state.workflow = "vibe-genesis";
         state.role = "orchestrator";
+        state.modeSource = "manual";
+        state.modeReason = "/takomi plan";
       });
       return `Takomi plan created session ${session.sessionId}\nMaster plan: ${paths.masterPlan}`;
     },
@@ -811,6 +822,84 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     description: "Show native subagent navigation hint",
     handler: async (ctx) => {
       ctx.ui.notify("Native subagent results are shown inline by Pi; use the transcript/tool expansion instead of Takomi focus cycling.", "info");
+    },
+  });
+
+  async function applyTakomiMode(ctx: ExtensionContext, mode: string, source: TakomiModeSource, reason?: string): Promise<string> {
+    const hasGenesis = await hasGenesisArtifacts(ctx.cwd);
+    state.enabled = true;
+    state.modeSource = source;
+    state.modeReason = reason?.trim() || undefined;
+
+    switch (mode) {
+      case "idle":
+        state.modeSource = "idle";
+        state.modeReason = undefined;
+        state.autoOrch = false;
+        state.planMode = false;
+        state.role = "general";
+        state.stage = undefined;
+        state.workflow = undefined;
+        break;
+      case "code":
+        state.autoOrch = false;
+        state.planMode = false;
+        state.role = "code";
+        state.stage = undefined;
+        state.workflow = undefined;
+        break;
+      case "review":
+        state.autoOrch = false;
+        state.planMode = true;
+        state.launchMode = "manual";
+        state.role = "review";
+        state.stage = undefined;
+        state.workflow = undefined;
+        break;
+      case "orchestrate":
+        state.autoOrch = true;
+        state.planMode = true;
+        state.role = "orchestrator";
+        state.stage = hasGenesis ? "build" : "genesis";
+        state.workflow = hasGenesis ? "vibe-build" : "vibe-genesis";
+        break;
+      case "genesis":
+      case "design":
+      case "build":
+        setStageAndWorkflow(state, mode);
+        state.autoOrch = mode === "build";
+        state.planMode = mode !== "build";
+        break;
+    }
+
+    persistState();
+    syncContextPanelState();
+    await refreshUi(ctx, state);
+    const label = state.modeSource === "idle" ? "idle" : `${state.modeSource}:${state.stage ?? state.role}`;
+    return `Takomi mode set to ${label}${state.modeReason ? ` (${state.modeReason})` : ""}.`;
+  }
+
+  pi.registerTool({
+    name: "takomi_mode",
+    label: "Takomi Mode",
+    description: "Set or clear the visible Takomi runtime mode after the active model decides a task benefits from code, review, lifecycle, or orchestration handling.",
+    promptSnippet: "Optional: call takomi_mode when you decide the current request should visibly enter Takomi code/review/orchestration/lifecycle mode. Do not call it for normal creative/general conversation. Use mode=idle to clear Takomi mode.",
+    promptGuidelines: [
+      "Let the user's request drive the choice; do not switch modes just because a vague word like code/review/build appears alone.",
+      "Prefer mode=code for direct coding in the current chat, mode=orchestrate only for broad/multi-step durable work, and mode=review for critique/audit/QA.",
+      "Use mode=idle when the user asks normal non-coding/non-Takomi questions and Takomi should get out of the way.",
+    ],
+    parameters: Type.Object({
+      mode: TakomiModeSchema,
+      reason: Type.Optional(Type.String({ description: "Short human-readable reason for the switch" })),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const text = await applyTakomiMode(ctx, params.mode, "model", params.reason);
+      ctx.ui.notify(text, "info");
+      return {
+        content: [{ type: "text", text }],
+        details: { mode: params.mode, source: state.modeSource, reason: state.modeReason, role: state.role, stage: state.stage, workflow: state.workflow },
+      };
     },
   });
 
@@ -1008,6 +1097,8 @@ ${stateJson}`
         }
         sessionState.tasks[idx] = nextTask;
         state.activeSessionId = params.sessionId;
+        state.modeSource = state.modeSource === "idle" ? "board" : state.modeSource;
+        state.modeReason = state.modeReason ?? "board task update";
         persistState();
         syncContextPanelState();
         await refreshUi(ctx, state);
@@ -1066,6 +1157,8 @@ ${stateJson}`
           }
         }
         state.activeSessionId = nextState.sessionId;
+        state.modeSource = "board";
+        state.modeReason = `expanded ${params.stage} stage`;
         persistState();
         syncContextPanelState();
         await refreshUi(ctx, state);
@@ -1109,6 +1202,8 @@ ${stateJson}`
       state.role = "orchestrator";
       state.stage = nextState.lifecycle.genesis.status === "completed" ? "build" : "genesis";
       state.workflow = state.stage === "genesis" ? "vibe-genesis" : "vibe-build";
+      state.modeSource = "board";
+      state.modeReason = "orchestrator session";
       persistState();
       syncContextPanelState();
       await refreshUi(ctx, state);
@@ -1158,11 +1253,15 @@ ${stateJson}`
 
     if (lowered === "use takomi") {
       state.enabled = true;
+      state.modeSource = "manual";
+      state.modeReason = "explicit user request";
       return { action: "transform", text: "Use the Takomi runtime, identify the correct lifecycle stage, and proceed accordingly." };
     }
 
     if (lowered.startsWith("use takomi ")) {
       state.enabled = true;
+      state.modeSource = "manual";
+      state.modeReason = "explicit user request";
       const route = decideRoute(text.slice("use takomi ".length));
       if (route.stage) setStageAndWorkflow(state, route.stage, { preserveRole: state.role === "orchestrator" && route.stage === "genesis" });
       else if (route.role !== "general") state.role = route.role;
@@ -1170,14 +1269,20 @@ ${stateJson}`
     }
 
     if (/\bvibe genesis\b/i.test(text)) {
+      state.modeSource = "manual";
+      state.modeReason = "vibe genesis";
       setStageAndWorkflow(state, "genesis", { preserveRole: state.role === "orchestrator" });
       return { action: "transform", text };
     }
     if (/\bvibe design\b/i.test(text)) {
+      state.modeSource = "manual";
+      state.modeReason = "vibe design";
       setStageAndWorkflow(state, "design");
       return { action: "transform", text };
     }
     if (/\bvibe build\b/i.test(text)) {
+      state.modeSource = "manual";
+      state.modeReason = "vibe build";
       setStageAndWorkflow(state, "build");
       return { action: "transform", text };
     }
@@ -1186,43 +1291,36 @@ ${stateJson}`
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    if (!state.enabled) return;
+    if (!state.enabled || (state.modeSource ?? "idle") === "idle") return;
 
     let effectiveState = cloneState(state);
     const runtimeCwd = ctx.cwd;
     const genesisExists = await hasGenesisArtifacts(runtimeCwd);
     const route = decideRoute(event.prompt);
-    if (state.autoOrch && shouldAutoRoute(event.prompt)) {
-      effectiveState.role = "orchestrator";
-      effectiveState.stage = genesisExists ? "build" : "genesis";
-      effectiveState.workflow = genesisExists ? "vibe-build" : "vibe-genesis";
-    }
-
-    const shouldHonorRoute = route.stage || route.role !== "general" || route.sessionRecommendation !== "none";
-    if (shouldHonorRoute && route.stage) {
-      effectiveState.stage = route.stage;
-      effectiveState.workflow = route.workflow;
-      effectiveState.role = effectiveState.role === "orchestrator" && route.stage === "genesis" ? "orchestrator" : route.role;
-    } else if (shouldHonorRoute && route.role !== "general") {
-      effectiveState.role = route.role;
-    }
-
-    let routingNote = route.reason;
+    let routingNote = state.modeReason
+      ? `Takomi mode selected by ${state.modeSource}: ${state.modeReason}.`
+      : `Takomi mode selected by ${state.modeSource ?? "runtime"}.`;
     const explicitLifecycleWaiver = /skip genesis|waive genesis|genesis complete|already have (a )?(prd|requirements)|design complete|jump straight to build/i.test(event.prompt);
-    const orchestrationActive = effectiveState.role === "orchestrator" || route.executionMode === "orchestrate";
+    const orchestrationActive = effectiveState.role === "orchestrator";
     if (!genesisExists && orchestrationActive && !explicitLifecycleWaiver) {
       effectiveState.stage = "genesis";
       effectiveState.workflow = "vibe-genesis";
       routingNote = "Blank project detected; orchestrator remains in control and must honor Genesis → Design → Build.";
+    }
+    if (effectiveState.stage !== state.stage || effectiveState.workflow !== state.workflow || effectiveState.role !== state.role) {
+      state.role = effectiveState.role;
+      state.stage = effectiveState.stage;
+      state.workflow = effectiveState.workflow;
     }
 
     const promptKey = `${effectiveState.role}:${effectiveState.workflow ?? "none"}`;
     const includeFullWorkflow = Boolean(effectiveState.workflow && effectiveState.lastFullPromptKey !== promptKey);
     if (includeFullWorkflow) {
       state.lastFullPromptKey = promptKey;
-      persistState();
-      syncContextPanelState();
     }
+    persistState();
+    syncContextPanelState();
+    await refreshUi(ctx, state);
 
     const routingPolicy = await resolveTakomiRoutingPolicy(runtimeCwd);
     const optionalFeatureContext = (() => {
@@ -1269,14 +1367,14 @@ ${stateJson}`
       `Execution mode: ${route.executionMode}. Session recommendation: ${route.sessionRecommendation}.`,
       `Takomi execution gate: ${effectiveState.launchMode === "manual" ? "review" : "auto"}. In review gate mode, show the delegation plan before launching and return to the user after each task with results, verification guidance, and the recommended next step.`,
       !effectiveState.subagentsEnabled ? "Takomi subagents are disabled for this session. Do not call takomi_subagent or subagent until the user enables subagents." : "",
-      !genesisExists ? "Project foundation is missing or incomplete. Do not skip Genesis unless the user explicitly waives it." : "",
-      "Takomi is the default orchestration mindset here. Do not wait for the literal phrase 'use Takomi' before applying lifecycle judgment.",
-      "Task fan-out is flexible. Do not force exactly three tasks; decompose Genesis, Design, and Build work to fit the actual scope.",
-      "A new orchestration session should usually begin with one Genesis foundation task that creates or updates the required markdown artifacts, then expand later stages only when the scope justifies it.",
-      "If a follow-up request is small, one-shot it. If it is multi-part or large, create or expand an orchestration session instead of pretending it is a single task.",
+      orchestrationActive && !genesisExists ? "Project foundation is missing or incomplete. Do not skip Genesis unless the user explicitly waives it." : "",
+      "Do not escalate to orchestration or review just because this is coding-related; stay in the selected Takomi mode unless the user asks or a durable board/session is genuinely needed.",
+      orchestrationActive ? "Task fan-out is flexible. Do not force exactly three tasks; decompose Genesis, Design, and Build work to fit the actual scope." : "",
+      orchestrationActive ? "A new orchestration session should usually begin with one Genesis foundation task that creates or updates the required markdown artifacts, then expand later stages only when the scope justifies it." : "",
+      orchestrationActive ? "If a follow-up request is small, one-shot it. If it is multi-part or large, create or expand an orchestration session instead of pretending it is a single task." : "",
       "Before any Takomi subagent dispatch or model override, use the injected Pi model-registry context and project routing policy. Prefer provider-qualified model IDs. Do not run `pi --list-models` unless the registry context is missing or the user asks for a visible diagnostic.",
-      "When useful, state the current Takomi stage and the recommended next stage.",
-      effectiveState.stage === "build"
+      "When useful, state the current Takomi mode/stage and the recommended next step.",
+      orchestrationActive && effectiveState.stage === "build"
         ? "For build orchestration, use takomi_subagent to dispatch work to specialist subagents, then record the result on takomi_board; reuse the same conversation id when sending fixes back to the agent."
         : "",
     ].filter(Boolean);

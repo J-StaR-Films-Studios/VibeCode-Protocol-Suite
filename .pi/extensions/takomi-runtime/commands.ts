@@ -20,6 +20,8 @@ export type TakomiRuntimeCommandState = {
   workflow?: TakomiWorkflowId;
   activeSessionId?: string;
   subagentsEnabled: boolean;
+  modeSource?: "idle" | "manual" | "model" | "board";
+  modeReason?: string;
 };
 
 type RegisterTakomiCommandOptions = {
@@ -36,6 +38,8 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
   async function handleStage(ctx: ExtensionCommandContext, stage: VibeLifecycleStage, prompt?: string): Promise<void> {
     await options.updateState(ctx, () => {
       options.getState().enabled = true;
+      options.getState().modeSource = "manual";
+      options.getState().modeReason = `/${stage}`;
       options.setStageAndWorkflow(stage, { preserveRole: stage === "genesis" && options.getState().role === "orchestrator" });
       options.getState().planMode = stage !== "build";
     }, workflowPrompt(stage, prompt));
@@ -54,17 +58,27 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
         state.autoOrch = false;
         state.planMode = false;
         state.role = "general";
+        state.stage = undefined;
+        state.workflow = undefined;
+        state.modeSource = "idle";
+        state.modeReason = undefined;
       } else if (mode === "orchestrate") {
         state.autoOrch = true;
         state.planMode = true;
         state.role = "orchestrator";
         state.stage = hasGenesis ? "build" : "genesis";
         state.workflow = hasGenesis ? "vibe-build" : "vibe-genesis";
+        state.modeSource = "manual";
+        state.modeReason = "/takomi mode orchestrate";
       } else {
         state.autoOrch = false;
         state.planMode = true;
         state.launchMode = "manual";
         state.role = "review";
+        state.stage = undefined;
+        state.workflow = undefined;
+        state.modeSource = "manual";
+        state.modeReason = "/takomi mode review";
       }
     }, () => `Takomi mode set to ${mode}`);
   }

@@ -134,6 +134,7 @@ export function statusText(state: TakomiRuntimeCommandState, subagentController:
   return [
     `Takomi: ${state.enabled ? "on" : "off"}`,
     `Mode: ${state.role}`,
+    `Source: ${state.modeSource ?? "idle"}${state.modeReason ? ` (${state.modeReason})` : ""}`,
     `Stage: ${state.stage ?? "-"}`,
     `Workflow: ${state.workflow ?? "-"}`,
     `Plan bias: ${state.planMode ? "on" : "off"}`,
