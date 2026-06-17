@@ -1007,6 +1007,10 @@ ${stateJson}`
           }
         }
         sessionState.tasks[idx] = nextTask;
+        state.activeSessionId = params.sessionId;
+        persistState();
+        syncContextPanelState();
+        await refreshUi(ctx, state);
         const nextState = buildSessionState(
           sessionState.sessionId,
           sessionState.title,
@@ -1064,6 +1068,7 @@ ${stateJson}`
         state.activeSessionId = nextState.sessionId;
         persistState();
         syncContextPanelState();
+        await refreshUi(ctx, state);
 
         return {
           content: [{ type: "text", text: `Expanded ${params.stage} stage in session ${nextState.sessionId}.\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(nextState.tasks)}` }],
@@ -1106,6 +1111,7 @@ ${stateJson}`
       state.workflow = state.stage === "genesis" ? "vibe-genesis" : "vibe-build";
       persistState();
       syncContextPanelState();
+      await refreshUi(ctx, state);
 
       return {
         content: [{ type: "text", text: `Created Takomi orchestrator session ${nextState.sessionId} in hybrid mode\n\nDocs: ${paths.root}\nState: ${paths.stateFile}\n\n${buildTaskRows(nextState.tasks) || "No tasks provided."}` }],
