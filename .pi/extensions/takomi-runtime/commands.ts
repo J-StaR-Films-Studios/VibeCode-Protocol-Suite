@@ -212,27 +212,7 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
       ctx.ui.notify(statusText(options.getState(), controller), controller.hasRuns() ? "info" : "warning");
       return;
     }
-    if (action === "expand" || action === "fullscreen") {
-      ctx.ui.setToolsExpanded(true);
-      ctx.ui.notify("Expanded native tool results for Takomi subagent output.", "info");
-      return;
-    }
-    if (action === "collapse") {
-      ctx.ui.setToolsExpanded(false);
-      ctx.ui.notify("Collapsed native tool results.", "info");
-      return;
-    }
-    if (action === "toggle") {
-      const expanded = !ctx.ui.getToolsExpanded();
-      ctx.ui.setToolsExpanded(expanded);
-      ctx.ui.notify(`${expanded ? "Expanded" : "Collapsed"} native tool results.`, "info");
-      return;
-    }
-    if (action === "next" || action === "prev") {
-      ctx.ui.notify("Takomi now uses Pi's native inline result UI. Subagent navigation is handled by the transcript/tool results.", "info");
-      return;
-    }
-    ctx.ui.notify("Usage: /takomi subagents <on|off|status|expand|collapse|toggle>", "warning");
+    ctx.ui.notify("Usage: /takomi subagents <on|off|status>", "warning");
   }
 
   pi.registerCommand("takomi", {

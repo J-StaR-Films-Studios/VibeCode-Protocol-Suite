@@ -794,36 +794,6 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerShortcut("alt+t", {
-    description: "Toggle native tool result expansion",
-    handler: async (ctx) => {
-      const expanded = !ctx.ui.getToolsExpanded();
-      ctx.ui.setToolsExpanded(expanded);
-      ctx.ui.notify(`${expanded ? "Expanded" : "Collapsed"} native tool results.`, "info");
-    },
-  });
-
-  pi.registerShortcut("alt+shift+t", {
-    description: "Expand native tool results",
-    handler: async (ctx) => {
-      ctx.ui.setToolsExpanded(true);
-      ctx.ui.notify("Expanded native tool results for Takomi subagent output.", "info");
-    },
-  });
-
-  pi.registerShortcut("alt+n", {
-    description: "Show native subagent navigation hint",
-    handler: async (ctx) => {
-      ctx.ui.notify("Native subagent results are shown inline by Pi; use the transcript/tool expansion instead of Takomi focus cycling.", "info");
-    },
-  });
-
-  pi.registerShortcut("alt+p", {
-    description: "Show native subagent navigation hint",
-    handler: async (ctx) => {
-      ctx.ui.notify("Native subagent results are shown inline by Pi; use the transcript/tool expansion instead of Takomi focus cycling.", "info");
-    },
-  });
 
   async function applyTakomiMode(ctx: ExtensionContext, mode: string, source: TakomiModeSource, reason?: string): Promise<string> {
     const hasGenesis = await hasGenesisArtifacts(ctx.cwd);
