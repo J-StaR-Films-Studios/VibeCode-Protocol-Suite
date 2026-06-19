@@ -15,6 +15,28 @@ function getPathEntries() {
 }
 
 function commandExists(command) {
+  const pathEntries = getPathEntries();
+
+  // Avoid shelling out on the hot launch path. On Windows, `where pi` is often
+  // ~100ms by itself; a direct PATH scan is much cheaper and good enough for
+  // npm/cmd shims. Keep `where`/`which` as a fallback for edge cases.
+  const manualCandidates = process.platform === 'win32'
+    ? (() => {
+        const hasExtension = /\.(cmd|exe|bat|com)$/i.test(command);
+        const extensions = hasExtension
+          ? ['']
+          : (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
+              .split(';')
+              .filter(Boolean)
+              .sort((a, b) => (a.toLowerCase() === '.cmd' ? -1 : b.toLowerCase() === '.cmd' ? 1 : 0));
+        return pathEntries.flatMap((entry) => extensions.map((extension) => path.join(entry, `${command}${extension.toLowerCase()}`)));
+      })()
+    : pathEntries.map((entry) => path.join(entry, command));
+
+  for (const candidate of manualCandidates) {
+    if (fs.existsSync(candidate)) return { found: true, path: candidate };
+  }
+
   const probe = process.platform === 'win32'
     ? spawnSync('where', [command], { stdio: 'pipe', encoding: 'utf8' })
     : spawnSync('which', [command], { stdio: 'pipe', encoding: 'utf8' });
@@ -25,11 +47,6 @@ function commandExists(command) {
       ? matches.find((entry) => /\.(cmd|exe|bat)$/i.test(entry))
       : matches[0];
     return { found: true, path: preferred || matches[0] || null };
-  }
-
-  for (const entry of getPathEntries()) {
-    const candidate = path.join(entry, process.platform === 'win32' ? `${command}.cmd` : command);
-    if (fs.existsSync(candidate)) return { found: true, path: candidate };
   }
 
   return { found: false, path: null };
@@ -140,10 +157,15 @@ export async function inspectPiSubagentsDependency(home = HOME) {
   };
 }
 
-export async function detectPiCommand() {
+export async function detectPiCommand(options = {}) {
+  const { includeVersion = true } = options;
   const binary = commandExists('pi');
   if (!binary.found) {
     return { installed: false, path: null, version: null };
+  }
+
+  if (!includeVersion) {
+    return { installed: true, path: binary.path, version: null };
   }
 
   const versionProbe = process.platform === 'win32'
@@ -381,7 +403,7 @@ export async function updatePiManagedPackages({ timeoutMs } = {}) {
     return { ok: true, changed: false, report: 'Skipped Pi extension package update because TAKOMI_SKIP_PI_PACKAGE_UPDATE=1.' };
   }
 
-  const pi = await detectPiCommand();
+  const pi = await detectPiCommand({ includeVersion: false });
   if (!pi.installed) return { ok: false, changed: false, report: 'Pi is not installed.' };
 
   // Only reconcile Pi-managed extension/package entries here. Plain `pi update`
@@ -458,14 +480,22 @@ function printFirstRunGuidance(reason) {
 }
 
 export async function launchTakomiHarness(cwd = process.cwd()) {
-  const report = await inspectPiHarnessEnvironment(cwd);
+  // Keep the common `takomi` path lean. A full environment inspection shells out
+  // to `pi --version`, which costs multiple seconds on Windows before Pi even
+  // starts. For launch we only need to know the command exists and the required
+  // global Takomi extensions are present; `takomi doctor` still performs the
+  // complete diagnostic check.
+  const [pi, installed] = await Promise.all([
+    detectPiCommand({ includeVersion: false }),
+    inspectInstalledTakomiPiHarness(),
+  ]);
 
-  if (!report.pi.installed) {
+  if (!pi.installed) {
     printFirstRunGuidance('Pi is not installed yet.');
     return 1;
   }
 
-  if (!report.installed.runtimeInstalled || !report.installed.subagentsInstalled) {
+  if (!installed.runtimeInstalled || !installed.subagentsInstalled) {
     printFirstRunGuidance('Takomi Pi harness is not fully installed yet.');
     return 1;
   }
@@ -473,22 +503,21 @@ export async function launchTakomiHarness(cwd = process.cwd()) {
   const env = {
     ...process.env,
     TAKOMI_HARNESS: '1',
+    // Avoid Pi's blocking startup version check on this wrapped launch path.
+    // Takomi runtime schedules its own UI-safe delayed check after session_start.
+    PI_SKIP_VERSION_CHECK: process.env.PI_SKIP_VERSION_CHECK ?? '1',
+    TAKOMI_DELAYED_PI_VERSION_CHECK: process.env.TAKOMI_DELAYED_PI_VERSION_CHECK ?? '1',
   };
 
   return await new Promise((resolve) => {
-    const child = process.platform === 'win32'
-      ? spawn('cmd.exe', ['/d', '/s', '/c', 'pi'], {
-          cwd,
-          stdio: 'inherit',
-          env,
-          shell: false,
-        })
-      : spawn(report.pi.path || 'pi', [], {
-          cwd,
-          stdio: 'inherit',
-          env,
-          shell: false,
-        });
+    const resolved = resolveCommandForSpawn(pi.path || 'pi', []);
+    const child = spawn(resolved.command, resolved.args, {
+      cwd,
+      stdio: 'inherit',
+      env,
+      shell: false,
+      windowsHide: false,
+    });
 
     child.on('close', (code) => resolve(code ?? 0));
     child.on('error', () => resolve(1));

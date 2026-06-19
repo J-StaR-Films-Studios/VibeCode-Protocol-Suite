@@ -84,3 +84,31 @@ export async function copyOwnedTree(src, dest, options = {}) {
     },
   });
 }
+
+export async function linkOwnedTree(src, dest) {
+  const resolvedSrc = path.resolve(src);
+  const stat = await fs.lstat(resolvedSrc);
+  const type = stat.isDirectory()
+    ? (process.platform === 'win32' ? 'junction' : 'dir')
+    : 'file';
+  await fs.ensureDir(path.dirname(dest));
+  await fs.symlink(resolvedSrc, dest, type);
+}
+
+export async function materializeOwnedTree(src, dest, options = {}) {
+  const linkMode = options.linkMode || 'copy';
+  if (linkMode === 'symlink' || linkMode === 'auto') {
+    try {
+      await linkOwnedTree(src, dest);
+      return { method: 'symlink' };
+    } catch (error) {
+      if (linkMode === 'symlink') throw error;
+      await fs.remove(dest).catch(() => {});
+      await copyOwnedTree(src, dest, options.copyOptions || {});
+      return { method: 'copy', fallbackError: error.message };
+    }
+  }
+
+  await copyOwnedTree(src, dest, options.copyOptions || {});
+  return { method: 'copy' };
+}

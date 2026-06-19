@@ -92,6 +92,73 @@ let activeSubagentLabel: string | undefined;
 let activeSubagentAgent: string | undefined;
 let activeSubagentTask: string | undefined;
 let activeSubagentStatus: string | undefined;
+let delayedPiVersionCheckStarted = false;
+
+const PI_LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
+
+function parseVersionParts(version: string): number[] | undefined {
+  const core = version.trim().replace(/^v/, "").split("-")[0];
+  if (!/^\d+(?:\.\d+)*$/.test(core)) return undefined;
+  return core.split(".").map((part) => Number.parseInt(part, 10) || 0);
+}
+
+function isNewerVersion(candidate: string, current: string): boolean {
+  const left = parseVersionParts(candidate);
+  const right = parseVersionParts(current);
+  if (!left || !right) return candidate.trim() !== current.trim();
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const a = left[i] ?? 0;
+    const b = right[i] ?? 0;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return false;
+}
+
+async function readCurrentPiVersion(): Promise<string | undefined> {
+  const candidates = [
+    path.resolve(path.dirname(process.argv[1] ?? ""), "..", "package.json"),
+    path.resolve(path.dirname(process.argv[1] ?? ""), "package.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(await readFile(candidate, "utf8")) as { name?: string; version?: string };
+      if (parsed.name === "@earendil-works/pi-coding-agent" && typeof parsed.version === "string") return parsed.version;
+    } catch { }
+  }
+  return undefined;
+}
+
+function scheduleDelayedPiVersionCheck(ctx: ExtensionContext): void {
+  if (delayedPiVersionCheckStarted) return;
+  if (process.env.TAKOMI_DELAYED_PI_VERSION_CHECK !== "1") return;
+  if (process.env.TAKOMI_SKIP_DELAYED_PI_VERSION_CHECK === "1" || process.env.PI_OFFLINE === "1") return;
+  delayedPiVersionCheckStarted = true;
+
+  const delayMs = Math.max(0, Number(process.env.TAKOMI_PI_VERSION_CHECK_DELAY_MS || 3000) || 3000);
+  const timeoutMs = Math.max(500, Number(process.env.TAKOMI_PI_VERSION_CHECK_TIMEOUT_MS || 2500) || 2500);
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const currentVersion = await readCurrentPiVersion();
+        if (!currentVersion) return;
+        const response = await fetch(PI_LATEST_VERSION_URL, {
+          headers: { accept: "application/json", "user-agent": `takomi-delayed-pi-version-check/${currentVersion}` },
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { version?: unknown; note?: unknown };
+        if (typeof data.version !== "string" || !isNewerVersion(data.version, currentVersion)) return;
+        if (ctx.hasUI) {
+          const note = typeof data.note === "string" && data.note.trim() ? ` ${data.note.trim()}` : "";
+          ctx.ui.notify(`Pi ${data.version} is available (installed: ${currentVersion}). Run: takomi refresh pi.${note}`, "info");
+        }
+      } catch {
+        // Best-effort only. Delayed version checks must never affect startup or usage.
+      }
+    })();
+  }, delayMs).unref?.();
+}
 
 const ThinkingSchema = Type.Union([
   Type.Literal("off"),
@@ -1365,6 +1432,7 @@ ${stateJson}`
 
   pi.on("session_start", async (_event, ctx) => {
     runtimeCtx = ctx;
+    scheduleDelayedPiVersionCheck(ctx);
     activeProfile = await loadTakomiProfile(ctx.cwd);
     activeSubagentLabel = undefined;
     activeSubagentAgent = undefined;

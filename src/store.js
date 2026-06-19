@@ -17,6 +17,7 @@ function createDefaultManifest() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         linkedHarnesses: [],
+        syncMode: 'copy',
         installed: {
             skills: [],
             workflows: [],
@@ -38,6 +39,7 @@ function normalizeManifest(manifest) {
         workflows: normalizeOwnedMap(manifest?.bundledOwned?.workflows),
     };
     normalized.harnessOwned = manifest?.harnessOwned || {};
+    normalized.syncMode = manifest?.syncMode || 'copy';
     return normalized;
 }
 

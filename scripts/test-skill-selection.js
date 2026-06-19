@@ -16,12 +16,27 @@ const harness = await import('../src/harness.js');
 
 const skillPath = (name) => path.join(process.env.TAKOMI_SKILLS_ROOT, name);
 
+function assertHarnessSkillPath(id, relativePath) {
+  assert.equal(harness.HARNESS_MAP[id].targets.skills, path.join(os.homedir(), ...relativePath));
+}
+
 async function resetSkillsInstallState() {
   await fs.remove(process.env.TAKOMI_SKILLS_ROOT);
   await fs.remove(installer.SKILLS_MANIFEST_PATH);
 }
 
 try {
+  assertHarnessSkillPath('antigravity', ['.gemini', 'config', 'skills']);
+  assert.equal(harness.HARNESS_MAP.antigravity.targets.workflows, path.join(os.homedir(), '.gemini', 'config', 'global_workflows'));
+  assertHarnessSkillPath('claude_code', ['.claude', 'skills']);
+  assertHarnessSkillPath('codex', ['.codex', 'skills']);
+  assertHarnessSkillPath('cursor', ['.cursor', 'skills']);
+  assertHarnessSkillPath('pi', ['.agents', 'skills']);
+  assertHarnessSkillPath('kilocode', ['.kilocode', 'skills']);
+  assertHarnessSkillPath('windsurf', ['.codeium', 'windsurf', 'skills']);
+  assert.equal(Boolean(harness.HARNESS_MAP.gemini_cli), false, 'deprecated Gemini CLI should not be a sync target');
+  assert.equal(Boolean(harness.HARNESS_MAP.antigravity_cli), false, 'Antigravity CLI should not use the old separate config target');
+
   const core = await catalog.getValidCoreSkills();
   assert.deepEqual(core, [
     'takomi',
@@ -139,6 +154,19 @@ try {
   assert.equal(await fs.pathExists(path.join(harnessTarget, 'ai-sdk')), false, 'harness sync should prune deselected Takomi-owned skills');
   assert.equal(await fs.pathExists(path.join(harnessTarget, 'manual-harness-skill')), true, 'harness sync should preserve manual skills');
   assert.equal(await fs.pathExists(path.join(harnessTarget, 'takomi')), true, 'harness sync should keep selected skills');
+
+  const linkedHarnessTarget = path.join(tempRoot, 'linked-harness-skills');
+  const linkResult = await harness.syncDirectory(path.join(store.STORE_PATH, 'skills'), linkedHarnessTarget, '', {
+    preserveManual: true,
+    prune: true,
+    returnDetails: true,
+    linkMode: 'auto',
+  });
+  assert.equal(linkResult.copied >= 1, true, 'link-mode harness sync should materialize store skills');
+  assert.equal(['symlink', 'copy'].includes(linkResult.owned.takomi.syncMethod), true, 'link-mode sync should record the materialization method');
+  if (linkResult.owned.takomi.syncMethod === 'symlink') {
+    assert.equal((await fs.lstat(path.join(linkedHarnessTarget, 'takomi'))).isSymbolicLink(), true, 'symlink sync should create a link/junction to the store skill');
+  }
 
   console.log('✓ skill selection installer tests passed');
 } finally {

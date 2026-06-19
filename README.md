@@ -63,7 +63,7 @@ Takomi now ships a Pi-native `takomi-context-manager` extension. It reduces prom
 
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 
-Install once. Use everywhere. Your skills follow you across every AI harness(Antigravity, KiloCode, Windsurf, Cursor, Gemini CLI):
+Install once. Use everywhere. Your skills follow you across detected AI harnesses (Antigravity, Claude Code, Codex, Cursor, Kilo Code, Pi/shared Agent Skills, Windsurf):
 
 ```bash
 # Using pnpm
@@ -184,17 +184,21 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 
 **One install. Every IDE. Zero friction.**
 
-Takomi v2.0 introduces the **Global Skills Router** — install skills once, and they appear in every AI harness you use. No symlinks. No admin privileges. Works on Mac & Windows.
+Takomi v2.0 introduces the **Global Skills Router** — install skills once into `~/.takomi/`, and Takomi syncs them into each harness' current global skills directory. You can choose symlink/junction mode for one canonical copy, auto fallback, or plain copy mode. Works on Mac & Windows.
+
+Note: `SKILL.md` is portable, but `~/.agents/skills` is **not** a universal global skills directory. Pi does load `~/.agents/skills`, and Takomi keeps that as the Pi/shared Agent Skills target. Other harnesses use their own global paths. See `docs/skills-harness-targets.md` for the current checked path table.
 
 ### Supported Harnesses
 
 | Harness | Global Skills Path | Global Workflows Path |
 |---|---|---|
-| **Antigravity** | `~/.gemini/antigravity/skills/` | `~/.gemini/antigravity/global_workflows/` |
-| **KiloCode** | `~/.kilocode/skills/` | `~/.kilocode/workflows/` |
+| **Antigravity** | `~/.gemini/config/skills/` | `~/.gemini/config/global_workflows/` |
+| **Claude Code** | `~/.claude/skills/` | _(skills only)_ |
+| **Codex** | `~/.codex/skills/` | _(skills only)_ |
+| **Cursor** | `~/.cursor/skills/` | _(skills only)_ |
+| **Kilo Code** | `~/.kilocode/skills/` | `~/.kilocode/workflows/` |
+| **Pi / shared Agent Skills** | `~/.agents/skills/` | _(skills only)_ |
 | **Windsurf** | `~/.codeium/windsurf/skills/` | `~/.codeium/windsurf/global_workflows/` |
-| **Global agents-compatible CLIs** _(e.g., Codex, Gemini CLI)_ | `~/.agents/skills/` | _(skills only)_ |
-| **Cursor** | `~/.cursor/skills/` | _(uses rules)_ |
 
 ### CLI Commands
 
@@ -505,7 +509,7 @@ Externally sourced skills and optional Pi packages retain credit to their upstre
 - **Context7**: From [upstash/context7](https://github.com/upstash/context7) — fresh library documentation fetcher.
 - **Audit Website**: From [squirrelscan/skills](https://github.com/squirrelscan/skills) — professional website auditor.
 - **Convex Skills**: From [waynesutton/convexskills](https://github.com/waynesutton/convexskills) — complete Convex development suite including **Functions**, **Schema Validation**, **Realtime**, **Agents**, **File Storage**, **Migrations**, **HTTP Actions**, **Cron Jobs**, **Component Authoring**, **Best Practices**, **Security Audit**, **Security Check**, **Avoid Feature Creep**, and **Optimize Agent Context**.
-- **Gemini CLI**: Custom VibeCode skill for large-context processing with Gemini 3 Pro.
+- **Anti-Gravity**: Custom skill for running Google's current Anti-Gravity CLI workflow for large-context review and analysis.
 - **Google Stitch Skills**: From [google-labs-code/stitch-skills](https://github.com/google-labs-code/stitch-skills) — Design-to-code suite including **design-md**, **enhance-prompt**, **stitch-loop**, **react-components**, and **shadcn-ui**.
 - **Jules**: From [sanjay3290/ai-skills](https://github.com/sanjay3290/ai-skills) — delegate coding tasks to Google Jules AI agent.
 - **Subagent Execution**: Built on **[`pi-subagents`](https://github.com/nicobailon/pi-subagents)** by **Nico Bailon** — providing the underlying Pi extension for delegated subagent runs (result rendering, live progress, single/parallel/chain execution, session/artifact handling, and related subagent tooling), upon which Takomi adds its own lifecycle orchestration, model-routing policy, and workflow metadata.

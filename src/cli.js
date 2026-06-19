@@ -23,6 +23,7 @@ import {
   downloadDirectoryFromGitHub,
 } from './utils.js';
 import {
+  HARNESS_MAP,
   detectHarnesses,
   printHarnessStatus,
   syncToAllHarnesses,
@@ -393,6 +394,43 @@ async function promptSkillsInstallSelection() {
   return { mode: response.mode, selectedSkills };
 }
 
+function normalizeHarnessSyncMode(value) {
+  return ['copy', 'symlink', 'auto'].includes(value) ? value : 'copy';
+}
+
+async function promptHarnessSyncMode(initial = 'auto') {
+  const normalizedInitial = normalizeHarnessSyncMode(initial);
+  const choices = [
+    { title: 'Auto (try symlink, copy if blocked)', value: 'auto', description: 'Best fallback when Windows permissions or filesystems block symlinks.' },
+    { title: 'Symlink / Junction (single source of truth)', value: 'symlink', description: 'Each managed skill/workflow points back to ~/.takomi; edits update one canonical copy.' },
+    { title: 'Copy (independent files)', value: 'copy', description: 'Most compatible; changes do not flow back to ~/.takomi.' },
+  ];
+  const response = await prompts({
+    type: 'select',
+    name: 'syncMode',
+    message: 'How should Takomi sync store resources into harness folders?',
+    choices,
+    initial: Math.max(0, choices.findIndex((choice) => choice.value === normalizedInitial)),
+  });
+  if (!response.syncMode) return null;
+  return normalizeHarnessSyncMode(response.syncMode);
+}
+
+function collectSyncFailures(syncSummary) {
+  return Object.entries(syncSummary || {})
+    .filter(([, result]) => result?.ok === false)
+    .map(([id, result]) => ({ id, errors: result.errors?.length ? result.errors : ['unknown sync error'] }));
+}
+
+function printSyncFailures(failures) {
+  if (!failures.length) return;
+  console.log(pc.yellow('\nSome harnesses did not fully sync:'));
+  for (const failure of failures) {
+    console.log(pc.dim(`  - ${failure.id}: ${failure.errors.join('; ')}`));
+  }
+  process.exitCode = 1;
+}
+
 async function installSkillsTarget() {
   console.log(pc.magenta('🧰 Takomi Skills Install\n'));
   try {
@@ -411,7 +449,7 @@ async function installSkillsTarget() {
     const result = await installBundledSkills(program.version(), selection);
     const validation = await validateSkillsInstall(selection.selectedSkills);
     printSkillsInstallSummary(result, validation);
-    console.log(pc.dim('\nGlobal skills are ready for Pi or other supported harnesses.\n'));
+    console.log(pc.dim('\nShared skills target is ready. For per-harness global paths, run "takomi setup" or "takomi sync".\n'));
   } catch (error) {
     console.log(pc.red('\nSkills install failed.'));
     console.log(pc.dim(String(error?.message || error)));
@@ -622,7 +660,7 @@ async function install(target) {
 
   if (detected.length === 0) {
     console.log(pc.yellow('  No AI harnesses detected on this machine.'));
-    console.log(pc.dim('  We support: Antigravity, KiloCode, Windsurf, Codex, Cursor, Gemini CLI'));
+    console.log(pc.dim(`  We support: ${Object.values(HARNESS_MAP).map(h => h.name).join(', ')}`));
     console.log(pc.dim('  Run "takomi init" instead for per-project setup.\n'));
     return;
   }
@@ -715,6 +753,11 @@ async function install(target) {
 
   if (!contentResponse.content) return;
 
+  const syncMode = await promptHarnessSyncMode(
+    (hasExistingStoreSkills || hasExistingStoreWorkflows) ? existingStoreManifest.syncMode : 'auto'
+  );
+  if (!syncMode) return;
+
   try {
     // 4. Initialize global store
     console.log(pc.cyan(`\n📦 Creating global store (${STORE_PATH})...\n`));
@@ -802,11 +845,15 @@ async function install(target) {
     const syncSummary = await syncToAllHarnesses(selectedHarnesses, STORE_PATH, {
       useOwnership: true,
       owned: manifest.harnessOwned,
+      linkMode: syncMode,
     });
 
     // 7. Update manifest
+    const syncFailures = collectSyncFailures(syncSummary);
+    const successfulHarnesses = selectedHarnesses.filter(h => !syncFailures.some(failure => failure.id === h.id));
     manifest = await getManifest();
-    manifest.linkedHarnesses = selectedHarnesses.map(h => h.id);
+    manifest.linkedHarnesses = successfulHarnesses.map(h => h.id);
+    manifest.syncMode = syncMode;
     manifest.installed.skills = await getStoreSkills();
     manifest.installed.workflows = await getStoreWorkflows();
     manifest.harnessOwned = manifest.harnessOwned || {};
@@ -814,11 +861,13 @@ async function install(target) {
       manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
     }
     await writeManifest(manifest);
+    printSyncFailures(syncFailures);
 
     // 8. Summary
-    console.log(pc.magenta('\n✨ Your command center is live. ✨'));
+    console.log(pc.magenta(syncFailures.length ? '\n⚠ Your command center is partially synced. ⚠' : '\n✨ Your command center is live. ✨'));
     console.log(pc.white(`\n  Store:     ${STORE_PATH}`));
-    console.log(pc.white(`  Connected: ${selectedHarnesses.map(h => h.name).join(', ')}`));
+    console.log(pc.white(`  Sync mode: ${syncMode}`));
+    console.log(pc.white(`  Connected: ${successfulHarnesses.map(h => h.name).join(', ') || 'none'}`));
     console.log(pc.dim(`\n  Add skills:    takomi add <github-url>`));
     console.log(pc.dim(`  Sync updates:  takomi sync\n`));
 
@@ -882,23 +931,33 @@ async function sync(target) {
 
   const selectedHarnesses = detected.filter(h => response.harnesses.includes(h.id));
 
-  console.log(pc.cyan('\n📡 Syncing from global store...\n'));
+  const envSyncMode = process.env.TAKOMI_HARNESS_SYNC_MODE;
+  const syncMode = normalizeHarnessSyncMode(envSyncMode || manifest.syncMode || 'copy');
+  console.log(pc.cyan(`\n📡 Syncing from global store (${syncMode})...\n`));
   const syncSummary = await syncToAllHarnesses(selectedHarnesses, STORE_PATH, {
     useOwnership: true,
     owned: manifest.harnessOwned,
+    linkMode: syncMode,
   });
 
   // Update manifest with current harnesses
-  manifest.linkedHarnesses = [...new Set([...manifest.linkedHarnesses, ...response.harnesses])];
+  const syncFailures = collectSyncFailures(syncSummary);
+  const successfulHarnessIds = response.harnesses.filter(id => !syncFailures.some(failure => failure.id === id));
+  manifest.linkedHarnesses = [...new Set([...manifest.linkedHarnesses, ...successfulHarnessIds])];
+  if (!envSyncMode) manifest.syncMode = syncMode;
   manifest.harnessOwned = manifest.harnessOwned || {};
   for (const harness of selectedHarnesses) {
     manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
   }
   await writeManifest(manifest);
+  printSyncFailures(syncFailures);
 
   const skills = await getStoreSkills();
   const workflows = await getStoreWorkflows();
-  console.log(pc.magenta(`\n✨ ${skills.length} skills and ${workflows.length} workflows synced to ${selectedHarnesses.length} IDE(s). Ready to build.\n`));
+  const syncedCount = successfulHarnessIds.length;
+  console.log(pc.magenta(syncFailures.length
+    ? `\n⚠ ${skills.length} skills and ${workflows.length} workflows partially synced to ${syncedCount}/${selectedHarnesses.length} IDE(s).\n`
+    : `\n✨ ${skills.length} skills and ${workflows.length} workflows synced to ${syncedCount} IDE(s). Ready to build.\n`));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -994,8 +1053,21 @@ async function add(url) {
     if (syncResponse.doSync) {
       const detected = detectHarnesses();
       const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
-      await syncToAllHarnesses(linked, STORE_PATH);
-      console.log(pc.magenta(`\n✨ Live on ${linked.length} IDE(s). You're armed and ready.\n`));
+      const syncSummary = await syncToAllHarnesses(linked, STORE_PATH, {
+        useOwnership: true,
+        owned: manifest.harnessOwned,
+        linkMode: normalizeHarnessSyncMode(process.env.TAKOMI_HARNESS_SYNC_MODE || manifest.syncMode || 'copy'),
+      });
+      const syncFailures = collectSyncFailures(syncSummary);
+      manifest.harnessOwned = manifest.harnessOwned || {};
+      for (const harness of linked) {
+        manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
+      }
+      await writeManifest(manifest);
+      printSyncFailures(syncFailures);
+      console.log(pc.magenta(syncFailures.length
+        ? `\n⚠ Live on ${linked.length - syncFailures.length}/${linked.length} IDE(s); some harnesses need attention.\n`
+        : `\n✨ Live on ${linked.length} IDE(s). You're armed and ready.\n`));
     }
   } else {
     console.log(pc.dim('\n  Run "takomi sync" when you want to push these to your IDEs.\n'));
@@ -1022,6 +1094,7 @@ async function harnesses() {
     console.log(pc.white(`  Location:  ${STORE_PATH}`));
     console.log(pc.white(`  Skills:    ${skills.length} ready to deploy`));
     console.log(pc.white(`  Workflows: ${workflows.length} available`));
+    console.log(pc.white(`  Sync mode: ${manifest.syncMode || 'copy'}`));
     console.log(pc.white(`  Connected: ${manifest.linkedHarnesses.join(', ') || 'none'}`));
     console.log(pc.dim(`  Updated:   ${manifest.updatedAt}\n`));
   } else {
@@ -1096,8 +1169,19 @@ async function updateProjectResources() {
       const detected = detectHarnesses();
       const linked = detected.filter(h => manifest.linkedHarnesses.includes(h.id));
       if (linked.length > 0) {
-        console.log(pc.cyan('\n📡 Auto-syncing to linked harnesses...\n'));
-        await syncToAllHarnesses(linked, STORE_PATH);
+        const syncMode = normalizeHarnessSyncMode(process.env.TAKOMI_HARNESS_SYNC_MODE || manifest.syncMode || 'copy');
+        console.log(pc.cyan(`\n📡 Auto-syncing to linked harnesses (${syncMode})...\n`));
+        const syncSummary = await syncToAllHarnesses(linked, STORE_PATH, {
+          useOwnership: true,
+          owned: manifest.harnessOwned,
+          linkMode: syncMode,
+        });
+        const syncFailures = collectSyncFailures(syncSummary);
+        manifest.harnessOwned = manifest.harnessOwned || {};
+        for (const harness of linked) {
+          manifest.harnessOwned[harness.id] = syncSummary[harness.id]?.owned || manifest.harnessOwned[harness.id] || {};
+        }
+        printSyncFailures(syncFailures);
       }
     }
 

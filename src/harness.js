@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import pc from 'picocolors';
-import { hashPath, normalizeOwnedMap, copyOwnedTree } from './owned-tree.js';
+import { hashPath, normalizeOwnedMap, materializeOwnedTree } from './owned-tree.js';
 
 // ─── Cross-Platform Home Directory ───────────────────────────────────────────
 const HOME = os.homedir();
@@ -34,13 +34,26 @@ function getAppData() {
 export const HARNESS_MAP = {
   antigravity: {
     name: 'Antigravity',
-    rootPath: path.join(HOME, '.gemini', 'antigravity'),
+    rootPath: path.join(HOME, '.gemini', 'config'),
     detect() {
       return fs.existsSync(this.rootPath);
     },
     targets: {
-      skills: path.join(HOME, '.gemini', 'antigravity', 'skills'),
-      workflows: path.join(HOME, '.gemini', 'antigravity', 'global_workflows'),
+      skills: path.join(HOME, '.gemini', 'config', 'skills'),
+      workflows: path.join(HOME, '.gemini', 'config', 'global_workflows'),
+      yamls: null,
+    },
+  },
+
+  claude_code: {
+    name: 'Claude Code',
+    rootPath: path.join(HOME, '.claude'),
+    detect() {
+      return fs.existsSync(this.rootPath);
+    },
+    targets: {
+      skills: path.join(HOME, '.claude', 'skills'),
+      workflows: null,
       yamls: null,
     },
   },
@@ -78,7 +91,20 @@ export const HARNESS_MAP = {
     name: 'Codex',
     rootPath: path.join(HOME, '.codex'),
     detect() {
-      return fs.existsSync(this.rootPath);
+      return fs.existsSync(this.rootPath) || fs.existsSync('/etc/codex');
+    },
+    targets: {
+      skills: path.join(HOME, '.codex', 'skills'),
+      workflows: null,
+      yamls: null,
+    },
+  },
+
+  pi: {
+    name: 'Pi / shared Agent Skills',
+    rootPath: path.join(HOME, '.pi'),
+    detect() {
+      return fs.existsSync(this.rootPath) || fs.existsSync(path.join(HOME, '.agents'));
     },
     targets: {
       skills: path.join(HOME, '.agents', 'skills'),
@@ -100,19 +126,7 @@ export const HARNESS_MAP = {
     },
   },
 
-  gemini_cli: {
-    name: 'Gemini CLI',
-    rootPath: path.join(HOME, '.gemini'),
-    detect() {
-      // Only match bare Gemini CLI — not Antigravity (which also lives under .gemini)
-      return fs.existsSync(this.rootPath) && !fs.existsSync(path.join(HOME, '.gemini', 'antigravity'));
-    },
-    targets: {
-      skills: path.join(HOME, '.agents', 'skills'),
-      workflows: null,
-      yamls: null,
-    },
-  },
+
 };
 
 // ─── Detection ───────────────────────────────────────────────────────────────
@@ -163,17 +177,14 @@ export function printHarnessStatus(detected) {
 
 /**
  * Syncs a source directory to a harness target path.
- * Uses hard copy (fs.copy) — no symlinks.
+ * Supports copy, symlink/junction, or auto-fallback materialization.
+ * When ownership is supplied, it also prunes previous Takomi-owned items
+ * that are no longer in the source while preserving manual or modified files.
  *
  * @param {string} sourcePath  - Source directory (e.g., ~/.takomi/skills/)
- * @param {string} targetPath  - Destination directory (e.g., ~/.gemini/antigravity/skills/)
+ * @param {string} targetPath  - Destination directory (e.g., ~/.gemini/config/skills/)
  * @param {string} label       - Human-readable label for logging
- * @returns {Promise<number>}  - Number of items copied
- */
-/**
- * Syncs a directory to a target path. When ownership is supplied, it also
- * prunes previous Takomi-owned items that are no longer in the source while
- * preserving manual or modified files.
+ * @returns {Promise<number|object>}  - Number of items materialized, or details
  */
 export async function syncDirectory(sourcePath, targetPath, label = '', options = {}) {
   if (!targetPath) return options.returnDetails ? { copied: 0, pruned: 0, preservedManual: [], preservedModified: [], owned: {} } : 0;
@@ -187,7 +198,10 @@ export async function syncDirectory(sourcePath, targetPath, label = '', options 
     const nextOwned = {};
     const preservedManual = [];
     const preservedModified = [];
+    const symlinkFallbacks = [];
+    const linkMode = options.linkMode || process.env.TAKOMI_HARNESS_SYNC_MODE || 'copy';
     let copied = 0;
+    let linked = 0;
     let pruned = 0;
 
     if (options.prune && Object.keys(previousOwned).length > 0) {
@@ -225,29 +239,35 @@ export async function syncDirectory(sourcePath, targetPath, label = '', options 
         await fs.remove(dest);
       }
 
-      await copyOwnedTree(src, dest);
+      const materialized = await materializeOwnedTree(src, dest, { linkMode });
       nextOwned[item] = {
         hash: await hashPath(dest),
         targetPath: dest,
+        sourcePath: path.resolve(src),
+        syncMethod: materialized.method,
         syncedAt: new Date().toISOString(),
       };
-      copied++;
+      if (materialized.method === 'symlink') linked++;
+      else copied++;
+      if (materialized.fallbackError) symlinkFallbacks.push(`${item}: ${materialized.fallbackError}`);
     }
 
     if (label) {
       const suffix = pruned ? `, removed ${pruned}` : '';
-      console.log(pc.green(`  ✔ ${label} (${copied} items${suffix})`));
+      const methodSummary = linked ? `${linked} linked, ${copied} copied` : `${copied} copied`;
+      console.log(pc.green(`  ✔ ${label} (${methodSummary}${suffix})`));
       if (preservedManual.length) console.log(pc.yellow(`    Preserved manual items: ${preservedManual.join(', ')}`));
       if (preservedModified.length) console.log(pc.yellow(`    Preserved modified Takomi-owned items: ${preservedModified.join(', ')}`));
+      if (symlinkFallbacks.length) console.log(pc.yellow(`    Symlink fallback copies: ${symlinkFallbacks.join('; ')}`));
     }
 
-    const details = { copied, pruned, preservedManual, preservedModified, owned: Object.fromEntries(Object.entries(nextOwned).sort(([a], [b]) => a.localeCompare(b))) };
-    return options.returnDetails ? details : copied;
+    const details = { copied: copied + linked, linked, copyCount: copied, pruned, preservedManual, preservedModified, symlinkFallbacks, owned: Object.fromEntries(Object.entries(nextOwned).sort(([a], [b]) => a.localeCompare(b))) };
+    return options.returnDetails ? details : copied + linked;
   } catch (error) {
     if (label) {
       console.log(pc.red(`  ✗ ${label}: ${error.message}`));
     }
-    return options.returnDetails ? { copied: 0, pruned: 0, preservedManual: [], preservedModified: [], owned: normalizeOwnedMap(options.owned), ok: false, error: error.message } : 0;
+    return options.returnDetails ? { copied: 0, linked: 0, copyCount: 0, pruned: 0, preservedManual: [], preservedModified: [], symlinkFallbacks: [], owned: normalizeOwnedMap(options.owned), ok: false, error: error.message } : 0;
   }
 }
 
@@ -309,6 +329,7 @@ export async function syncToHarness(harness, storePath, options = {}) {
         preserveManual: useOwnership,
         prune: useOwnership,
         returnDetails: useOwnership,
+        linkMode: options.linkMode,
       },
     );
     if (useOwnership) {
@@ -335,6 +356,7 @@ export async function syncToHarness(harness, storePath, options = {}) {
         preserveManual: useOwnership,
         prune: useOwnership,
         returnDetails: useOwnership,
+        linkMode: options.linkMode,
       },
     );
     if (useOwnership) {
