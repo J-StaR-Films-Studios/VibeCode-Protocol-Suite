@@ -81,9 +81,9 @@ export function renderRuntimeStatus(theme: Theme, state: RuntimeHudState): strin
   const sourceLabel = source === "manual" ? theme.fg("warning", "manual") : theme.fg("success", source);
   const role = state.stage && state.role !== state.stage ? theme.fg("dim", state.role) : "";
   const plan = state.planMode ? theme.fg("warning", "plan") : theme.fg("dim", "direct");
-  const gate = state.launchMode === "manual" ? theme.fg("warning", "review-gate") : "";
+  const gate = state.launchMode === "manual" ? theme.fg("warning", "review-gate") : theme.fg("success", "auto-gate");
   const subagents = state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : "";
-  return [theme.fg("accent", "Takomi"), sourceLabel, stageBadge, role, gate || plan, subagents].filter(Boolean).join(" ");
+  return [theme.fg("accent", "Takomi"), sourceLabel, stageBadge, role, gate, plan, subagents].filter(Boolean).join(" ");
 }
 
 export function renderRuntimeWidget(theme: Theme, state: RuntimeHudState): string[] {
@@ -95,7 +95,7 @@ export function renderRuntimeWidget(theme: Theme, state: RuntimeHudState): strin
     sourceLabel,
     badge(theme, primary, stageTone(state.stage)),
     state.stage && state.role !== state.stage ? theme.fg("dim", `role:${state.role}`) : "",
-    state.launchMode === "manual" ? theme.fg("warning", "review-gate") : "",
+    state.launchMode === "manual" ? theme.fg("warning", "review-gate") : theme.fg("success", "auto-gate"),
     state.planMode ? theme.fg("warning", "plan") : theme.fg("dim", "direct"),
     state.subagentsEnabled === false ? theme.fg("error", "subagents:off") : theme.fg("dim", "subagents:on"),
     state.workflow ? theme.fg("dim", `wf:${state.workflow}`) : "",

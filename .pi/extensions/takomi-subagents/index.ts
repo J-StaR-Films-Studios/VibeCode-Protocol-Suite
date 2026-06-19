@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { renderTakomiSubagentCall, renderTakomiSubagentResult } from "./native-render";
+import { loadPiSubagentsInternals } from "./pi-subagents-internal";
 import { executeTakomiSubagentTool } from "./tool-runner";
 
 const ChecklistItemSchema = Type.Object({
@@ -74,6 +75,11 @@ function registerSubagentTool(pi: ExtensionAPI): void {
   });
 }
 
-export default function takomiSubagents(pi: ExtensionAPI) {
+export default async function takomiSubagents(pi: ExtensionAPI) {
+  // Preload the native pi-subagents renderer before tool registration. Rendering
+  // callbacks are synchronous, so if we only lazy-load internals during execution
+  // a completed takomi_subagent result can fall back to Takomi's plain text
+  // renderer and lose the native compact/expanded details shown by `subagent`.
+  await loadPiSubagentsInternals();
   registerSubagentTool(pi);
 }

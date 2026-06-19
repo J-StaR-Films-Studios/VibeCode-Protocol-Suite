@@ -58,6 +58,43 @@ In practice:
 - Collapse direct Takomi subagent launching and board redispatch into one adapter.
 - Stop exposing many low-level slash commands as the primary user surface.
 
+## Current Wrapper Contract
+
+As of 2026-06-19, `takomi_subagent` is not a pure alias for Pi's `subagent`; it is a Takomi lifecycle/policy wrapper around the native `pi-subagents` execution and final rendering path.
+
+### Native Pi responsibilities
+
+- `pi-subagents` owns child process execution, single/parallel/chain semantics, progress snapshots, sessions, artifacts, tool-count/token/duration summaries, and the final compact/expanded result renderer.
+- `.pi/extensions/takomi-subagents/pi-subagents-internal.ts` is the only import adapter for native `pi-subagents` internals. If upstream paths change, repair this adapter instead of spreading internal imports across Takomi.
+- `.pi/extensions/takomi-subagents/pi-subagents-engine.ts` converts Takomi task params into native subagent params, then calls the native executor.
+
+### Takomi wrapper responsibilities
+
+- `.pi/extensions/takomi-subagents/index.ts` registers only `takomi_subagent`; it must never claim the default `subagent` tool name.
+- `.pi/extensions/takomi-subagents/tool-runner.ts` validates Takomi-specific inputs, applies launch gates, resolves Takomi agent aliases, applies model-routing defaults, builds `TakomiDelegationPlan`, and attaches `details.takomi` metadata to the native result.
+- Takomi preserves workflow, skills, checklist, model/fallback/thinking, `conversationId`, `agentScope`, preview/manual gate, project-agent trust, hard-stop, and board/session continuity behavior.
+- `.pi/extensions/takomi-subagents/index.ts` preloads `pi-subagents` internals during extension startup because completed tool rendering is synchronous. Without this preload, completed `takomi_subagent` results can fall back to a plain Takomi text renderer and lose native Ctrl+O detail.
+
+### Rendering contract
+
+- `renderTakomiSubagentCall()` may remain Takomi-branded (`takomi_subagent reviewer`, `takomi_subagent parallel`, etc.).
+- Partial/live output is intentionally Takomi-custom and bounded in `.pi/extensions/takomi-subagents/native-render.ts` so manual scrolling/Ctrl+O does not jump on every token.
+- Partial/live rows must not show `[completed]` while the outer tool result is still partial. If every child row already looks terminal but Pi has not settled the tool result, the live renderer shows `finalizing` instead.
+- Policy-gate blocks from `takomi-context-manager` must render compact by default even though the model receives the full policy text. Ctrl+O expands the full loaded policy context, and Ctrl+O again collapses it.
+- Final/non-partial output should delegate to native `renderSubagentResult()` so collapsed and Ctrl+O-expanded views match normal Pi `subagent` output: stats, task text, tool calls, usage, session file, artifacts, and markdown output.
+- If native rendering is unavailable, Takomi may fall back to a compact text renderer, but that is a degraded state and should be treated as a regression for normal completed runs.
+
+### Regression checks
+
+Use these UI expectations after future changes:
+
+1. Running `takomi_subagent` shows a bounded live card headed `takomi_subagent running` or `takomi_subagent finalizing`, not a large raw log dump.
+2. A child row does not display `[completed]` while the outer card still says the tool is running.
+3. Completed collapsed `takomi_subagent` output should look native-style, not just `✓ takomi_subagent completed · N result lines hidden`.
+4. Pressing Ctrl+O on a completed `takomi_subagent` result should reveal native detail comparable to `subagent`: task, command/tool lines, result markdown, skills/model usage, session, and artifacts.
+5. A first-time policy gate block for `takomi_subagent` stays compact until Ctrl+O, despite containing the full loaded model-routing policy in the tool result for the model.
+6. `details.takomi` remains present for Takomi orchestration metadata, but it must not break native renderer assumptions about `details.mode`, `details.results`, or `details.progress`.
+
 ## Components
 
 ### Shared Core
@@ -306,6 +343,9 @@ type TakomiSubagentRunGroup = {
 - Registered `takomi_subagent` as the Takomi lifecycle-aware wrapper and branded its native-style renderer as Takomi.
 - Added live partial updates for `takomi_subagent` so model readiness, running output, logs, blocked state, and completion appear in the native-style result card.
 - Simplified `.pi/extensions/takomi-subagents/native-render.ts` so direct `takomi_subagent` output follows the default Pi subagent compact/detail pattern more closely instead of using a bespoke Takomi card layout.
+- Added a renderer preload in `.pi/extensions/takomi-subagents/index.ts` so completed `takomi_subagent` results use native `pi-subagents` compact/expanded rendering instead of falling back to plain hidden-line text.
+- Adjusted `.pi/extensions/takomi-subagents/native-render.ts` live status mapping so final partial updates show `finalizing` instead of prematurely showing child rows as `[completed]` while the outer tool is still running.
+- Added compact/expanded rendering for first-run policy-gate blocks so the full loaded routing policy does not fill the screen unless Ctrl+O expands tool output.
 - Rewired `Alt+T`, `Alt+Shift+T`, and `/takomi subagents expand|collapse|toggle` to Pi's native tool-result expansion state.
 - Added a safe agent alias fallback so `general` resolves to `orchestrator` when the project does not define a `general` agent.
 - Targeted verification passed for the changed Takomi runtime, subagent, and shared-core files.
@@ -327,6 +367,8 @@ type TakomiSubagentRunGroup = {
 - Plan finalization happens before execution for unapproved broad work.
 - Active subagent run tracking remains centralized, while visible output is owned by Pi's native-style subagent result UI.
 - Active Takomi subagent output streams live through Pi's native-style result UI rather than Takomi's legacy below-editor stack.
+- Completed `takomi_subagent` results use native `pi-subagents` final rendering for collapsed and Ctrl+O-expanded views.
+- Live partial `takomi_subagent` output remains bounded and uses `finalizing` instead of premature child `[completed]` status before the outer tool settles.
 - Runtime files are kept modular, with new or changed files staying near the 200-line guideline where practical.
 - TypeScript verification passes.
 
@@ -340,6 +382,9 @@ type TakomiSubagentRunGroup = {
 - Do not make auto mode launch unapproved plans.
 - Do not make manual mode tedious for small one-shot work.
 - Do not let compact UI become raw log output.
+- Do not let completed `takomi_subagent` results regress to the plain `result lines hidden` fallback when native rendering is available.
+- Do not show child `[completed]` status in a still-partial/running outer tool card.
+- Do not let first-run policy-gate blocks dump the full routing policy into the compact/default view.
 - Do not break existing `.pi/takomi/` session file compatibility.
 
 ## Open Questions

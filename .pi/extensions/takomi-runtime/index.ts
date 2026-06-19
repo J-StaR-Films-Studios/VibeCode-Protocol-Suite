@@ -888,7 +888,6 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       case "review":
         state.autoOrch = false;
         state.planMode = true;
-        state.launchMode = "manual";
         state.role = "review";
         state.stage = undefined;
         state.workflow = undefined;

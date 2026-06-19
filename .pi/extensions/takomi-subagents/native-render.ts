@@ -38,12 +38,16 @@ function resultText(result: ToolResult): string {
       : JSON.stringify((result as any)?.details ?? {}, null, 2);
 }
 
-function summarizeCollapsedResult(text: string, status: string, theme: Theme): string {
+function extractPolicyNames(text: string): string[] {
   const policyMatch = text.match(/Required policies:\n((?:- .+\n?)+)/);
-  const policies = policyMatch?.[1]
+  return policyMatch?.[1]
     ?.split("\n")
     .map((line) => line.replace(/^[-\s]+/, "").trim())
     .filter(Boolean) ?? [];
+}
+
+function summarizeCollapsedResult(text: string, status: string, theme: Theme): string {
+  const policies = extractPolicyNames(text);
   const lineCount = text ? text.split(/\r?\n/).length : 0;
   const label = policies.length > 0
     ? `policy context loaded: ${policies.join(", ")}`
@@ -53,22 +57,89 @@ function summarizeCollapsedResult(text: string, status: string, theme: Theme): s
   return `${theme.fg(color, `${icon} takomi_subagent ${status}`)}${theme.fg("dim", ` · ${label} (ctrl+o to expand)`)}`;
 }
 
+function isPolicyGateBlock(text: string): boolean {
+  return /^Blocked\s+takomi_subagent:\s+required policy context had not been loaded yet\./m.test(text)
+    && /\nRequired policies:\n/.test(text)
+    && /\nLoaded policy context:\n/.test(text);
+}
+
+function renderPolicyGateBlock(text: string, expanded: boolean | undefined, theme: Theme): string {
+  const policies = extractPolicyNames(text);
+  const lineCount = text ? text.split(/\r?\n/).length : 0;
+  const policyLabel = policies.length ? policies.join(", ") : "required policy";
+  if (!expanded) {
+    return [
+      theme.fg("warning", "⚠ takomi_subagent blocked"),
+      theme.fg("dim", `Required policy context loaded for this session: ${policyLabel}.`),
+      theme.fg("dim", `Retry the original tool call. ${lineCount} policy lines hidden (ctrl+o to expand).`),
+    ].join("\n");
+  }
+  return [
+    theme.fg("warning", "⚠ takomi_subagent blocked"),
+    theme.fg("dim", "Policy context was loaded and passed back to the model; retry the original call."),
+    theme.fg("dim", "Press ctrl+o again to collapse."),
+    "",
+    text,
+  ].join("\n");
+}
+
 function recentOutputLines(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean).slice(-3);
   if (typeof value === "string") return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(-3);
   return [];
 }
 
+function normalizeLiveStatus(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value === "complete") return "completed";
+  if (value === "in-progress") return "running";
+  if (value === "timed-out") return "failed";
+  return value;
+}
+
+function rawLiveStatus(row: any): string {
+  const explicit = normalizeLiveStatus(
+    typeof row?.progress?.status === "string" ? row.progress.status
+      : typeof row?.status === "string" ? row.status
+        : undefined,
+  );
+  if (explicit) return explicit;
+
+  const exitCode = typeof row?.exitCode === "number" ? row.exitCode
+    : typeof row?.code === "number" ? row.code
+      : undefined;
+  if (exitCode === 0) return "completed";
+  if (exitCode === undefined || exitCode === null || exitCode === -1) return "running";
+  return "failed";
+}
+
+function isLiveTerminalStatus(status: string): boolean {
+  return ["completed", "failed", "blocked", "detached", "paused"].includes(status);
+}
+
+function displayLiveStatus(status: string, allRowsTerminal: boolean): string {
+  // Native pi-subagents can emit one last partial update after the child process
+  // reaches exitCode 0 but before the takomi_subagent tool result has actually
+  // settled. In that window the tool card is still partial/running, so showing a
+  // child as "completed" is misleading. Call it finalizing until Pi renders the
+  // real final result.
+  if (allRowsTerminal && status === "completed") return "finalizing";
+  return status;
+}
+
 function livePartialText(result: ToolResult, theme: Theme): string {
   const details = (result as any)?.details ?? {};
   const results = Array.isArray(details.results) ? details.results : [];
   const progress = Array.isArray(details.progress) ? details.progress : [];
+  const rows = results.length ? results : progress;
+  const rawStatuses = rows.map(rawLiveStatus);
+  const allRowsTerminal = rows.length > 0 && rawStatuses.every(isLiveTerminalStatus);
+  const titleStatus = allRowsTerminal ? "finalizing" : "running";
   const lines = [
-    theme.fg("toolTitle", theme.bold("takomi_subagent running")),
+    theme.fg("toolTitle", theme.bold(`takomi_subagent ${titleStatus}`)),
     theme.fg("dim", "Live detail is bounded while streaming so manual scroll/ctrl+o does not jump on every token."),
   ];
 
-  const rows = results.length ? results : progress;
   if (!rows.length) {
     const text = resultText(result).split(/\r?\n/).find((line) => line.trim())?.trim();
     lines.push(theme.fg("dim", text || "Waiting for subagent progress…"));
@@ -76,7 +147,7 @@ function livePartialText(result: ToolResult, theme: Theme): string {
   }
 
   rows.slice(0, 6).forEach((row: any, index: number) => {
-    const status = row.status ?? (row.exitCode === 0 ? "completed" : row.exitCode === -1 ? "running" : row.exitCode === undefined ? "running" : "failed");
+    const status = displayLiveStatus(rawStatuses[index] ?? rawLiveStatus(row), allRowsTerminal);
     const agent = row.agent ?? `task ${index + 1}`;
     const task = String(row.task ?? "").replace(/\s+/g, " ").trim();
     const currentTool = row.currentTool ?? row.progress?.currentTool;
@@ -93,8 +164,12 @@ function livePartialText(result: ToolResult, theme: Theme): string {
 }
 
 export function renderTakomiSubagentResult(result: ToolResult, options: { expanded?: boolean; isPartial?: boolean }, theme: Theme, context: any): any {
-  const status = (result as any)?.isError ? "failed" : options.isPartial ? "running" : "completed";
+  const status = ((result as any)?.isError || context?.isError) ? "failed" : options.isPartial ? "running" : "completed";
   const text = resultText(result);
+
+  if (isPolicyGateBlock(text)) {
+    return new Text(renderPolicyGateBlock(text, options.expanded, theme), 0, 0);
+  }
 
   if (options.isPartial) {
     if (options.expanded) return new Text(livePartialText(result, theme), 0, 0);

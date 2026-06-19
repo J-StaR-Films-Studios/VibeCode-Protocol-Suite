@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { TakomiThinkingLevel } from "../../../src/pi-takomi-core";
+import type { TakomiLaunchMode, TakomiThinkingLevel } from "../../../src/pi-takomi-core";
 import { loadTakomiProfile } from "../takomi-runtime/profile";
 import { applyTakomiRoutingDefaults, loadTakomiModelRoutingSnapshot } from "../takomi-runtime/model-routing-defaults";
 import { resolveAgentName } from "./agent-aliases";
@@ -192,6 +192,17 @@ function withNativeHardStop(result: any, hardStop: { reason: string; message: st
     },
   };
 }
+
+function readRuntimeLaunchMode(ctx: ExtensionContext): TakomiLaunchMode | undefined {
+  const entries = ctx.sessionManager.getEntries();
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i] as { type?: string; customType?: string; data?: { launchMode?: unknown } };
+    if (entry.type !== "custom" || entry.customType !== "takomi-runtime-state") continue;
+    if (entry.data?.launchMode === "manual" || entry.data?.launchMode === "auto") return entry.data.launchMode;
+  }
+  return undefined;
+}
+
 function resolveMode(params: TakomiSubagentToolParams): "single" | "parallel" | "chain" | undefined {
   const hasChain = Boolean(params.chain?.length);
   const hasParallel = Boolean(params.tasks?.length);
@@ -234,6 +245,7 @@ export async function executeTakomiSubagentTool(
     return textResult(message, { results: [], agentScope: params.agentScope ?? "both" }, true);
   }
   const profile = await loadTakomiProfile(rootCwd);
+  const runtimeLaunchMode = readRuntimeLaunchMode(ctx);
   const agentScope = params.agentScope ?? "both";
   const agents = discoverTakomiAgents(rootCwd, agentScope);
   const byName = new Map<string, TakomiAgentConfig>(agents.map((agent) => [agent.name, agent]));
@@ -290,7 +302,7 @@ export async function executeTakomiSubagentTool(
   }
   const plan = createTakomiDelegationPlan({
     source: "takomi-tool",
-    launchMode: profile.launchMode ?? "auto",
+    launchMode: runtimeLaunchMode ?? profile.launchMode ?? "auto",
     profile,
     tasks: tasks.map((task, index) => ({
       id: task.conversationId ?? `direct-${index + 1}`,
