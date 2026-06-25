@@ -23,19 +23,26 @@ Terminology rule: when the user says **Gemini**, treat that as **Gemini via the 
    - lesson notes
    - ChatGPT transcripts
    - sample exam layout if provided
-3. **Confirm the paper pattern before drafting** if any of these are unclear:
+   - photographed handwritten pages, when provided
+3. **For photographed handwritten pages, extract with multimodal vision first**:
+   - use a multimodal model/subagent to read the image directly
+   - batch images in small ordered groups, usually 3-5 images per extraction task
+   - explicitly forbid OCR/Tesseract/Python preprocessing on the first pass unless the model is not multimodal
+   - use OCR only as fallback when direct model vision is unavailable or fails on a specific page
+   - preserve image filename/page references for every uncertain item
+4. **Confirm the paper pattern before drafting** if any of these are unclear:
    - subject family (Mathematics/English vs other subjects)
    - mark split
    - question counts
    - whether theory is answer-all or answer-any
-4. **Create or reuse clean folders**:
+5. **Create or reuse clean folders**:
    - `Questions/`
-   - `Marking Scheme/`
-   - `Questions/assets/` for all generated SVG/PNG diagrams
-5. **Draft the paper first.**
-6. **Create the marking scheme second.**
-7. **Run an independent verification pass third.**
-8. **Apply user feedback and rerender** instead of defending the first draft.
+   - `Marking Scheme/` only when requested
+   - `Questions/assets/` for all generated SVG/PNG/image diagrams
+6. **Draft the paper first.**
+7. **Create the marking scheme second only when requested.**
+8. **Run an independent verification pass third.**
+9. **Apply user feedback and rerender** instead of defending the first draft.
 
 ## Preferred Multi-Agent Pattern
 
@@ -83,19 +90,35 @@ Never silently reuse the old 100-mark structure unless the user explicitly asks 
 For the final paper DOCX, prefer:
 
 - **Times New Roman**
-- **12 pt** body text by default
+- use one font size consistently within a paper; **start with 14 pt** and only reduce it if layout pressure makes it necessary
 - narrow margins
-- **1-column header**, **2-column body** where it helps fit the paper
+- every exam header should include, in this order where possible: school name, academic session, term/exam title, pupil name/date line, examination number/time line, class, arm, subject, and instructions
+- header must be **1-column**
+- body should be **1-column by default**; use 2-column or 3-column only when it genuinely improves fit for dense objective papers
+- do not apply a multi-column body just because the skill mentions compact layout; use judgment per subject
 - bold black headings instead of oversized decorative headings
-- objective options kept inline or compact on the next line, not vertically stacked unless unavoidable
+- objective options must start on the **same line as the question** whenever possible; keep them inline with about 3 spaces between choices, not vertically stacked unless unavoidable
+- if the paper looks like it will run to **3 pages**, try a **2-column or 3-column body layout** before reducing the font size; use judgment based on content density
+- preserve the school name and student-detail heading fields from the source, or leave clear blanks/placeholders if they are not provided
+- if the source uses an arm/stream/class line, keep it but do not hardcode labels like `Arm:` unless the source explicitly requires them
+- when using separate header/body sections in DOCX, make the body section **continuous** so it does not jump to a new page
+- avoid hard page breaks between the heading block and the paper body unless the user explicitly asks for a new page
 - remove explicit `Total Marks: ...` header line unless requested
 - target about **2 pages** per paper where practical
 
-### 3) Diagram rules
+### 3) Diagram and image rules
 
 - Keep all generated figures inside `Questions/assets/`.
-- Create diagrams as SVG first; generate PNG copies if DOCX rendering needs them.
-- Keep angle labels and vertex labels clearly visible.
+- Choose the diagram method by complexity:
+  - simple geometric/line diagrams, tables, clocks, arrows, and labels: SVG first; generate PNG copies if DOCX rendering needs them
+  - pictorial objects for young pupils, e.g. mango, pot, bucket, moon, table, cup, house, animals, people, classroom objects: prefer Anti-Gravity image generation or another image-generation path, then place the generated PNG/JPG in `Questions/assets/`
+  - hybrid diagrams: combine clean SVG labels/structure with generated image assets when useful
+- When using Anti-Gravity for diagrams, explicitly tell it whether to generate images, use SVG, or use a hybrid method, and require it to report which method was used.
+- Never include the teacher's written answer labels in student-facing diagrams. If the source labels a keyboard as "Keyboard" or groups division answers for marking guidance, remove that answer/label from the final exam.
+- Keep diagrams separated when the source has separate question items or separate objects that must be arranged on the paper. Do not combine unrelated drawings into one asset just for convenience; combine only when the source/question explicitly presents them as one group.
+- Preserve the source question order for diagram-heavy nursery/primary papers by rebuilding from the original images, not only from extraction summaries.
+- If an item asks pupils to colour an object or flag, do not colour it in the exam; provide an outline only unless the instruction asks for a sample.
+- Keep angle labels and vertex labels clearly visible for geometry.
 - Avoid placing numbers directly on triangle edges.
 - If labels are cramped, move them outward and add white-backed label boxes if needed.
 
@@ -127,7 +150,10 @@ For each subject batch, try to maintain:
 - Remix questions reasonably from the provided curriculum material.
 - Stay within the authority source unless the user allows expansion.
 - Make objective questions unambiguous.
-- Ensure the marking scheme matches final numbering exactly.
+- Do not leak answers from teacher notes, source annotations, labels, grouped examples, or marking cues into the student-facing paper.
+- For handwritten sources, try hard to infer unclear words from context, subject vocabulary, options, and neighboring pages before marking `[unclear]`.
+- If uncertainty remains, create a user-review list with image filename/page number, question number, cropped/quoted context if possible, and the competing interpretations. Ask the user instead of leaving unexplained uncertainty in the final paper.
+- Ensure the marking scheme matches final numbering exactly when a marking scheme is requested.
 - For diagrams, refer to them consistently as Diagram A, B, C, etc.
 
 ## Required Clarifications
@@ -140,6 +166,7 @@ Ask the user before proceeding when any of the following is missing:
 - sample layout path if layout matching matters
 - exact marks pattern for non-Math/non-English subjects
 - desired final format if not obvious
+- final interpretation of handwritten items that remain ambiguous after a multimodal-first extraction pass and contextual inference
 
 ## Safe Revision Rules
 
