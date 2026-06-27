@@ -119,6 +119,100 @@ function getGlobalNodeModulesRoot(home = HOME) {
   return path.join(home, '.npm-global', 'lib', 'node_modules');
 }
 
+async function readJsonIfExists(filePath) {
+  try {
+    if (await fs.pathExists(filePath)) return await fs.readJson(filePath);
+  } catch {}
+  return null;
+}
+
+async function writeJsonWithBackup(filePath, value, backupLabel = 'takomi-backup') {
+  await fs.ensureDir(path.dirname(filePath));
+  if (await fs.pathExists(filePath)) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    await fs.copy(filePath, `${filePath}.${backupLabel}-${stamp}`);
+  }
+  await fs.writeJson(filePath, value, { spaces: 2 });
+}
+
+function removeRawPiSubagentsPackageEntries(settings) {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return { changed: false, settings };
+  if (!Array.isArray(settings.packages)) return { changed: false, settings };
+  const before = settings.packages.length;
+  const nextPackages = settings.packages.filter((entry) => entry !== 'npm:pi-subagents' && entry !== 'pi-subagents');
+  if (nextPackages.length === before) return { changed: false, settings };
+  return { changed: true, settings: { ...settings, packages: nextPackages } };
+}
+
+export async function inspectRawPiSubagentsActivation({ cwd = process.cwd(), home = HOME } = {}) {
+  const user = getPiGlobalTargets(home);
+  const project = getProjectPiTargets(cwd);
+  const legacyExtension = path.join(user.extensions, 'subagent');
+  const findings = [];
+
+  for (const [scope, filePath] of [['user', user.settings], ['project', project.settings]]) {
+    const settings = await readJsonIfExists(filePath);
+    const packages = Array.isArray(settings?.packages) ? settings.packages : [];
+    if (packages.includes('npm:pi-subagents') || packages.includes('pi-subagents')) {
+      findings.push({ type: 'settings-package', scope, path: filePath });
+    }
+  }
+
+  if (await fs.pathExists(path.join(legacyExtension, 'index.ts')) || await fs.pathExists(path.join(legacyExtension, 'index.js'))) {
+    findings.push({ type: 'legacy-extension', scope: 'user', path: legacyExtension });
+  }
+
+  return { findings };
+}
+
+export async function disableRawPiSubagentsActivation({ cwd = process.cwd(), home = HOME } = {}) {
+  const user = getPiGlobalTargets(home);
+  const project = getProjectPiTargets(cwd);
+  const actions = [];
+
+  for (const [scope, filePath] of [['user', user.settings], ['project', project.settings]]) {
+    const settings = await readJsonIfExists(filePath);
+    const result = removeRawPiSubagentsPackageEntries(settings);
+    if (result.changed) {
+      await writeJsonWithBackup(filePath, result.settings, 'takomi-disable-raw-pi-subagents');
+      actions.push({ type: 'settings-package-removed', scope, path: filePath });
+    }
+  }
+
+  const legacyExtension = path.join(user.extensions, 'subagent');
+  if (await fs.pathExists(path.join(legacyExtension, 'index.ts')) || await fs.pathExists(path.join(legacyExtension, 'index.js'))) {
+    const disabledRoot = path.join(user.root, 'disabled-extensions');
+    await fs.ensureDir(disabledRoot);
+    let dest = path.join(disabledRoot, 'subagent');
+    if (await fs.pathExists(dest)) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      dest = path.join(disabledRoot, `subagent-${stamp}`);
+    }
+    await fs.move(legacyExtension, dest, { overwrite: false });
+    actions.push({ type: 'legacy-extension-moved', scope: 'user', path: legacyExtension, disabledPath: dest });
+  }
+
+  return { actions };
+}
+
+export function formatRawPiSubagentsFindings(findings = []) {
+  if (!findings.length) return 'No raw pi-subagents activation found.';
+  return findings.map((finding) => {
+    if (finding.type === 'settings-package') return `- ${finding.scope} settings package entry: ${finding.path}`;
+    if (finding.type === 'legacy-extension') return `- legacy raw subagent extension: ${finding.path}`;
+    return `- ${finding.path || JSON.stringify(finding)}`;
+  }).join('\n');
+}
+
+export function formatRawPiSubagentsDisableActions(actions = []) {
+  if (!actions.length) return 'No raw pi-subagents activation changes were needed.';
+  return actions.map((action) => {
+    if (action.type === 'settings-package-removed') return `- removed raw pi-subagents package from ${action.scope} settings: ${action.path}`;
+    if (action.type === 'legacy-extension-moved') return `- moved raw subagent extension out of Pi extensions: ${action.path} -> ${action.disabledPath}`;
+    return `- ${action.path || JSON.stringify(action)}`;
+  }).join('\n');
+}
+
 export async function inspectPiSubagentsDependency(home = HOME) {
   const pkg = await getPackageJson();
   const declaredVersion = pkg?.dependencies?.['pi-subagents'] || null;
@@ -447,6 +541,7 @@ export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
   const bundled = await inspectBundledPiAssets();
   const installed = await inspectInstalledTakomiPiHarness();
   const piSubagents = await inspectPiSubagentsDependency();
+  const rawPiSubagentsActivation = await inspectRawPiSubagentsActivation({ cwd });
   const project = getProjectPiTargets(cwd);
 
   return {
@@ -454,6 +549,7 @@ export async function inspectPiHarnessEnvironment(cwd = process.cwd()) {
     bundled,
     installed,
     piSubagents,
+    rawPiSubagentsActivation,
     project: {
       targets: project,
       settingsPresent: await fs.pathExists(project.settings),

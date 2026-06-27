@@ -31,8 +31,24 @@ const TaskSchema = Type.Object({
   checklist: Type.Optional(Type.Array(Type.Union([Type.String(), ChecklistItemSchema]))),
 });
 
+const ContextSchema = Type.Union([
+  Type.Literal("fresh"),
+  Type.Literal("fork"),
+]);
+
+const ActionSchema = Type.Union([
+  Type.Literal("list"),
+  Type.Literal("get"),
+  Type.Literal("models"),
+  Type.Literal("status"),
+  Type.Literal("interrupt"),
+  Type.Literal("resume"),
+  Type.Literal("doctor"),
+]);
+
 const SubagentParameters = Type.Object({
-  agent: Type.Optional(Type.String({ description: "Agent name for single execution" })),
+  action: Type.Optional(ActionSchema),
+  agent: Type.Optional(Type.String({ description: "Agent name for single execution, or target agent for get/models actions" })),
   task: Type.Optional(Type.String({ description: "Task for single execution" })),
   workflow: Type.Optional(Type.String({ description: "Workflow or playbook overlay for this task" })),
   skills: Type.Optional(Type.Array(Type.String(), { description: "Extra skills to apply during the task" })),
@@ -47,6 +63,14 @@ const SubagentParameters = Type.Object({
   previewOnly: Type.Optional(Type.Boolean({ description: "Return the delegation plan without launching" })),
   clarify: Type.Optional(Type.Boolean({ description: "Show the native pi-subagents TUI to preview/edit before execution. Especially useful for chains; requires an interactive Pi TUI." })),
   chain: Type.Optional(Type.Array(TaskSchema, { description: "Sequential chain of subagent tasks" })),
+  context: Type.Optional(ContextSchema),
+  async: Type.Optional(Type.Boolean({ description: "Run through native pi-subagents background/async mode" })),
+  concurrency: Type.Optional(Type.Number({ description: "Maximum concurrency for parallel task groups" })),
+  worktree: Type.Optional(Type.Boolean({ description: "Use native pi-subagents worktree isolation where supported" })),
+  id: Type.Optional(Type.String({ description: "Native async/control run id for status, interrupt, or resume actions" })),
+  message: Type.Optional(Type.String({ description: "Follow-up message for resume actions" })),
+  index: Type.Optional(Type.Number({ description: "Child index for resume actions when needed" })),
+  chainName: Type.Optional(Type.String({ description: "Saved chain name for get actions" })),
   agentScope: Type.Optional(Type.Union([Type.Literal("user"), Type.Literal("project"), Type.Literal("both")])),
   // Project-agent confirmation and hard-stop overrides are enforced server-side;
   // they are intentionally not model-callable parameters.
@@ -56,11 +80,14 @@ function registerSubagentTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "takomi_subagent",
     label: "Takomi",
-    description: "Run subagents with Pi-style single, parallel, or chain modes plus Takomi lifecycle metadata.",
-    promptSnippet: "Delegate lifecycle-aware Takomi work to specialist subagents. Use single, tasks, or chain; reuse conversationId for review loops.",
+    description: "Run subagents with Pi-style single, parallel, chain, async, fork, and management/status modes plus Takomi lifecycle metadata.",
+    promptSnippet: "Delegate lifecycle-aware Takomi work to specialist subagents. Use single, tasks, chain, or action=list/status/doctor; reuse conversationId for review loops.",
     promptGuidelines: [
       "Use this tool during orchestration when a specialist should handle a task.",
+      "Use action=list to discover agents and action=status/doctor for native pi-subagents diagnostics/control instead of raw subagent.",
       "Use tasks for independent parallel work and chain for dependent handoffs with {previous}.",
+      "Set context=fork only when inherited parent-session history is needed; otherwise prefer fresh or the agent default.",
+      "Set async=true for long-running work when the parent can continue safely; keep active worktree writes single-threaded unless worktree isolation is enabled.",
       "Set clarify=true when the user asks to preview/edit a subagent run in the native Pi TUI before launch.",
       "Use model, fallbackModels, and thinking only when deliberate; otherwise let the agent/profile defaults apply.",
       "If review sends work back to the same agent, reuse the same conversationId for continuity.",

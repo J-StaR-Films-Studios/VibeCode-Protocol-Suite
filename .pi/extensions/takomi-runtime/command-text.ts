@@ -32,6 +32,7 @@ const SUBCOMMAND_COMPLETIONS: Record<string, TakomiCompletion[]> = {
     { value: "auto", label: "auto", description: "Continue approved plans automatically" },
   ],
   subagents: [
+    { value: "list", label: "list", description: "List available Takomi subagents" },
     { value: "status", label: "status", description: "Show active subagents" },
     { value: "on", label: "on", description: "Allow subagent delegation" },
     { value: "off", label: "off", description: "Disable subagent delegation" },
@@ -95,7 +96,7 @@ export function commandHelp(): string {
     "/takomi plan [title]",
     "/takomi mode <direct|orchestrate|review>",
     "/takomi gate <auto|review>",
-    "/takomi subagents <on|off|status>",
+    "/takomi subagents <list|on|off|status>",
     "/takomi stats [overview|daily|models|projects|projects-full|sessions|sessions-full|tasks|tasks-full|tools|subagents|sources] [since 7d]",
     "/takomi routing [show|where]",
     "/takomi routing <policy text>              # updates global policy",

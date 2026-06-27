@@ -37,7 +37,8 @@ Inside Pi, use:
 - `/takomi gate auto` to continue approved plans automatically
 - `/takomi gate review` to return to the user after each task with results and verification guidance
 - `/takomi subagents on` or `/takomi subagents off` to allow or disable delegated subagents
-- `/takomi subagents status|expand|collapse|fullscreen|next|prev|toggle` to inspect or reshape the active subagent stack
+- `/takomi subagents list` to list available Takomi agents without exposing the raw `subagent` tool
+- `/takomi subagents status` to inspect active subagent state
 - `/takomi-status` to show lifecycle, gate, session, and active subagent state
 - `/takomi-reset` to reset session-local Takomi runtime state
 - `/context-report` to inspect prompt compaction, skill loading, policy gates, model routing corrections, and duplicate extension diagnostics
@@ -107,9 +108,9 @@ So when working on packaging, agents should distinguish between:
 - Task packets can carry `workflow`, `skills`, `preferredModel`, `fallbackModels`, `preferredThinking`, `executionHint`, `conversationId`, and `checklist` metadata.
 - Direct `takomi_subagent` calls build a `TakomiDelegationPlan` before launch. In auto mode the plan launches immediately; in manual mode the plan is returned for review until `confirmLaunch=true` is supplied.
 - The subagent tool supports `conversationId`, so reviewed work can be sent back to the same agent for continuation instead of restarting from scratch.
-- The subagent tool supports Pi-style single, parallel `tasks`, and sequential `chain` modes.
+- The subagent tool supports Pi-style single, parallel `tasks`, sequential `chain`, explicit `context=fork|fresh`, `async=true`, and native read/control actions such as `action=list`, `action=status`, `action=doctor`, `action=interrupt`, and `action=resume`.
 - The subagent tool supports `agentScope` values of `user`, `project`, and `both`; project-local agents require confirmation by default.
-- The subagent tool also supports per-run `workflow`, `skills`, `model`, `fallbackModels`, `thinking`, and `checklist` overrides.
+- The subagent tool also supports per-run `workflow`, `skills`, `model`, `fallbackModels`, `thinking`, `checklist`, `concurrency`, and `worktree` overrides.
 - `takomi_board` records session/state/markdown artifacts only; it does not run subagents.
 - Pi's default `subagent` tool remains owned by the user-level/default subagent extension to avoid tool-name conflicts; Takomi uses `takomi_subagent` as the preferred lifecycle-aware execution interface and renders it with the native Pi-style result surface.
 - Treat raw `subagent` usage as advanced/internal. Normal Takomi lifecycle execution should go through `takomi_subagent`, then `takomi_board update_task` should record the outcome.
@@ -121,6 +122,8 @@ So when working on packaging, agents should distinguish between:
 - `takomi-context-manager` gates `takomi_subagent` when model-routing context has not been loaded, provides the routing policy, and tells the agent to retry.
 - `takomi-context-manager` can correct safe wrong-provider model requests, block or pause on policy violations, and ask the user whether to retry with an approved model or stop.
 - `takomi-context-manager` detects known duplicate global/project Takomi extension paths in `context_report` to help diagnose tool registration conflicts.
+- `context_report` restores context-manager snapshots and Pi tool-result history after reload/restart and explicitly labels gaps; it is not a replacement for Pi's Alt-C token/session stats.
+- `context_report` defaults to compact `mode: "summary"`; use `mode: "verbose"` for full diagnostics or `mode: "problems"` for attention-only output. `verbose: true` remains a compatibility alias. `/context-report` exposes `summary`, `verbose`, and `problems` as slash-command argument completions.
 - `takomi_board` can:
   - create a Genesis-first lifecycle session by default
   - preserve authored `master_plan.md` and task packet markdown

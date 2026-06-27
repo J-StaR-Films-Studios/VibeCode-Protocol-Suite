@@ -25,11 +25,20 @@ export type TakomiSubagentToolTask = {
 };
 
 export type TakomiSubagentToolParams = Partial<TakomiSubagentToolTask> & {
+  action?: "list" | "get" | "models" | "status" | "interrupt" | "resume" | "doctor";
   tasks?: TakomiSubagentToolTask[];
   chain?: TakomiSubagentToolTask[];
   confirmLaunch?: boolean;
   previewOnly?: boolean;
   clarify?: boolean;
+  context?: "fresh" | "fork";
+  async?: boolean;
+  concurrency?: number;
+  worktree?: boolean;
+  id?: string;
+  message?: string;
+  index?: number;
+  chainName?: string;
   agentScope?: TakomiAgentScope;
 };
 
@@ -247,6 +256,32 @@ export async function executeTakomiSubagentTool(
   const profile = await loadTakomiProfile(rootCwd);
   const runtimeLaunchMode = readRuntimeLaunchMode(ctx);
   const agentScope = params.agentScope ?? "both";
+
+  if (params.action) {
+    try {
+      const nativeResult: any = await engine.execute(
+        "takomi-tool",
+        { ...params, cwd: rootCwd, agentScope },
+        signal,
+        onUpdate as any,
+        ctx,
+      );
+      return {
+        ...nativeResult,
+        details: {
+          ...(nativeResult?.details ?? {}),
+          takomi: {
+            action: params.action,
+            agentScope,
+          },
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return textResult(message, { results: [], action: params.action, agentScope }, true);
+    }
+  }
+
   const agents = discoverTakomiAgents(rootCwd, agentScope);
   const byName = new Map<string, TakomiAgentConfig>(agents.map((agent) => [agent.name, agent]));
   const mode = resolveMode(params);
@@ -328,10 +363,10 @@ export async function executeTakomiSubagentTool(
   }
   try {
     const nativeParams: TakomiSubagentToolParams = mode === "single"
-      ? { ...params, ...tasks[0]!, agentScope }
+      ? { ...params, ...tasks[0]!, cwd: rootCwd, agentScope }
       : mode === "parallel"
-        ? { ...params, tasks, agentScope }
-        : { ...params, chain: tasks, agentScope };
+        ? { ...params, cwd: rootCwd, tasks, agentScope }
+        : { ...params, cwd: rootCwd, chain: tasks, agentScope };
 
     const nativeResult: any = await engine.execute(
       "takomi-tool",

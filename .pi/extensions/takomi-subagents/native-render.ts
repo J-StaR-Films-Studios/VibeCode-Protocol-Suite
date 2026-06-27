@@ -171,12 +171,14 @@ export function renderTakomiSubagentResult(result: ToolResult, options: { expand
     return new Text(renderPolicyGateBlock(text, options.expanded, theme), 0, 0);
   }
 
+  const native = renderNativeSubagentResult(result, options, theme, context);
+  if (options.isPartial && native) return native;
+
   if (options.isPartial) {
     if (options.expanded) return new Text(livePartialText(result, theme), 0, 0);
     return new Text(summarizeCollapsedResult(text, status, theme), 0, 0);
   }
 
-  const native = renderNativeSubagentResult(result, options, theme, context);
   if (native) return native;
 
   if (!options.expanded) {

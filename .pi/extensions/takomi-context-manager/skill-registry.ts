@@ -1,3 +1,6 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { SkillRecord } from "./types";
 
 export function normalizeText(value: string): string {
@@ -84,4 +87,121 @@ export function findSkill(skills: Map<string, SkillRecord>, name: string): Skill
   if (exact) return exact;
   const matches = sortedSkills(skills).filter((skill) => normalizeName(skill.name).includes(key));
   return matches.length === 1 ? matches[0] : undefined;
+}
+
+function parseFrontmatter(text: string): Record<string, string> {
+  const match = text.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return {};
+  const data: Record<string, string> = {};
+  for (const line of match[1].split(/\r?\n/)) {
+    const parsed = line.match(/^([a-zA-Z0-9_-]+):\s*(.*)$/);
+    if (!parsed) continue;
+    data[parsed[1]] = parsed[2].replace(/^['\"]|['\"]$/g, "").trim();
+  }
+  return data;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readSkillFile(filePath: string): Promise<SkillRecord | undefined> {
+  try {
+    const text = await readFile(filePath, "utf8");
+    const frontmatter = parseFrontmatter(text);
+    const name = frontmatter.name?.trim() || path.basename(path.dirname(filePath));
+    const description = frontmatter.description?.trim();
+    if (!name || !description) return undefined;
+    return { name, description, location: filePath, source: "filesystem" };
+  } catch {
+    return undefined;
+  }
+}
+
+async function collectSkillFiles(root: string, directMarkdownFiles = false, depth = 0, maxDepth = 8): Promise<string[]> {
+  if (depth > maxDepth || !await pathExists(root)) return [];
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const files: string[] = [];
+  if (await pathExists(path.join(root, "SKILL.md"))) files.push(path.join(root, "SKILL.md"));
+  if (directMarkdownFiles && depth === 0) {
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) files.push(path.join(root, entry.name));
+    }
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if ([".git", "node_modules"].includes(entry.name)) continue;
+    files.push(...await collectSkillFiles(path.join(root, entry.name), false, depth + 1, maxDepth));
+  }
+  return [...new Set(files)];
+}
+
+async function collectPackageSkillRoots(nodeModulesRoot: string): Promise<string[]> {
+  if (!await pathExists(nodeModulesRoot)) return [];
+  const roots: string[] = [];
+  let packages: Array<{ name: string; isDirectory(): boolean }> = [];
+  try {
+    packages = await readdir(nodeModulesRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const pkg of packages) {
+    if (!pkg.isDirectory()) continue;
+    if (pkg.name.startsWith("@")) {
+      const scopeRoot = path.join(nodeModulesRoot, pkg.name);
+      let scoped: Array<{ name: string; isDirectory(): boolean }> = [];
+      try {
+        scoped = await readdir(scopeRoot, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const scopedPkg of scoped) if (scopedPkg.isDirectory()) roots.push(path.join(scopeRoot, scopedPkg.name, "skills"));
+      continue;
+    }
+    roots.push(path.join(nodeModulesRoot, pkg.name, "skills"));
+  }
+  return roots;
+}
+
+function ancestorSkillRoots(cwd: string): string[] {
+  const roots: string[] = [];
+  let current = path.resolve(cwd || process.cwd());
+  const seen = new Set<string>();
+  while (!seen.has(current)) {
+    seen.add(current);
+    roots.push(path.join(current, ".agents", "skills"));
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  roots.push(path.resolve(cwd || process.cwd(), ".pi", "skills"));
+  return roots;
+}
+
+export async function discoverSkillsFromFilesystem(cwd = process.cwd()): Promise<SkillRecord[]> {
+  const home = os.homedir();
+  const roots = [
+    { root: path.join(home, ".pi", "agent", "skills"), directMarkdownFiles: true },
+    { root: path.join(home, ".agents", "skills"), directMarkdownFiles: false },
+    ...ancestorSkillRoots(cwd).map((root) => ({ root, directMarkdownFiles: root.endsWith(`${path.sep}.pi${path.sep}skills`) })),
+    ...(await collectPackageSkillRoots(path.join(home, ".pi", "agent", "npm", "node_modules"))).map((root) => ({ root, directMarkdownFiles: false })),
+  ];
+  const skillFiles = new Set<string>();
+  for (const { root, directMarkdownFiles } of roots) {
+    for (const file of await collectSkillFiles(root, directMarkdownFiles)) skillFiles.add(file);
+  }
+  const skills = await Promise.all([...skillFiles].map(readSkillFile));
+  return skills.filter((skill): skill is SkillRecord => Boolean(skill));
 }

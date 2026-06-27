@@ -2,7 +2,7 @@ export type SkillRecord = {
   name: string;
   description?: string;
   location?: string;
-  source: "systemPromptOptions" | "xml" | "tool";
+  source: "systemPromptOptions" | "xml" | "filesystem" | "tool";
 };
 
 export type CandidateContext = {
@@ -57,7 +57,15 @@ export type ContextReport = {
   editedFiles: string[];
   writtenFiles: string[];
   blockedActions: Array<{ toolName: string; reason: string; timestamp: string }>;
+  modelRoutingCorrections: Array<{ toolName: string; from: string; to: string; timestamp: string; recovery?: string }>;
   duplicateExtensionWarnings: Array<{ toolName: string; paths: string[] }>;
+  sessionRestore: {
+    attempted: boolean;
+    restored: boolean;
+    snapshotCount: number;
+    toolResultCount: number;
+    note: string;
+  };
   promptRewrite: {
     attempted: boolean;
     changed: boolean;

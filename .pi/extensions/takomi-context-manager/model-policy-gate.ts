@@ -6,6 +6,7 @@ import type { ContextManagerState } from "./state";
 import { recordBlocked } from "./state";
 import { resolveTakomiRoutingPolicy } from "../takomi-runtime/routing-policy";
 import { approvedModelEquivalent, isTakomiModelApproved } from "../takomi-runtime/model-routing-defaults";
+import { persistReportSnapshot } from "./session-state";
 
 type Settings = {
   takomi?: { modelRoutingPolicyFile?: string };
@@ -183,19 +184,19 @@ export function installModelPolicyGate(pi: ExtensionAPI, state: ContextManagerSt
     if (approved.length === 0) return;
 
     const refs = collectRequestedModelRefs(event.input);
-    const corrections: string[] = [];
+    const corrections: Array<{ from: string; to: string; recovery?: string }> = [];
     for (const ref of refs) {
       if (isTakomiModelApproved(ref.value, approved)) continue;
       const equivalent = approvedModelEquivalent(ref.value, approved);
       if (equivalent) {
         setModelRef(ref, equivalent);
-        corrections.push(`${ref.value} -> ${equivalent}`);
+        corrections.push({ from: ref.value, to: equivalent });
         continue;
       }
       const recovery = await askForInvalidModelRecovery(ctx, ref.value, approved);
       if (recovery.action === "retry") {
         setModelRef(ref, recovery.model);
-        corrections.push(`${ref.value} -> ${recovery.model} (user selected recovery)`);
+        corrections.push({ from: ref.value, to: recovery.model, recovery: "user selected recovery" });
         continue;
       }
       const reason = [
@@ -204,12 +205,23 @@ export function installModelPolicyGate(pi: ExtensionAPI, state: ContextManagerSt
         "Human selected stop. The agent turn has been aborted; wait for the user's next prompt.",
       ].join("\n");
       recordBlocked(state, event.toolName, reason);
+      persistReportSnapshot(pi, state, "model-policy-gate-block");
       ctx.abort?.();
       return { block: true, reason };
     }
 
     if (corrections.length > 0) {
-      ctx.ui.notify(`Takomi context manager corrected subagent model routing:\n- ${corrections.join("\n- ")}\n\nBe careful to follow /takomi routing policy next time.`, "warning");
+      const timestamp = new Date().toISOString();
+      state.report.timestamp = timestamp;
+      state.report.modelRoutingCorrections.push(...corrections.map((correction) => ({
+        toolName: event.toolName,
+        from: correction.from,
+        to: correction.to,
+        recovery: correction.recovery,
+        timestamp,
+      })));
+      persistReportSnapshot(pi, state, "model-policy-correction");
+      ctx.ui.notify(`Takomi context manager corrected subagent model routing:\n- ${corrections.map((correction) => `${correction.from} -> ${correction.to}${correction.recovery ? ` (${correction.recovery})` : ""}`).join("\n- ")}\n\nBe careful to follow /takomi routing policy next time.`, "warning");
     }
   });
 

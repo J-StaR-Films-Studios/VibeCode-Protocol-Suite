@@ -44,7 +44,7 @@ import {
   isStoreInitialized,
 } from './store.js';
 import { runDoctor } from './doctor.js';
-import { ensurePiInstalled, ensurePiSubagentsInstalled, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiCliPackage, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
+import { disableRawPiSubagentsActivation, ensurePiInstalled, ensurePiSubagentsInstalled, formatRawPiSubagentsDisableActions, formatRawPiSubagentsFindings, inspectRawPiSubagentsActivation, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiCliPackage, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { offerPiOptionalFeatures } from './pi-optional-features.js';
 import {
@@ -461,6 +461,37 @@ async function installAllTargets(options = {}) {
   await installSkillsTarget();
 }
 
+async function offerRawPiSubagentsHardening({ interactive = process.stdin.isTTY && process.stdout.isTTY } = {}) {
+  const audit = await inspectRawPiSubagentsActivation({ cwd: process.cwd() });
+  if (!audit.findings.length) return;
+
+  console.log(pc.yellow('\n⚠ Raw Pi subagents activation detected'));
+  console.log(pc.dim(formatRawPiSubagentsFindings(audit.findings)));
+  console.log(pc.dim('\nTakomi keeps pi-subagents installed as an internal module, but raw Pi activation exposes the separate `subagent` tool next to `takomi_subagent`.'));
+
+  let shouldDisable = process.env.TAKOMI_DISABLE_RAW_PI_SUBAGENTS === '1';
+  if (interactive && process.env.TAKOMI_DISABLE_RAW_PI_SUBAGENTS !== '1') {
+    const response = await prompts({
+      type: 'confirm',
+      name: 'disable',
+      message: 'Disable raw Pi subagents activation so agents only see takomi_subagent?',
+      initial: true,
+    });
+    shouldDisable = response.disable === true;
+  }
+
+  if (!shouldDisable) {
+    console.log(pc.yellow(interactive
+      ? 'Leaving raw Pi subagents activation unchanged.'
+      : 'Non-interactive run: leaving raw Pi subagents activation unchanged. Set TAKOMI_DISABLE_RAW_PI_SUBAGENTS=1 to disable automatically.'));
+    return;
+  }
+
+  const result = await disableRawPiSubagentsActivation({ cwd: process.cwd() });
+  console.log(pc.green('✔ Disabled raw Pi subagents activation'));
+  console.log(pc.dim(formatRawPiSubagentsDisableActions(result.actions)));
+}
+
 async function installPiTarget(options = {}) {
   const { offerOptionalFeatures = true } = options;
   console.log(pc.magenta('🧭 Pi Harness Preflight\n'));
@@ -493,12 +524,14 @@ async function installPiTarget(options = {}) {
     const result = await installPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
+    await offerRawPiSubagentsHardening();
     if (offerOptionalFeatures) {
       console.log(pc.cyan('\n🧩 Optional Takomi Pi feature packs...\n'));
       await offerPiOptionalFeatures({ interactive: true });
     }
     console.log(pc.cyan('\n📦 Checking Pi-managed extension package updates...\n'));
     printPiManagedPackageUpdateResult(await updatePiManagedPackages());
+    await offerRawPiSubagentsHardening();
     console.log(pc.dim('\nNext: cd <project> && takomi\n'));
   } catch (error) {
     console.log(pc.red('\nPi harness asset install failed.'));
@@ -512,8 +545,10 @@ async function installPiOptionalFeaturesTarget() {
   printPiInstallResult(pi);
   if (!pi.ok) return;
   await offerPiOptionalFeatures({ interactive: true });
+  await offerRawPiSubagentsHardening();
   console.log(pc.cyan('\n📦 Checking Pi-managed extension package updates...\n'));
   printPiManagedPackageUpdateResult(await updatePiManagedPackages());
+  await offerRawPiSubagentsHardening();
 }
 
 async function syncPiTarget() {
@@ -522,8 +557,10 @@ async function syncPiTarget() {
     const result = await syncPiHarnessAssets(program.version());
     const validation = await validatePiHarnessInstall();
     printPiInstallSummary(result, validation);
+    await offerRawPiSubagentsHardening();
     console.log(pc.cyan('\n📦 Checking Pi-managed extension package updates...\n'));
     printPiManagedPackageUpdateResult(await updatePiManagedPackages());
+    await offerRawPiSubagentsHardening();
   } catch (error) {
     console.log(pc.red('\nPi sync failed.'));
     console.log(pc.dim(String(error?.message || error)));

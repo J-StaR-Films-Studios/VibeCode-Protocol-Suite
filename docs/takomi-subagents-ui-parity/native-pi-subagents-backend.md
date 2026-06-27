@@ -87,7 +87,7 @@ Current extension code imports pi-subagents internals through a single local ada
 import { createSubagentExecutor } from "./pi-subagents-internal";
 ```
 
-The adapter wraps internal-but-exported pi-subagents modules, and `package.json` pins `pi-subagents` to `0.28.0` so upstream internal path changes cannot arrive through a caret update. If upstream exposes a stable public entry point later, Takomi should update only `.pi/extensions/takomi-subagents/pi-subagents-internal.ts`.
+The adapter wraps internal-but-exported pi-subagents modules, and `package.json` pins `pi-subagents` to `0.31.0` so upstream internal path changes cannot arrive through a caret update. If upstream exposes a stable public entry point later, Takomi should update only `.pi/extensions/takomi-subagents/pi-subagents-internal.ts`.
 
 ## Files changed
 

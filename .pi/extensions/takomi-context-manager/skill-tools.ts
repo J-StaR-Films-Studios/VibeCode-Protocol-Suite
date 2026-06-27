@@ -3,7 +3,8 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { ContextManagerState } from "./state";
-import { findSkill, normalizeName, sortedSkills } from "./skill-registry";
+import { discoverSkillsFromFilesystem, findSkill, mergeSkills, normalizeName, sortedSkills } from "./skill-registry";
+import { persistReportSnapshot, restoreReportFromSession } from "./session-state";
 
 function renderSkillIndex(state: ContextManagerState): string {
   const skills = sortedSkills(state.skills);
@@ -29,6 +30,12 @@ async function loadSkillContent(location: string): Promise<string> {
   return readFile(location, "utf8");
 }
 
+async function ensureSkillsDiscovered(state: ContextManagerState, cwd: string): Promise<void> {
+  if (state.skills.size > 0) return;
+  state.skills = mergeSkills(await discoverSkillsFromFilesystem(cwd));
+  state.report.skillCount = state.skills.size;
+}
+
 export function registerSkillTools(pi: ExtensionAPI, state: ContextManagerState): void {
   pi.registerTool({
     name: "skill_index",
@@ -37,8 +44,12 @@ export function registerSkillTools(pi: ExtensionAPI, state: ContextManagerState)
     promptSnippet: "List available skill names only for progressive skill loading",
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      restoreReportFromSession(state, ctx);
+      await ensureSkillsDiscovered(state, ctx.cwd);
+      state.report.timestamp = new Date().toISOString();
       state.report.cwd = ctx.cwd;
       state.report.toolCalls.skillIndex += 1;
+      persistReportSnapshot(pi, state, "skill_index");
       return { content: [{ type: "text", text: renderSkillIndex(state) }], details: { skillCount: state.skills.size } };
     },
   });
@@ -50,8 +61,12 @@ export function registerSkillTools(pi: ExtensionAPI, state: ContextManagerState)
     promptSnippet: "Show selected skill descriptions and locations without full instructions",
     parameters: Type.Object({ skills: Type.Array(Type.String({ description: "Skill name to inspect" })) }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      restoreReportFromSession(state, ctx);
+      await ensureSkillsDiscovered(state, ctx.cwd);
+      state.report.timestamp = new Date().toISOString();
       state.report.cwd = ctx.cwd;
       state.report.toolCalls.skillManifest += 1;
+      persistReportSnapshot(pi, state, "skill_manifest");
       return { content: [{ type: "text", text: renderManifest(state, params.skills) }], details: { requested: params.skills } };
     },
   });
@@ -63,16 +78,24 @@ export function registerSkillTools(pi: ExtensionAPI, state: ContextManagerState)
     promptSnippet: "Load full SKILL.md instructions for one selected skill",
     parameters: Type.Object({ skill: Type.String({ description: "Exact skill name to load" }) }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      restoreReportFromSession(state, ctx);
+      await ensureSkillsDiscovered(state, ctx.cwd);
+      state.report.timestamp = new Date().toISOString();
       state.report.cwd = ctx.cwd;
       state.report.toolCalls.skillLoad += 1;
       const skill = findSkill(state.skills, params.skill);
-      if (!skill?.location) return { content: [{ type: "text", text: renderManifest(state, [params.skill]) }], details: { found: false, requested: params.skill }, isError: true };
+      if (!skill?.location) {
+        persistReportSnapshot(pi, state, "skill_load_not_found");
+        return { content: [{ type: "text", text: renderManifest(state, [params.skill]) }], details: { found: false, requested: params.skill }, isError: true };
+      }
       try {
         const content = await loadSkillContent(skill.location);
-        state.report.loadedByTool.push(skill.name);
+        state.report.loadedByTool = [...new Set([...state.report.loadedByTool, skill.name])].sort();
+        persistReportSnapshot(pi, state, "skill_load");
         return { content: [{ type: "text", text: [`Skill: ${skill.name}`, `Location: ${skill.location}`, "", content].join("\n") }], details: { found: true, skill: skill.name, location: skill.location } };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        persistReportSnapshot(pi, state, "skill_load_error");
         return { content: [{ type: "text", text: message }], details: { found: true, skill: skill.name, error: message }, isError: true };
       }
     },

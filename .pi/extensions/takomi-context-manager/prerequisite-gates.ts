@@ -3,6 +3,7 @@ import type { ContextManagerConfig } from "./types";
 import type { ContextManagerState } from "./state";
 import { recordBlocked, syncReportLedger } from "./state";
 import { renderPolicies } from "./policy-registry";
+import { persistReportSnapshot } from "./session-state";
 
 function renderPolicyGateBlock(toolName: string, missing: string[], policyText: string): string {
   return [
@@ -33,6 +34,7 @@ export function installPrerequisiteGates(pi: ExtensionAPI, state: ContextManager
       syncReportLedger(state);
       const reason = renderPolicyGateBlock(event.toolName, missing, policyText);
       recordBlocked(state, event.toolName, reason);
+      persistReportSnapshot(pi, state, "prerequisite-gate-block");
       return { block: true, reason };
     }
   });

@@ -54,7 +54,8 @@ function createState(): SubagentState {
   };
 }
 
-function resolveMode(params: TakomiSubagentToolParams): "single" | "parallel" | "chain" | undefined {
+function resolveMode(params: TakomiSubagentToolParams): "single" | "parallel" | "chain" | "action" | undefined {
+  if (params.action) return "action";
   const hasChain = Boolean(params.chain?.length);
   const hasParallel = Boolean(params.tasks?.length);
   const hasSingle = Boolean(params.agent && params.task);
@@ -205,12 +206,26 @@ function toSubagentParams(params: TakomiSubagentToolParams, rootCwd: string, dis
   const base = {
     agentScope: params.agentScope ?? "both",
     cwd: rootCwd,
-    context: "fresh" as const,
-    async: false,
+    ...(params.context ? { context: params.context } : {}),
+    ...(params.async !== undefined ? { async: params.async } : {}),
+    ...(params.concurrency !== undefined ? { concurrency: params.concurrency } : {}),
+    ...(params.worktree !== undefined ? { worktree: params.worktree } : {}),
     clarify: params.clarify === true,
     includeProgress: true,
     sessionDir: stableConversationSessionDir(rootCwd, tasks),
   };
+
+  if (mode === "action") {
+    return {
+      ...base,
+      action: params.action,
+      agent: params.agent,
+      chainName: params.chainName,
+      id: params.id,
+      message: params.message,
+      index: params.index,
+    };
+  }
 
   if (mode === "single") {
     const task = tasks[0]!;

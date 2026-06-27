@@ -23,7 +23,15 @@ export function createEmptyReport(): ContextReport {
     editedFiles: [],
     writtenFiles: [],
     blockedActions: [],
+    modelRoutingCorrections: [],
     duplicateExtensionWarnings: [],
+    sessionRestore: {
+      attempted: false,
+      restored: false,
+      snapshotCount: 0,
+      toolResultCount: 0,
+      note: "No session restore attempted yet.",
+    },
     promptRewrite: {
       attempted: false,
       changed: false,
@@ -63,6 +71,8 @@ export function syncReportLedger(state: ContextManagerState): void {
 }
 
 export function recordBlocked(state: ContextManagerState, toolName: string, reason: string): void {
-  state.report.blockedActions.push({ toolName, reason, timestamp: new Date().toISOString() });
+  const timestamp = new Date().toISOString();
+  state.report.timestamp = timestamp;
+  state.report.blockedActions.push({ toolName, reason, timestamp });
   syncReportLedger(state);
 }

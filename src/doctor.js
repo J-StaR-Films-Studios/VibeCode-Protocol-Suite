@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import pc from 'picocolors';
-import { inspectPiHarnessEnvironment } from './pi-harness.js';
+import { formatRawPiSubagentsFindings, inspectPiHarnessEnvironment } from './pi-harness.js';
 import { getStoreSkills, isStoreInitialized } from './store.js';
 import { PI_MANIFEST_PATH } from './pi-installer.js';
 import { SKILLS_MANIFEST_PATH, SKILLS_ROOT } from './skills-installer.js';
@@ -41,6 +41,7 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
       ? `${report.piSubagents.globalPackageJson}${report.piSubagents.globalVersion ? ` (${report.piSubagents.globalVersion})` : ''}`
       : 'missing'));
   console.log(status(report.piSubagents.binaryInstalled, 'pi-subagents installer binary', report.piSubagents.binaryPath || 'missing'));
+  console.log(status(report.rawPiSubagentsActivation.findings.length === 0, 'Raw Pi subagent tool hidden', report.rawPiSubagentsActivation.findings.length ? 'raw subagent activation detected' : 'yes'));
   console.log(status(report.installed.routingPolicyPresent || report.project.routingPolicyPresent, 'Routing policy', report.project.routingPolicyPresent ? report.project.targets.routingPolicy : report.installed.targets.routingPolicy));
   console.log(status(await fs.pathExists(SKILLS_ROOT), 'Installed skills root', SKILLS_ROOT));
   console.log(status(await fs.pathExists(SKILLS_MANIFEST_PATH), 'Skills install manifest', SKILLS_MANIFEST_PATH));
@@ -66,6 +67,11 @@ export async function runDoctor({ version, cwd = process.cwd() } = {}) {
 
   if (!report.piSubagents.localInstalled && !report.piSubagents.globalInstalled) {
     console.log(pc.white('  - Install pi-subagents: npm install -g pi-subagents'));
+  }
+
+  if (report.rawPiSubagentsActivation.findings.length) {
+    console.log(pc.white('  - Disable raw Pi subagents so models only see takomi_subagent. Run takomi setup pi or set TAKOMI_DISABLE_RAW_PI_SUBAGENTS=1 takomi refresh pi.'));
+    console.log(pc.dim(formatRawPiSubagentsFindings(report.rawPiSubagentsActivation.findings).split(/\r?\n/).map((line) => `    ${line}`).join('\n')));
   }
 
   if (!report.project.routingPolicyPresent && !report.installed.routingPolicyPresent) {

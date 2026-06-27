@@ -50,6 +50,8 @@ Legacy commands like `takomi install pi`, `takomi sync pi`, `takomi upgrade`, an
 
 During `takomi setup pi` or `takomi setup pi-features`, Takomi offers optional Pi feature packs with recommended/manual/select-all/skip choices. Current defaults install **Takomi Interview** (`npm:@juicesharp/rpiv-ask-user-question`) so models can ask structured clarification questions. **Takomi Todo** (`npm:@juicesharp/rpiv-todo`), **Takomi Browser QA** (`npm:pi-chrome`), and **Takomi Doc Preview** (`npm:pi-markdown-preview`) remain opt-in. `takomi refresh` runs Pi's package updater so installed optional, custom, old, and new Pi packages are reconciled together.
 
+Takomi keeps `pi-subagents` installed as an internal runtime module, but setup/refresh now detects legacy raw Pi subagent activation (`npm:pi-subagents` in Pi settings or `~/.pi/agent/extensions/subagent`) and offers to disable it so models see `takomi_subagent` instead of two competing subagent tools.
+
 ### Context Manager
 
 Takomi now ships a Pi-native `takomi-context-manager` extension. It reduces prompt bloat with progressive context loading:
@@ -60,6 +62,7 @@ Takomi now ships a Pi-native `takomi-context-manager` extension. It reduces prom
 - `takomi_subagent` is guarded by routing-policy context and can recover from wrong-provider model choices
 - `/context-report` shows prompt compaction, loaded skills/policies, blocked actions, model-routing corrections, and duplicate extension diagnostics
 
+`context_report` is context-manager-specific rather than a clone of Pi's Alt-C window. It restores its own hidden snapshots and Pi tool-result history after `/reload`/restart, and labels any remaining gaps instead of reporting fresh in-memory zeros as session truth. It supports `mode: "summary" | "verbose" | "problems"`; `verbose: true` remains a compatibility alias for `mode: "verbose"`. The `/context-report` slash command supports argument completions for `summary`, `verbose`, and `problems`.
 
 ### Option A: Global Install (Best for Multi-IDE Users) ⭐
 

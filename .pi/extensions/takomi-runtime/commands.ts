@@ -9,6 +9,7 @@ import { commandHelp, completions, statusText, workflowPrompt } from "./command-
 import type { TakomiSubagentController } from "./subagent-types";
 import { previewTakomiRoutingPolicy, renderRoutingPolicyPreview, resolveTakomiRoutingPolicy, type RoutingPolicyInstallScope } from "./routing-policy";
 import { collectTakomiStats, renderTakomiStats } from "./takomi-stats.js";
+import { discoverTakomiAgents } from "../takomi-subagents/agents";
 
 export type TakomiRuntimeCommandState = {
   enabled: boolean;
@@ -202,6 +203,17 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
 
   async function handleSubagents(ctx: ExtensionCommandContext, action?: string): Promise<void> {
     const controller = options.subagentController;
+    if (action === "list" || action === "agents") {
+      const agents = discoverTakomiAgents(ctx.cwd, "both");
+      const lines = [
+        "Takomi subagents:",
+        ...(agents.length
+          ? agents.map((agent) => `- ${agent.name} (${agent.source}): ${agent.description}`)
+          : ["- (none discovered)"]),
+      ];
+      ctx.ui.notify(lines.join("\n"), agents.length ? "info" : "warning");
+      return;
+    }
     if (action === "on" || action === "off") {
       await options.updateState(ctx, () => {
         options.getState().subagentsEnabled = action === "on";
@@ -212,7 +224,7 @@ export function registerTakomiCommands(pi: ExtensionAPI, options: RegisterTakomi
       ctx.ui.notify(statusText(options.getState(), controller), controller.hasRuns() ? "info" : "warning");
       return;
     }
-    ctx.ui.notify("Usage: /takomi subagents <on|off|status>", "warning");
+    ctx.ui.notify("Usage: /takomi subagents <list|on|off|status>", "warning");
   }
 
   pi.registerCommand("takomi", {
