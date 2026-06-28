@@ -1,6 +1,6 @@
 {
   "name": "takomi-codex",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260628231636",
   "description": "Takomi orchestration, policy, and roadbook adapter for Codex.",
   "author": {
     "name": "J StaR Films Studios"
@@ -29,6 +29,9 @@
       "Create a Takomi roadbook for this work.",
       "Inspect the local Takomi runtime."
     ],
-    "brandColor": "#7C3AED"
+    "brandColor": "#18CFE4",
+    "composerIcon": "./assets/composer-icon.png",
+    "logo": "./assets/logo.png",
+    "logoDark": "./assets/logo-dark.png"
   }
 }

@@ -19,7 +19,11 @@ The plugin should let a normal Codex request use Takomi judgment without forcing
 - `plugins/takomi-codex/.codex-plugin/plugin.json`
   - valid Codex plugin manifest
   - points to bundled skills and scripts
+  - points to bundled logo/icon assets
   - avoids unsupported fields
+- `.agents/plugins/marketplace.json`
+  - repo-local marketplace metadata
+  - points Codex at `./plugins/takomi-codex`
 - `plugins/takomi-codex/skills/takomi-codex/SKILL.md`
   - Codex-native Takomi entrypoint
   - lifecycle routing for Genesis, Design, Build, Review, and Recovery
@@ -252,7 +256,9 @@ Implementation should begin only after the user confirms this blueprint.
 ## Implementation Notes
 
 - [x] Created repo-local plugin at `plugins/takomi-codex/`.
+- [x] Added repo-local marketplace metadata at `.agents/plugins/marketplace.json`.
 - [x] Added `.codex-plugin/plugin.json` with Takomi-specific metadata.
+- [x] Added Takomi logo assets under `plugins/takomi-codex/assets/`.
 - [x] Added `skills/takomi-codex/SKILL.md` for Codex-native Takomi behavior.
 - [x] Added `scripts/takomi-detect.ps1` for read-only runtime detection.
 - [x] Added `scripts/takomi-doctor.ps1` for plugin and runtime readiness checks.
