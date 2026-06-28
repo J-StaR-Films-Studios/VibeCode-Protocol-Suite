@@ -1,0 +1,34 @@
+{
+  "name": "takomi-codex",
+  "version": "0.1.0",
+  "description": "Takomi orchestration, policy, and roadbook adapter for Codex.",
+  "author": {
+    "name": "J StaR Films Studios"
+  },
+  "license": "ISC",
+  "keywords": [
+    "takomi",
+    "codex",
+    "orchestration",
+    "pi",
+    "roadbooks"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Takomi Codex",
+    "shortDescription": "Use Takomi lifecycle orchestration inside Codex.",
+    "longDescription": "Takomi Codex brings Takomi's Genesis, Design, Build, review, policy, and markdown roadbook workflows into Codex while adapting to local Pi/Takomi runtime state when present.",
+    "developerName": "J StaR Films Studios",
+    "category": "Productivity",
+    "capabilities": [
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Use Takomi to plan this feature.",
+      "Create a Takomi roadbook for this work.",
+      "Inspect the local Takomi runtime."
+    ],
+    "brandColor": "#7C3AED"
+  }
+}
