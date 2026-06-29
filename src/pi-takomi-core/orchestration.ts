@@ -181,7 +181,7 @@ function describeWorkflowPhase(workflow?: OrchestratorTask["workflow"]): string 
     case "vibe-genesis":
       return "Product framing and blueprint generation";
     case "vibe-design":
-      return "Design planning and interaction definition";
+      return "UI/UX design, visual system, and interaction definition";
     case "vibe-build":
       return "Implementation and delivery";
     default:

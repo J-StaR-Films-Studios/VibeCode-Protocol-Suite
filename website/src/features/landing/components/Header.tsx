@@ -1,48 +1,47 @@
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { navLinks, repositoryUrl } from "@/features/site/siteData";
 
 export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl h-16 items-center justify-between px-6">
-        <a href="#" className="flex items-center gap-3 font-mono text-lg font-bold tracking-tight text-foreground transition-opacity hover:opacity-90">
+        <Link
+          href="/"
+          className="flex items-center font-mono text-lg font-bold tracking-tight text-foreground transition-opacity hover:opacity-90"
+        >
           <Image
             src="/takomi-logo.png"
             alt="Takomi"
-            width={90}
-            height={26}
-            className="h-7 w-auto"
+            width={118}
+            height={34}
+            className="h-8 w-auto"
             priority
           />
-          <span>
-            TAKOMI<span className="text-accent animate-pulse-slow">_</span>
-          </span>
-        </a>
+        </Link>
         
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-400">
-          <a href="#protocol" className="transition-colors hover:text-accent">
-            Protocol
-          </a>
-          <a href="#workflow" className="transition-colors hover:text-accent">
-            Workflow
-          </a>
-          <a href="#plugin" className="transition-colors hover:text-accent">
-            Codex Plugin
-          </a>
-          <a href="#install" className="transition-colors hover:text-accent">
-            Docs & Installation
-          </a>
+        <nav className="hidden items-center gap-7 text-sm font-medium text-zinc-400 md:flex">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="transition-colors hover:text-accent"
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="flex items-center gap-4">
-          <a
-            href="#install"
+          <Link
+            href="/installation"
             className="hidden sm:inline-flex h-9 items-center justify-center rounded border border-accent/20 bg-accent-muted px-4 text-xs font-semibold text-accent transition-all duration-200 hover:border-accent hover:bg-accent/10 cursor-pointer"
           >
             Initialize
-          </a>
+          </Link>
           <a
-            href="https://github.com/JStaRFilms/VibeCode-Protocol-Suite"
+            href={repositoryUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex h-9 w-9 items-center justify-center rounded border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 transition-colors cursor-pointer"

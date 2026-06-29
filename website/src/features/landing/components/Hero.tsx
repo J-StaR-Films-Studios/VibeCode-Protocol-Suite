@@ -2,18 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { installCommand } from "@/features/site/siteData";
 
-const installCommand = "npm install -g takomi && takomi setup pi";
+interface HeroProps {
+  version: string;
+}
 
-export default function Hero() {
-  const [copied, setCopied] = useState(false);
+export default function Hero({ version }: HeroProps) {
   const [terminalLine, setTerminalLine] = useState(0);
-
-  const copyCommand = () => {
-    navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   // Simple terminal line stepper for interactive feel
   useEffect(() => {
@@ -41,7 +38,7 @@ export default function Hero() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
           </span>
-          <span>PROTOCOL v0.0.1</span>
+          <span>TAKOMI v{version}</span>
           <span className="text-zinc-600 font-normal">|</span>
           <span>STATUS: OPERATIONAL</span>
         </div>
@@ -62,35 +59,29 @@ export default function Hero() {
 
         {/* CTAs */}
         <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
-          <button
-            onClick={copyCommand}
+          <Link
+            href="/installation"
             className="group relative flex h-11 items-center justify-center gap-2 rounded border border-accent bg-accent px-6 text-sm font-semibold text-background transition-all duration-200 hover:bg-transparent hover:text-accent cursor-pointer"
           >
-            {copied ? "Copied to Clipboard" : "Initialize Engine"}
+            Choose install path
             <svg
-              className={`h-4 w-4 fill-none stroke-current transition-transform duration-200 ${copied ? "scale-90" : "group-hover:translate-x-0.5"}`}
+              className="h-4 w-4 fill-none stroke-current transition-transform duration-200 group-hover:translate-x-0.5"
               viewBox="0 0 24 24"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              {copied ? (
-                <path d="M20 6L9 17l-5-5" />
-              ) : (
-                <>
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <polyline points="12 5 19 12 12 19" />
-                </>
-              )}
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
             </svg>
-          </button>
+          </Link>
           
-          <a
-            href="#workflow"
+          <Link
+            href="/docs"
             className="flex h-11 items-center justify-center rounded border border-zinc-800 bg-zinc-900/40 px-6 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-foreground cursor-pointer"
           >
-            Explore Workflow
-          </a>
+            Explore Docs
+          </Link>
         </div>
       </div>
 
@@ -139,7 +130,7 @@ export default function Hero() {
             
             <div className={`transition-opacity duration-500 ${terminalLine >= 1 ? "opacity-100" : "opacity-0 h-0 overflow-hidden"}`}>
               <span className="text-zinc-500">Checking project files & rules...</span><br />
-              <span className="text-amber-500">[!]</span> <span className="text-zinc-400">Rule warning: &quot;src/app/page.tsx&quot; is approaching 200 lines. Propose refactor.</span>
+              <span className="text-amber-500">[!]</span> <span className="text-zinc-400">Size signal: page surface is growing. Suggest split when useful.</span>
             </div>
 
             <div className={`transition-opacity duration-500 ${terminalLine >= 2 ? "opacity-100" : "opacity-0 h-0 overflow-hidden"}`}>

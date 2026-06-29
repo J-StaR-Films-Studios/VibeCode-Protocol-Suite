@@ -47,7 +47,7 @@ export default function Timeline() {
       steps: [
         "Import validated parameters and Zod payload schemas.",
         "Run compilation validation: npx tsc --noEmit.",
-        "Refactor files exceeding the 200-line rule limit.",
+        "Split growing files when the design or maintenance signal justifies it.",
       ],
       output: "[✓] Build gate passed. Compiled 14 tsx files without errors.",
     },
@@ -67,10 +67,10 @@ export default function Timeline() {
       id: "recovery",
       name: "05. Recovery",
       command: "pwsh -File .\\plugins\\takomi-codex\\scripts\\takomi-policy.ps1 -Root .",
-      objective: "Rescue agents stuck in loop states by purging context memory and resetting workspace.",
+      objective: "Recover from confused routing, stale context, or oversized prompt state.",
       steps: [
         "Execute 'agent_reset.md' mid-session protocols.",
-        "Clean prompt kernel context block variables.",
+        "Reload only the policies and skills required for the next action.",
         "Load project state snapshots to restore functional baseline.",
       ],
       output: "[✓] Recovery complete. Prompt kernel payload reduced from 1200 to 250 lines.",

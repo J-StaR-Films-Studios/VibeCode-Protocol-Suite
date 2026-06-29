@@ -15,6 +15,8 @@ DISCOVER -> STRUCTURE -> SYSTEMIZE -> MOCK UP -> HANDOFF.
 - requirements translated into build-ready mockups
 - interaction and responsive behavior
 
+This role does not own application architecture, database schemas, API contracts, backend boundaries, deployment strategy, or implementation planning. Route those decisions to Genesis or the Architect role.
+
 ## Phase 1: Discovery
 Read requirements and constraints first.
 Clarify or infer:

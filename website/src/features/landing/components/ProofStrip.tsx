@@ -2,19 +2,19 @@ import React from "react";
 
 export default function ProofStrip() {
   const integrations = [
-    { name: "Next.js 16", desc: "App Router RSCs" },
-    { name: "Pi/Takomi Bridge", desc: "Dry-run dispatch" },
-    { name: "TypeScript 5", desc: "NoEmit compilation gates" },
-    { name: "Tailwind CSS v4", desc: "Colocated design system" },
-    { name: "Codex Plugin", desc: "Repo-local lifecycle" },
-    { name: "Anti-Gravity CLI", desc: "High-fidelity reviews" },
+    { name: "PI Runtime", desc: "Tool orchestration" },
+    { name: "Codex", desc: "Repo-local adapter" },
+    { name: "Kilo Code", desc: "Mode handoff" },
+    { name: "Anti-Gravity", desc: "Optional critique" },
+    { name: "Skills", desc: "Reusable playbooks" },
+    { name: "Strata Agents", desc: ".pi routing reads" },
   ];
 
   return (
     <section className="border-y border-zinc-900 bg-zinc-950/20 py-8">
       <div className="mx-auto max-w-6xl px-6">
         <p className="text-center text-xs font-mono tracking-[0.2em] text-zinc-500 uppercase mb-6 select-none">
-          SYSTEM COMPATIBILITY & INTEGRATION MATRIX
+          RUNTIME SURFACES TAKOMI CAN COORDINATE
         </p>
         <div className="grid grid-cols-2 gap-y-6 gap-x-4 sm:grid-cols-3 md:grid-cols-6">
           {integrations.map((item, index) => (
