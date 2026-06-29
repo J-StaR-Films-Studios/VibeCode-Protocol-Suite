@@ -87,3 +87,13 @@ body {
 .animate-pulse-slow {
   animation: pulse-slow 2.8s ease-in-out infinite;
 }
+
+.pi-grid {
+  background-color: #08111a;
+  background-image:
+    linear-gradient(rgba(88, 124, 150, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 124, 150, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(88, 124, 150, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 124, 150, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 6px 6px, 6px 6px;
+}
