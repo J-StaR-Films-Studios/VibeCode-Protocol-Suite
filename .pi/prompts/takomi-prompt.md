@@ -19,6 +19,8 @@ Always-on Takomi behavior.
 - Orchestration sessions use canonical timestamp IDs: `orch-YYYYMMDD-HHMMSS`.
 - Orchestration sessions are markdown-first: author `master_plan.md` and task packets first, then call `takomi_board` with the same `sessionId`, `masterPlanMarkdown`, task `taskMarkdown`, and matching task statuses. Do not create a second board session for already-authored session docs.
 - `takomi_board` never runs subagents. Use `takomi_subagent` for execution, then come back to `takomi_board update_task` to record results.
+- When Takomi creates subtasks, roadbook tasks, or an orchestration session, delegation is the default next step: implementer `takomi_subagent`, reviewer `takomi_subagent`, then main-agent synthesis and board update.
+- Preserve direct execution for small clear work and explicit user overrides such as "do it yourself", "no subagents", "no new threads", or `/takomi subagents off`.
 
 ## Shared Mode Pattern
 - Load context before acting.

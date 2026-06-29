@@ -4,6 +4,8 @@
 
 Make Takomi's native Pi orchestration feel deliberate instead of noisy. Broad work should fan out automatically in auto mode, while manual mode should expose a clear delegation plan before launch so the user can inspect or adjust agent, task, model, thinking level, and review behavior.
 
+When Takomi creates subtasks, roadbook tasks, or an orchestration session, Pi should use `takomi_subagent` by default for implementation and a separate review pass. The main agent remains the orchestrator: it synthesizes results, updates the roadbook/board, decides whether to accept or redispatch, and handles the final user handoff.
+
 This pass keeps Takomi's existing board, agents, and session model. It borrows the useful planning ideas from Pi subagent patterns without taking a runtime dependency on `pi-subagents`.
 
 ## Components
@@ -24,7 +26,8 @@ This pass keeps Takomi's existing board, agents, and session model. It borrows t
 4. In `auto` mode, dispatch proceeds immediately.
 5. In `manual` mode, Takomi returns the plan unless `confirmLaunch=true` is provided.
 6. Dispatch uses the existing `dispatchTakomiSubagent` adapter, preserving model preflight, `--thinking`, fallback behavior, prompt loading from `.pi/agents/*.md`, and stable conversation ids.
-7. Runtime events update the compact active-agent stack and fullscreen detail view.
+7. A reviewer run checks implementation output before the orchestrator accepts or redispatches the task.
+8. Runtime events update the compact active-agent stack and fullscreen detail view.
 
 ## Schema
 
@@ -66,6 +69,8 @@ Board/direct dispatch additions:
 - Manual mode returns a readable delegation plan instead of launching immediately.
 - Auto mode still launches without an extra confirmation step.
 - Board redispatch and direct `takomi_subagent` calls share the same plan shape.
+- Decomposed orchestration defaults to implementer and reviewer `takomi_subagent` runs.
+- The main orchestrator owns final synthesis, board updates, acceptance, redispatch, and user handoff.
 - Plans show agent, task, model, thinking, workflow, checklist progress, review state, and launch mode.
 - Redispatch still reuses `conversationId`.
 - Active subagent UI still supports minimized, expanded, fullscreen, and focus switching.
@@ -77,5 +82,6 @@ Board/direct dispatch additions:
 - Do not hard-code personal model choices.
 - Do not break `.pi/agents/*.md` prompt discovery.
 - Do not require manual preview in auto mode.
+- Do not force subagents for small one-shot tasks or when the user explicitly says "do it yourself", "no subagents", or "no new threads".
 - Do not lose session continuity during review-and-redispatch.
 - Keep raw tool chatter secondary in compact and expanded modes.

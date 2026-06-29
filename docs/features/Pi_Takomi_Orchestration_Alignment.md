@@ -15,11 +15,13 @@ This feature should make the relationship explicit:
 - the default kickoff session is a reusable template defined in shared core, not an extension-only hard-coded block
 - Build remains a lifecycle stage and workflow, not a fake specialist role
 - Takomi lifecycle judgment is the default orchestration behavior, even when the user does not explicitly say "use Takomi"
+- decomposition implies delegation-first execution: the main agent coordinates while `takomi_subagent` implementer and reviewer runs do the execution work by default
 
 ## Problem Statement
 
 Current observed mismatches:
 - the docs say Build is a workflow/stage that uses orchestration, delegation, review, and redispatch
+- the default behavior must make delegation the normal execution path once a request has been decomposed, without over-orchestrating one-shot work
 - the runtime implementation creates a fixed three-task orchestrator session in the extension itself
 - the shared core has `createTask`, routing, workflow definitions, and session rendering, but not the kickoff template factory
 - this makes it harder to keep Pi runtime behavior, docs, and future packaged reuse aligned
@@ -72,15 +74,20 @@ Current observed mismatches:
    - preserve session continuity and review loops when a stage splits
 6. Update the Pi runtime extension to call shared core helpers instead of owning orchestration policy inline.
 7. Centralize any task packet defaults that belong to Takomi policy in shared core so future Pi packaging or reuse cannot drift.
-8. Improve route/orchestration decision logic so follow-up requests can choose intelligently between:
+8. Make the implement-review loop explicit for decomposed work:
+   - implementer `takomi_subagent` executes the task
+   - reviewer `takomi_subagent` reviews the result
+   - the main orchestrator synthesizes, updates the board, and accepts or redispatches
+9. Improve route/orchestration decision logic so follow-up requests can choose intelligently between:
    - direct one-shot handling
    - updating the current session
    - creating a new orchestration session for a larger multi-part task
-9. Review prompt/docs wording so the scaffold clearly says:
+10. Review prompt/docs wording so the scaffold clearly says:
    - a session embodies the full Genesis → Design → Build lifecycle
    - stages may split into multiple tasks or remain compact
    - Build is a stage that often expands into specialist implementation tasks for the MUS
    - orchestration is used by judgment, not by rigid command ritual
+   - explicit user overrides such as "do it yourself", "no subagents", or "no new threads" allow direct execution
 
 ## Data Flow
 
@@ -92,11 +99,13 @@ Current observed mismatches:
    - create new orchestration session
 4. If a new session is needed, shared core creates an initial lifecycle session with Genesis as the first active task.
 5. As stage outputs become clearer, the orchestrator can expand Design and Build into more granular tasks.
-6. Pi runtime persists:
+6. For decomposed implementation work, Pi dispatches an implementer `takomi_subagent`, then a reviewer `takomi_subagent`.
+7. The main orchestrator synthesizes results, updates the board, and accepts or redispatches with the same durable task packet.
+8. Pi runtime persists:
    - docs task files
    - machine JSON state
    - active runtime state
-7. Later board actions update task status, notes, checklist progress, redispatch metadata, stage expansion, and subagent continuity.
+9. Later board actions update task status, notes, checklist progress, redispatch metadata, stage expansion, and subagent continuity.
 
 ## Database Schema
 
@@ -148,6 +157,7 @@ Persistent state is file-based:
 - prompt/docs wording may still imply the scaffold template is the canonical Takomi flow
 - moving policy into shared core must not break current session file layout or redispatch behavior
 - smarter automatic routing can become annoying if thresholds are too eager and trigger orchestration for normal small tasks
+- delegation-first language can be misread as mandatory ceremony; direct execution must remain valid for small one-shot tasks and explicit user opt-outs
 - dynamic stage expansion can become confusing if the board does not make parent-stage versus child-task relationships obvious
 
 ## Acceptance Criteria
@@ -158,6 +168,9 @@ Persistent state is file-based:
 - a new orchestration session starts with a Genesis-first lifecycle backbone instead of a rigid fixed task list
 - Genesis, Design, and Build can each remain compact or expand into multiple tasks based on scope
 - Build can represent MUS implementation across many tasks without breaking the lifecycle model
+- decomposed Pi orchestration uses `takomi_subagent` implementer and reviewer passes by default
+- the main orchestrator remains responsible for synthesis, board updates, acceptance, redispatch, and final user handoff
+- explicit user overrides allow direct execution
 - follow-up requests can be judged as one-shot work or orchestration-worthy work using explicit shared-core logic
 - existing session file format remains compatible
 - docs reflect that lifecycle stages are canonical, while task count is dynamic

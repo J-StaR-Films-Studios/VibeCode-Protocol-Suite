@@ -1,0 +1,20 @@
+{
+  "name": "jstarfilmsstudios",
+  "interface": {
+    "displayName": "J StaR Films Studios"
+  },
+  "plugins": [
+    {
+      "name": "takomi-codex",
+      "source": {
+        "source": "local",
+        "path": "./plugins/takomi-codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

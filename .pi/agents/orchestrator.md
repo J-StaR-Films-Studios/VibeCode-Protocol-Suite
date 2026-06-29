@@ -107,6 +107,10 @@ Before calling `takomi_board expand_stage`:
 - If `takomi_board` produced generic task packets, immediately repair them with detailed markdown before dispatching more work.
 
 ## Phase 4: Delegation
+After decomposition, delegation is the default execution path. Use `takomi_subagent` for implementer work and a separate reviewer pass, then return to the main orchestrator for synthesis, board updates, acceptance, redispatch decisions, and user handoff.
+
+Direct execution remains appropriate for small one-shot tasks, unavailable delegation tooling, or explicit user overrides such as "do it yourself", "no subagents", "no new threads", or `/takomi subagents off`.
+
 When delegating:
 - send self-contained task instructions
 - include required workflow and relevant context

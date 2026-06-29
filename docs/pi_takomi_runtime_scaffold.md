@@ -66,6 +66,7 @@ Current progress inside the scaffold:
 - machine state is written to `.pi/takomi/orchestrator/<sessionId>.json`
 - task packets can carry workflow, skills, model override, conversationId, and checklist metadata
 - lifecycle sessions now start Genesis-first and can expand later stages dynamically
+- decomposed orchestration sessions should dispatch implementer and reviewer work through `takomi_subagent` by default
 
 ### Phase 3
 Package as an installable Pi package.
@@ -101,22 +102,25 @@ The Pi-specific runtime explicitly models the Vibe Code Protocol:
 Intended behavior:
 1. Genesis creates the project foundation and the required markdown artifacts.
 2. Design turns that into build-ready UI and UX direction, ideally with a strong design-capable model.
-3. Build is a workflow/stage layer that uses orchestration plus specialist subagents; it is not meant to duplicate the coder role.
+3. Build is a workflow/stage layer that uses orchestration plus specialist subagents; the main agent coordinates rather than becoming the default coder.
 4. A new orchestration session starts with a Genesis foundation task, then expands Design and Build only when the scope justifies it.
 5. Follow-up work should be judged intelligently:
    - one-shot when it is small
    - session expansion when it belongs to the current lifecycle
    - a fresh orchestration session when the request is large and multi-part
-6. During Build, work may be reviewed and then sent back to the same agent by reusing its `conversationId`, instead of restarting the task from scratch.
-7. The board/runtime uses a hybrid architecture:
+6. When a request creates subtasks, roadbook tasks, or a session, Pi should use `takomi_subagent` for implementer execution and a separate reviewer pass by default.
+7. During Build, work may be reviewed and then sent back to the same agent by reusing its `conversationId`, instead of restarting the task from scratch.
+8. The board/runtime uses a hybrid architecture:
    - visible docs for human inspection
    - hidden JSON state for machine tracking
-8. Task packets may specify:
+9. Task packets may specify:
    - `workflow`
    - `skills`
    - `preferredModel`
    - `conversationId`
    - `checklist`
+
+Direct execution is still correct for small one-shot tasks. The user can also opt out of delegation with explicit language such as "do it yourself", "no subagents", or "no new threads"; the runtime should then keep the roadbook current while allowing the main agent to execute.
 
 ## Notes
 
