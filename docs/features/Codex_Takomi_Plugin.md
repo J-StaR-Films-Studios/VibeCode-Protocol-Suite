@@ -12,7 +12,7 @@ The plugin should let a normal Codex request use Takomi judgment without forcing
 - broad tasks create or update markdown roadbooks
 - policy-aware tasks inspect project/user Takomi config
 - available Pi/Takomi runtimes can be used through explicit scripts or future MCP tools
-- multi-Codex-thread orchestration is supported as an execution strategy when thread tools are available
+- delegated orchestration is supported through available multi-agent/subagent tooling, with user-owned Codex threads available as an explicit or approved orchestration option
 
 ## Components
 
@@ -31,7 +31,7 @@ The plugin should let a normal Codex request use Takomi judgment without forcing
   - lifecycle routing for Genesis, Design, Build, Review, and Recovery
   - environment adapter rules for Pi/Takomi detection
   - markdown-board orchestration rules
-  - optional multi-Codex-thread orchestration rules
+  - optional delegation rules for available multi-agent/subagent tooling
 - `plugins/takomi-codex/scripts/`
   - `takomi-detect.ps1`
   - `takomi-doctor.ps1`
@@ -44,7 +44,8 @@ The plugin should let a normal Codex request use Takomi judgment without forcing
 
 - Codex loads the plugin skill and applies Takomi routing.
 - The agent can call local scripts through the terminal.
-- The agent can use Codex thread tools if available and explicitly useful.
+- The agent can use available multi-agent or subagent tools when delegation is explicitly useful.
+- The agent uses Codex thread tools only when the user explicitly asks for new threads, handoff threads, or parallel thread orchestration, or when the agent recommends that route and the user approves it.
 - The agent reports which mode it selected for broad work.
 
 ### Server / Runtime Surface
@@ -87,7 +88,8 @@ Future versions can add an MCP server once the script contract settles.
    - Codex direct work
    - local scripts
    - Pi/Takomi CLI bridge when available
-   - multi-Codex-thread delegation when tools are available and the task warrants it
+   - multi-agent/subagent delegation when tools are available and the task warrants it
+   - user-owned Codex threads only when explicitly requested by the user or recommended and approved
 7. The agent updates docs and board state before handoff.
 
 ## Database Schema
@@ -216,17 +218,18 @@ Dry-run-first bridge for Takomi-supported harness operations:
 
 This supports non-Pi harnesses when the user or project policy points there.
 
-## Multi-Codex-Thread Orchestration
+## Codex Delegation
 
-The skill should support multi-thread orchestration only when Codex thread tools are available.
+The skill should support delegation through available multi-agent or subagent tools when broad work benefits from independent execution or review.
 
 Rules:
 
 - Use direct work for small tasks.
-- Use one child thread per independent specialist task only when the task is broad enough.
-- Each child thread receives a self-contained task packet path.
+- Use one delegate per independent specialist task only when the task is broad enough.
+- Each delegate receives a self-contained task packet path.
 - Parent thread owns synthesis and board updates.
-- Child threads should not write global/user config.
+- Delegates should not write global/user config.
+- Create or fork user-owned Codex threads only when the user explicitly asks for new threads, handoff threads, or parallel thread orchestration, or when the parent agent recommends that route and the user approves it.
 - Parent thread verifies deliverables before marking tasks complete.
 
 ## Regressions To Watch

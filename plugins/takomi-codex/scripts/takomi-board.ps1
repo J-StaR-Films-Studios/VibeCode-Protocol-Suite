@@ -85,7 +85,8 @@ Define the work, route it through Takomi, and keep progress visible.
 
 - Direct Codex work when sufficient
 - Markdown roadbook for coordination
-- Pi/Takomi or multi-Codex-thread delegation only when useful and available
+- Pi/Takomi or multi-agent/subagent delegation only when useful and available
+- User-owned Codex threads only when explicitly requested or recommended and approved
 
 ## Tasks
 

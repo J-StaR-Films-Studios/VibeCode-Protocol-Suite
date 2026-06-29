@@ -1,11 +1,11 @@
 ---
 name: takomi-codex
-description: Use Takomi lifecycle orchestration inside Codex with policy-aware runtime detection, markdown roadbooks, optional Pi/Takomi dispatch, and optional multi-Codex-thread delegation.
+description: Use Takomi lifecycle orchestration inside Codex with policy-aware runtime detection, markdown roadbooks, optional Pi/Takomi dispatch, and explicit-consent delegation.
 ---
 
 # Takomi Codex
 
-Takomi Codex is the Codex-native adapter for the Takomi protocol. Use it when the user asks for Takomi, orchestration, roadbooks, Genesis/Design/Build lifecycle work, policy-aware execution, Pi/Takomi runtime inspection, or multi-thread task coordination.
+Takomi Codex is the Codex-native adapter for the Takomi protocol. Use it when the user asks for Takomi, orchestration, roadbooks, Genesis/Design/Build lifecycle work, policy-aware execution, Pi/Takomi runtime inspection, or delegated task coordination.
 
 ## Operating Principle
 
@@ -64,7 +64,7 @@ Avoid hard-coding personal model names as universal defaults. Prefer provider-qu
 
 Use `scripts/takomi-board.ps1` for broad work that needs durable coordination.
 
-Markdown roadbooks are the durable source of truth for orchestration state, even when Pi, subagents, child Codex threads, or optional JSON tracking are used.
+Markdown roadbooks are the durable source of truth for orchestration state, even when Pi, subagents, multi-agent tools, explicitly requested Codex threads, or optional JSON tracking are used.
 
 Roadbooks live at:
 
@@ -93,7 +93,7 @@ When a request is broad enough to create subtasks, roadbook tasks, or an orchest
 4. Synthesize results in the main thread.
 5. Update the roadbook, then accept the work or redispatch with a tighter packet.
 
-In Pi, prefer `takomi_subagent` for implementer and reviewer runs. In Codex, prefer child Codex threads when thread tools are available. If thread tools are unavailable, create markdown task packets and execute directly as the fallback.
+In Pi, prefer `takomi_subagent` for implementer and reviewer runs. In Codex, prefer available multi-agent or subagent tools for delegated subtasks. If those tools are unavailable, create markdown task packets and execute directly as the fallback. Use user-owned Codex child threads only when the user explicitly asks for new threads, handoff threads, or parallel thread orchestration, or when the parent agent recommends that route and the user approves it.
 
 ## Lifecycle Modes
 
@@ -164,17 +164,17 @@ Default behavior is dry-run. Before running with `-Execute`:
 - prefer `status` or `harnesses` before `sync`, `setup`, or `refresh`
 - keep Codex as the parent coordinator unless the user explicitly hands off execution
 
-## Multi-Codex-Thread Delegation
+## Codex Delegation
 
-When the user asks for parallel orchestration or Takomi decomposition makes delegation appropriate:
+When Takomi decomposition makes delegation appropriate:
 
-1. Search for Codex thread tools with `tool_search`.
-2. Create child threads only when `create_thread`, `fork_thread`, or equivalent tools are actually available.
-3. Give each child thread a self-contained task packet path and definition of done.
-4. Keep the parent thread responsible for synthesis, verification, docs, and board updates.
-5. Do not send child threads tasks that require global/user config writes unless the user approved that scope.
+1. Search for available multi-agent or subagent tools with `tool_search` when delegation would materially help.
+2. Give each delegate a self-contained task packet path and definition of done.
+3. Keep the parent thread responsible for synthesis, verification, docs, and board updates.
+4. Do not delegate tasks that require global/user config writes unless the user approved that scope.
+5. Create or fork user-owned Codex threads only when the user explicitly asks for new threads, handoff threads, or parallel thread orchestration, or when the parent agent recommends that route and the user approves it.
 
-If thread tools are unavailable, fall back to markdown task packets and direct Codex execution.
+If delegation tooling is unavailable, fall back to markdown task packets and direct Codex execution.
 
 ## File Size Discipline
 

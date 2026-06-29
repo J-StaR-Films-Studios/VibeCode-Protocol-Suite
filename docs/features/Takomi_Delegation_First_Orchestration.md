@@ -10,8 +10,8 @@ Make Takomi delegation-first once it decomposes work, while preserving direct ex
 - Broad work may create subtasks, roadbook tasks, or an orchestration session.
 - Once decomposition happens, the main agent becomes the orchestrator by default.
 - The orchestrator owns context intake, task packets, sequencing, board updates, synthesis, acceptance, redispatch, and final user handoff.
-- Implementer subagents or child threads execute task packets.
-- Reviewer subagents or child threads review implementation output before acceptance.
+- Implementer subagents or available multi-agent delegates execute task packets.
+- Reviewer subagents or available multi-agent delegates review implementation output before acceptance.
 - Markdown roadbooks remain the durable source of truth.
 
 ## User Overrides
@@ -37,14 +37,14 @@ Pi should prefer `takomi_subagent` for decomposed work:
 
 ## Codex Behavior
 
-Codex should prefer child Codex threads when thread tools are available:
+Codex should prefer available multi-agent or subagent tools for decomposed work. User-owned Codex child threads are a separate surface and should be created only when the user explicitly asks for new threads, handoff threads, or parallel thread orchestration, or when the parent agent recommends that route and the user approves it.
 
 1. Parent creates or updates the markdown roadbook.
-2. Parent sends implementer task packets to child threads.
-3. Parent sends reviewer packets to separate child threads.
+2. Parent sends implementer task packets to available multi-agent or subagent delegates.
+3. Parent sends reviewer packets to separate reviewer delegates when tooling supports it.
 4. Parent synthesizes, verifies, updates the roadbook, and hands off.
 
-If thread tools are unavailable, the parent creates markdown task packets and executes directly as fallback.
+If delegation tooling is unavailable, the parent creates markdown task packets and executes directly as fallback.
 
 ## Acceptance Criteria
 
