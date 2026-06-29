@@ -4,6 +4,8 @@
 
 Create a repo-committable Codex plugin that embodies Takomi as a portable orchestration layer while adapting to local Pi/Takomi runtime state when it exists.
 
+For user-facing setup and first-run guidance, see [Takomi Codex Onboarding](../takomi-codex-onboarding.md). This feature document remains the implementation blueprint and design record.
+
 The plugin should let a normal Codex request use Takomi judgment without forcing ceremony:
 
 - small tasks stay direct
@@ -237,6 +239,48 @@ Rules:
 - Do not let JSON tracking replace readable markdown roadbooks.
 - Keep plugin files modular and below the 200-line guidance where practical.
 
+## Onboarding Surface Audit
+
+Current onboarding surfaces serve different audiences and should stay distinct:
+
+- `README.md`: broad Takomi users. It currently explains the Pi harness, context manager, global skills install, and Codex skill-native path, but it does not yet explain the newer Codex plugin path.
+- `.agents/plugins/marketplace.json`: Codex/plugin discovery. It declares the repo-local `takomi-codex` plugin source at `./plugins/takomi-codex`.
+- `plugins/takomi-codex/.codex-plugin/plugin.json`: Codex plugin install/preview surface. It provides display name, short and long descriptions, default prompts, category, brand assets, and skill path.
+- `plugins/takomi-codex/skills/takomi-codex/SKILL.md`: agent/operator surface. It explains lifecycle routing, policy loading, runtime detection, roadbooks, dry-run Pi/Takomi dispatch, and optional multi-thread delegation.
+- `plugins/takomi-codex/scripts/*.ps1`: verification and operations surface. These scripts provide read-only detection, policy display, doctor checks, roadbook operations, dry-run Pi/Takomi dispatch, and dry-run harness operations.
+- `docs/features/Codex_Takomi_Plugin.md`: implementation blueprint and design record. It should not become the long user-facing onboarding guide.
+
+Script safety matrix:
+
+| Script | Main Use | Writes Files? | Execution Risk |
+| --- | --- | --- | --- |
+| `takomi-detect.ps1` | Inspect available project/user/CLI runtime surfaces | No | Read-only diagnostic |
+| `takomi-policy.ps1` | Display project-first policy and routing context | No | Read-only diagnostic |
+| `takomi-doctor.ps1` | Validate plugin readiness and runtime hints | No | Read-only diagnostic |
+| `takomi-board.ps1` | Create and update markdown roadbooks | Yes, project docs only | Safe for requested project docs work |
+| `takomi-pi-dispatch.ps1` | Recommend or run Pi/Takomi bridge commands | Dry-run by default | Use `-Execute` only with explicit approval or safe diagnostics |
+| `takomi-harness.ps1` | Recommend or run Takomi-supported harness operations | Dry-run by default | Use `-Execute` only after target and write scope are understood |
+
+Main gaps found during the Genesis audit:
+
+1. There is no canonical user-facing Codex plugin onboarding guide.
+2. README users can discover Codex skills, but not the repo-local Codex plugin workflow.
+3. The first-run command sequence is spread across the feature doc and script names instead of presented as a copy-pasteable verification path.
+4. The "works without Pi, adapts when Pi/Takomi exists" promise needs a plain-language onboarding explanation.
+5. Runtime safety boundaries should be surfaced earlier: project files are safe to update when requested, while user/global runtime files are read-only unless the user approves writes.
+6. `takomi-board.ps1` currently needs PowerShell 7 (`pwsh`) because Windows PowerShell 5 fails on newer syntax such as `??`.
+7. Plugin prompts are useful examples, but users need them in human docs too: "Use Takomi to plan this feature", "Create a Takomi roadbook for this work", and "Inspect the local Takomi runtime".
+
+Minimum first-run journey for a new Codex plugin user:
+
+1. Install or enable the repo-local plugin exposed by `.agents/plugins/marketplace.json`.
+2. Ask Codex to use `takomi-codex`, inspect runtime, or create a Takomi roadbook.
+3. Run non-mutating verification commands: `takomi-detect.ps1`, `takomi-policy.ps1`, and `takomi-doctor.ps1`.
+4. For broad work, create or show a markdown roadbook under `docs/tasks/orchestrator-sessions/<sessionId>/`.
+5. Use Pi/Takomi dispatch only as a dry-run recommendation unless the user explicitly authorizes execution.
+
+Canonical user-facing onboarding now lives in `docs/takomi-codex-onboarding.md`; keep this feature doc focused on implementation notes and design history.
+
 ## Acceptance Criteria
 
 - A valid Codex plugin exists under `plugins/takomi-codex/`.
@@ -249,9 +293,9 @@ Rules:
 - The plugin can be validated with the Codex plugin validator.
 - This feature doc is updated with implementation notes after build.
 
-## Approval Gate
+## Current Status
 
-Implementation should begin only after the user confirms this blueprint.
+The first plugin pass has been implemented and validated. Future work should treat this document as the implementation record and use the onboarding roadbook tasks for user-facing documentation improvements.
 
 ## Implementation Notes
 
@@ -269,6 +313,7 @@ Implementation should begin only after the user confirms this blueprint.
 - [x] Kept plugin files modular and under 200 lines each.
 - [x] Validated the plugin with the Codex plugin validator.
 - [x] Smoke-tested detection, doctor, policy, board, and dispatch status commands.
+- [x] Audited onboarding surfaces for the Codex plugin docs roadbook.
 
 ## Verification
 
@@ -281,21 +326,21 @@ python C:\Users\johno\.codex\skills\.system\plugin-creator\scripts\validate_plug
 Result: plugin validation passed.
 
 ```powershell
-.\plugins\takomi-codex\scripts\takomi-detect.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite
-.\plugins\takomi-codex\scripts\takomi-policy.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite
-.\plugins\takomi-codex\scripts\takomi-doctor.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite
-.\plugins\takomi-codex\scripts\takomi-pi-dispatch.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite -Action status
-.\plugins\takomi-codex\scripts\takomi-harness.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite -Action status
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-detect.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-policy.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-doctor.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-pi-dispatch.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite -Action status
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-harness.ps1 -Root C:\CreativeOS\01_Projects\Code\Personal_Stuff\2025-12-02_VibeCode-Protocol-Suite -Action status
 ```
 
 Result: the plugin detected project `.pi`, project profile, routing policy, policy files, user runtime folders, the `takomi` CLI, and the `pi` CLI. Doctor passed.
 
 ```powershell
-.\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action create -SessionId orch-20260628-000001
-.\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action add-task -SessionId orch-20260628-000001 -TaskTitle "Verify board script"
-.\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action complete-task -SessionId orch-20260628-000001 -TaskId T001
-.\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action summary -SessionId orch-20260628-000001
-.\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action show -SessionId orch-20260628-000001
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action create -SessionId orch-20260628-000001
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action add-task -SessionId orch-20260628-000001 -TaskTitle "Verify board script"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action complete-task -SessionId orch-20260628-000001 -TaskId T001
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action summary -SessionId orch-20260628-000001
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\plugins\takomi-codex\scripts\takomi-board.ps1 -Root <temp-root> -Action show -SessionId orch-20260628-000001
 ```
 
 Result: temp roadbook was created, task was added, task moved to completed, summary was written, and status showed `completed: 1`.

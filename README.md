@@ -123,6 +123,14 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite --skill 
 
 Original Takomi-authored skills in this bundle include `21st-dev-components`, `takomi`, `global-brand-namer`, `jstar-reviewer`, and the core VibeCode/Takomi workflow skills that ship with the CLI.
 
+### Codex Plugin Quick Start
+
+For the newer repo-local Codex plugin path, enable `takomi-codex` from `.agents/plugins/marketplace.json`. That marketplace entry points Codex at `./plugins/takomi-codex`, which includes plugin metadata, the `takomi-codex` skill, and local verification scripts.
+
+This plugin path is distinct from `skills add --skill takomi`, which installs the older global Takomi skill. Use natural language such as `use takomi-codex to inspect this repo`, `use Takomi to plan this feature`, or `create a Takomi roadbook for this work`.
+
+See [Takomi Codex Onboarding](docs/takomi-codex-onboarding.md) for activation, first-run verification, policy loading, roadbooks, dry-run dispatch, no-Pi fallback, and troubleshooting.
+
 ---
 
 ## 📦 Skill Ecosystem
