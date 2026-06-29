@@ -3,6 +3,11 @@
 ## Goal
 Build a modern, high-converting landing page showcasing the Takomi VibeCode Protocol. It should explain the philosophy and how Takomi transforms AI from a chatbot into a development partner.
 
+## Implementation Status
+- Scaffolded a standalone Next.js App Router site in `website/`.
+- Added a static landing page with header, hero, proof strip, protocol/features, workflow timeline, installation CTA, and footer.
+- Used Anti-Gravity for the initial UI/code pass, then tightened install accuracy, script references, brand assets, and verification.
+
 ## Components (Client vs Server)
 - The website will be a **Next.js App Router** application (to be scaffolded in `website/`).
 - **Server First**: All UI components are React Server Components by default.
@@ -10,6 +15,10 @@ Build a modern, high-converting landing page showcasing the Takomi VibeCode Prot
 
 ## Data Flow
 - This is a static presentation site. No database schema or complex data fetching is required for V1.
+
+## Verification
+- `npm run lint` from `website/`
+- `npx tsc --noEmit` from `website/`
 
 ## 21st.dev Manual Handoff Integration
 Since this is a greenfield project and we don't have a reference site, we will use the **Manual Mode** of the `21st-dev-components` skill. 
