@@ -170,21 +170,23 @@ npx -y skills add https://github.com/JStaRFilms/VibeCode-Protocol-Suite
 <details>
 <summary><strong>📚 Full skill categories</strong></summary>
 
-**Convex Development Suite** — `convex`, `convex-agents`, `convex-best-practices`, `convex-functions`, `convex-schema-validator`, `convex-realtime`, `convex-file-storage`, `convex-migrations`, `convex-http-actions`, `convex-cron-jobs`, `convex-component-authoring`, `convex-security-audit`, `convex-security-check`
+**Developer / Frameworks** — `ai-sdk`, `nextjs-standards`, `context7`, `monorepo-management`, `upgrading-expo`, `github-ops`, `git-worktree`, `git-commit-generation`, `pr-comment-fix`, `jules`, `gemini`, `anti-gravity`
 
-**AI Media Suite** — `ai-avatar-video`, `ai-marketing-videos`, `ai-podcast-creation`, `ai-product-photography`, `ai-social-media-content`, `ai-voice-cloning`
+**Security / Review** — `security-audit`, `audit-website`, `code-review`, `jstar-reviewer`, `convex-security-audit`, `convex-security-check`
 
-**Frontend & Design** — `frontend-design`, `ui-ux-pro-max`, `21st-dev-components`, `stitch`, `web-design-guidelines`, `building-native-ui`, `component-analysis`
+**Convex** — `convex`, `convex-agents`, `convex-best-practices`, `convex-component-authoring`, `convex-cron-jobs`, `convex-file-storage`, `convex-functions`, `convex-http-actions`, `convex-migrations`, `convex-realtime`, `convex-schema-validator`, `convex-security-audit`, `convex-security-check`
 
-**SEO & Marketing** — `seo-ready`, `programmatic-seo`, `audit-website`, `copywriting`, `marketing-ideas`, `pricing-strategy`, `social-content`, `google-trends`
+**Frontend / UI** — `frontend-design`, `web-design-guidelines`, `building-native-ui`, `ui-ux-pro-max`, `component-analysis`, `21st-dev-components`, `stitch`, `webapp-testing`
 
-**Documentation & Office** — `pdf`, `docx`, `pptx`, `xlsx`, `crafting-effective-readmes`, `sync-docs`
+**Docs / Office / Extraction** — `pdf`, `docx`, `pptx`, `xlsx`, `high-fidelity-extraction`, `crafting-effective-readmes`, `exam-creator-skill`
 
-**Dev Tooling** — `nextjs-standards`, `remotion`, `monorepo-management`, `git-worktree`, `github-ops`, `webapp-testing`, `upgrading-expo`, `jules`
+**Marketing / SEO / Copy** — `copywriting`, `marketing-ideas`, `pricing-strategy`, `programmatic-seo`, `seo-ready`, `social-content`, `twitter-automation`, `google-trends`, `domain-name-brainstormer`, `global-brand-namer`, `youtube-pipeline`
 
-**Branding & Naming** — `global-brand-namer`, `domain-name-brainstormer`
+**AI Media / Content Creation** — `ai-avatar-video`, `ai-marketing-videos`, `ai-podcast-creation`, `ai-product-photography`, `ai-social-media-content`, `ai-voice-cloning`, `takomi-flow`
 
-**Content & Automation** — `youtube-pipeline`, `twitter-automation`, `prompt-engineering`, `algorithmic-art`
+**Creative / Video / Art** — `algorithmic-art`, `blender-mcp-scene-director`, `takomi-flow`, `remotion`, `youtube-pipeline`, `ai-avatar-video`, `ai-marketing-videos`, `photo-book-builder`
+
+**Skill Building / Prompting / Orchestration** — `skill-creator`, `prompt-engineering`, `subagent-driven-development`, `spawn-task`
 
 </details>
 
