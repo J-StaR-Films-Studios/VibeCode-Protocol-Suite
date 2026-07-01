@@ -1,0 +1,1 @@
+We need to make the website showcase the skills and what notbetter etc..
