@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "examples": [
+    {
+      "name": "cinematic-video",
+      "description": "Text-to-video request with review frames.",
+      "request": {
+        "schemaVersion": 1,
+        "kind": "video",
+        "prompt": "A cinematic sunrise over a futuristic Lagos film studio, practical lighting, smooth camera move",
+        "variations": 2,
+        "aspectRatio": "16:9",
+        "durationSeconds": 4,
+        "mode": "text-to-video",
+        "modelHint": "best-available",
+        "allowSpend": false,
+        "extractFrames": 4,
+        "sourceAssets": []
+      }
+    },
+    {
+      "name": "concept-image",
+      "description": "Text-to-image request for a reusable concept frame.",
+      "request": {
+        "schemaVersion": 1,
+        "kind": "image",
+        "prompt": "A polished concept frame for an AI video orchestration dashboard, realistic product shot",
+        "variations": 1,
+        "aspectRatio": "1:1",
+        "mode": "text-to-image",
+        "modelHint": "best-available",
+        "allowSpend": false,
+        "sourceAssets": []
+      }
+    },
+    {
+      "name": "image-to-video",
+      "description": "Image-to-video request with a local source asset placeholder.",
+      "request": {
+        "schemaVersion": 1,
+        "kind": "video",
+        "prompt": "Animate the source image into a slow cinematic push-in with subtle environmental motion",
+        "variations": 1,
+        "aspectRatio": "16:9",
+        "durationSeconds": 4,
+        "mode": "image-to-video",
+        "modelHint": "best-available",
+        "allowSpend": false,
+        "extractFrames": 4,
+        "sourceAssets": ["C:/path/to/source-image.png"]
+      }
+    },
+    {
+      "name": "collect-after-review",
+      "description": "Downstream packaging pattern after a run has downloaded assets.",
+      "commands": [
+        "node scripts/takomi-flow.mjs review --run <run.json|run-dir> --frames 4",
+        "node scripts/takomi-flow.mjs collect --run <run.json|run-dir> --target-dir <project-output-folder> --frames 4 --include-frames"
+      ]
+    }
+  ]
+}

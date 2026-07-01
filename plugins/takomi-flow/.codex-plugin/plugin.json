@@ -1,0 +1,25 @@
+{
+  "name": "takomi-flow",
+  "version": "0.1.0+codex.20260701103255",
+  "description": "Agent-first Google Flow browser automation for Codex and Takomi workflows.",
+  "author": {
+    "name": "JStaR Films Studios"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "TakomiFlow",
+    "shortDescription": "Use Google Flow from Codex through safe browser automation.",
+    "longDescription": "TakomiFlow gives Codex agents a reusable, local workflow for bootstrapping a Google Flow browser profile, smoke-checking access, preparing generation requests, and downloading Flow assets through the public UI with explicit spend guards.",
+    "developerName": "JStaR Films Studios",
+    "category": "Productivity",
+    "capabilities": [
+      "browser-automation",
+      "mcp-tools",
+      "video-generation",
+      "image-generation",
+      "asset-pipeline"
+    ],
+    "defaultPrompt": "Use TakomiFlow to prepare or run a safe Google Flow browser workflow."
+  }
+}
