@@ -106,6 +106,7 @@ export const SKILL_CATEGORIES = [
       'xlsx',
       'high-fidelity-extraction',
       'crafting-effective-readmes',
+      'exam-creator-skill',
     ],
   },
   {
@@ -139,6 +140,7 @@ export const SKILL_CATEGORIES = [
       'ai-product-photography',
       'ai-social-media-content',
       'ai-voice-cloning',
+      'takomi-flow',
     ],
   },
   {
@@ -149,10 +151,12 @@ export const SKILL_CATEGORIES = [
     skills: [
       'algorithmic-art',
       'blender-mcp-scene-director',
+      'takomi-flow',
       'remotion',
       'youtube-pipeline',
       'ai-avatar-video',
       'ai-marketing-videos',
+      'photo-book-builder',
     ],
   },
   {

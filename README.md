@@ -46,6 +46,20 @@ takomi setup all
 takomi setup project
 ```
 
+### TakomiFlow For Google Flow Assets
+
+TakomiFlow packages Google Flow image/video generation as a Codex plugin with MCP tools plus a CLI fallback. It can generate Flow keyframes, short video shots, moodboards, collect downloaded assets, extract review frames, and record Flow project URLs.
+
+Install the full plugin from this suite:
+
+```powershell
+.\scripts\install-takomi-flow.ps1 -InstallDependencies
+```
+
+If someone only has skills but not the plugin, install/use the bundled `takomi-flow` skill first. It teaches Codex how to use the skill directly, fetch this suite when needed, install the full TakomiFlow plugin globally after approval, and verify the setup.
+
+See [TakomiFlow Onboarding](docs/takomi-flow-onboarding.md) and [TakomiFlow Public Distribution](docs/takomi-flow-public-distribution.md).
+
 Legacy commands like `takomi install pi`, `takomi sync pi`, `takomi upgrade`, and `takomi init` still work, but the simpler mental model is: **setup once, refresh when stale, run `takomi` to use it.**
 
 During `takomi setup pi` or `takomi setup pi-features`, Takomi offers optional Pi feature packs with recommended/manual/select-all/skip choices. Current defaults install **Takomi Interview** (`npm:@juicesharp/rpiv-ask-user-question`) so models can ask structured clarification questions. **Takomi Todo** (`npm:@juicesharp/rpiv-todo`), **Takomi Browser QA** (`npm:pi-chrome`), and **Takomi Doc Preview** (`npm:pi-markdown-preview`) remain opt-in. `takomi refresh` runs Pi's package updater so installed optional, custom, old, and new Pi packages are reconciled together.
