@@ -39,6 +39,12 @@ export function validateRequest(raw, requestPath = undefined) {
   if (normalized.aspectRatio && !capabilities.aspectRatios.includes(normalized.aspectRatio)) {
     warnings.push(`Aspect ratio "${normalized.aspectRatio}" is not in listed options.`);
   }
+  if (normalized.projectUrl && !isFlowProjectUrl(normalized.projectUrl)) {
+    errors.push(`Project URL must be a Google Flow project URL: ${normalized.projectUrl}`);
+  }
+  if (normalized.editorWaitMs !== undefined && normalized.editorWaitMs < 1000) {
+    errors.push('editorWaitMs must be at least 1000 milliseconds.');
+  }
   for (const asset of normalized.sourceAssets) {
     if (!fs.existsSync(path.resolve(asset))) {
       errors.push(`Source asset does not exist: ${asset}`);
@@ -55,4 +61,13 @@ export function validateRequest(raw, requestPath = undefined) {
     errors,
     warnings,
   };
+}
+
+function isFlowProjectUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.hostname === 'labs.google' && url.pathname.includes('/fx/tools/flow/project/');
+  } catch {
+    return false;
+  }
 }

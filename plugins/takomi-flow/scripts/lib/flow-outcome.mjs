@@ -1,4 +1,5 @@
-import { hasText, openGeneratedMedia } from './flow-ui.mjs';
+import { downloadButton, hasText, openGeneratedMedia } from './flow-ui.mjs';
+import { newMediaIds } from './flow-media.mjs';
 
 export async function handleGenerationFollowups(page, request) {
   if (await hasText(page, /which of these durations would you prefer/i)) {
@@ -14,7 +15,9 @@ export async function handleGenerationFollowups(page, request) {
 export async function waitForGenerationOutcome(page, request, options = {}) {
   const timeoutMs = Number(options.timeoutMs || process.env.TAKOMI_FLOW_WAIT_MS || 300000);
   const intervalMs = Number(options.intervalMs || process.env.TAKOMI_FLOW_POLL_MS || 5000);
+  const readyProbeMs = Number(options.readyProbeMs || process.env.TAKOMI_FLOW_READY_PROBE_MS || 45000);
   const started = Date.now();
+  let lastReadyProbeAt = 0;
   let approved = false;
   while (Date.now() - started < timeoutMs) {
     if (await hasText(page, /which of these durations would you prefer/i)) {
@@ -23,23 +26,38 @@ export async function waitForGenerationOutcome(page, request, options = {}) {
     if (await hasText(page, /costing\s+\d+\s+credits/i)) {
       approved = await clickApprove(page) || approved;
     }
-    if (await page.locator('button').filter({ hasText: /download\s*Download/i }).count().catch(() => 0)) {
-      return { status: 'download_ready', approved };
+    const freshMediaIds = await newMediaIds(page, options.baselineMediaIds || []);
+    const downloadReady = await downloadButton(page).count().catch(() => 0);
+    if (downloadReady && (!options.baselineMediaIds || freshMediaIds.length || /\/edit\//.test(page.url()))) {
+      return { status: 'download_ready', approved, mediaIds: freshMediaIds };
     }
-    if (await page.locator('img[src*="media.getMediaUrlRedirect"], video').count().catch(() => 0)) {
-      await openGeneratedMedia(page);
-      return { status: 'media_ready', approved };
+    if (freshMediaIds.length) {
+      await openGeneratedMedia(page, freshMediaIds);
+      return { status: 'media_ready', approved, mediaIds: freshMediaIds };
     }
-    if (await hasVisibleText(page, /\b\d{1,3}%\b|generating|waiting in the queue|been scheduled/i)) {
+    if (Date.now() - started >= readyProbeMs && Date.now() - lastReadyProbeAt >= readyProbeMs) {
+      lastReadyProbeAt = Date.now();
+      if (await probeDownloadableMedia(page, freshMediaIds)) {
+        return { status: 'download_ready', approved, mediaIds: freshMediaIds, probed: true };
+      }
+    }
+    if (await hasVisibleText(page, /\b\d{1,3}%\b|generating|currently in the queue|waiting in the queue|been scheduled|i['’]ve scheduled|ready for you shortly/i)) {
       await page.waitForTimeout(intervalMs);
       continue;
     }
-    if (await hasVisibleText(page, /failed|oops, something went wrong/i)) {
+    if (await hasText(page, /failed|oops, something went wrong/i)) {
       return { status: 'failed', approved };
     }
     await page.waitForTimeout(intervalMs);
   }
   return { status: 'timeout', approved };
+}
+
+async function probeDownloadableMedia(page, mediaIds = []) {
+  if (await downloadButton(page).count().catch(() => 0)) return true;
+  await openGeneratedMedia(page, mediaIds);
+  await page.waitForTimeout(1000);
+  return (await downloadButton(page).count().catch(() => 0)) > 0;
 }
 
 async function hasVisibleText(page, pattern) {
@@ -74,16 +92,23 @@ async function chooseDuration(page, requested) {
 
 async function clickApprove(page) {
   const candidates = [
-    page.getByText('Approve', { exact: true }).first(),
-    page.locator('div,button,[role="button"]').filter({ hasText: /^\s*check\s*Approve\s*$/i }).first(),
-    page.locator('text=Approve').first(),
+    page.getByRole('button', { name: /^Approve$/i }).last(),
+    page.locator('button').filter({ hasText: /^Approve$/i }).last(),
+    page.locator('[role="button"]').filter({ hasText: /^Approve$/i }).last(),
+    page.locator('div,button,[role="button"]').filter({ hasText: /^\s*check\s*Approve\s*$/i }).last(),
   ];
   for (const locator of candidates) {
     if (!(await locator.count().catch(() => 0))) continue;
     try {
       await locator.click({ timeout: 10000, force: true });
       await page.waitForTimeout(1000);
-      return true;
+      const stillVisible = await page.getByRole('button', { name: /^Approve$/i })
+        .last()
+        .isVisible({ timeout: 1000 })
+        .catch(() => false);
+      if (!stillVisible || await hasVisibleText(page, /generating|currently in the queue|waiting in the queue|been scheduled|i['’]ve scheduled|ready for you shortly/i)) {
+        return true;
+      }
     } catch {}
   }
   return false;

@@ -8,8 +8,13 @@ export function createSettingsPlan(request) {
     modelHint: request.modelHint,
     extractFrames: request.extractFrames,
     sourceAssets: request.sourceAssets || [],
+    projectUrl: request.projectUrl,
+    reuseCurrentProject: request.reuseCurrentProject,
+    allowNewProject: request.allowNewProject,
+    freshChatOnFailure: request.freshChatOnFailure,
+    editorWaitMs: request.editorWaitMs,
   };
-  const automatic = ['prompt', 'download folder', 'metadata', 'asset catalog'];
+  const automatic = ['prompt', 'project reuse', 'same-project chat recovery', 'download folder', 'metadata', 'asset catalog'];
   if (request.extractFrames > 0) automatic.push('video review frame extraction after download');
   return {
     schemaVersion: 1,

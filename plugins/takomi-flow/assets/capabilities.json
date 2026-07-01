@@ -77,6 +77,36 @@
       "type": "boolean",
       "required": false,
       "description": "Explicit user approval to submit a generation that may spend Flow credits."
+    },
+    {
+      "name": "projectUrl",
+      "type": "string",
+      "required": false,
+      "description": "Existing Flow project URL to reuse instead of creating a new project."
+    },
+    {
+      "name": "reuseCurrentProject",
+      "type": "boolean",
+      "required": false,
+      "description": "Prefer the already open Flow project tab when attached to trusted Chrome."
+    },
+    {
+      "name": "allowNewProject",
+      "type": "boolean",
+      "required": false,
+      "description": "Permit clicking New project when no reusable project is available."
+    },
+    {
+      "name": "freshChatOnFailure",
+      "type": "boolean",
+      "required": false,
+      "description": "Recover stale or broken chat state by starting a fresh chat inside the same project."
+    },
+    {
+      "name": "editorWaitMs",
+      "type": "integer",
+      "required": false,
+      "description": "Override the Flow project editor readiness wait budget in milliseconds."
     }
   ],
   "sourceAssets": {
@@ -96,13 +126,15 @@
     "collection": "takomi-flow://schemas/collection"
   },
   "settingsCoverage": {
-    "automatic": ["prompt", "download folder", "metadata", "asset catalog", "video review frame extraction"],
+    "automatic": ["prompt", "project reuse", "same-project chat recovery", "download folder", "metadata", "asset catalog", "video review frame extraction"],
     "selectorDependent": ["mode", "aspectRatio", "durationSeconds", "modelHint", "sourceAssets", "variations"],
     "note": "Selector-dependent settings are preserved in settingsPlan metadata until live Flow controls are observed and tuned."
   },
   "safety": {
     "spendGuardDefault": false,
     "requiresAllowSpend": true,
+    "newProjectDefault": false,
+    "sameProjectChatRecovery": true,
     "bypassCaptcha": false,
     "bypassQuota": false,
     "automateCredentials": false

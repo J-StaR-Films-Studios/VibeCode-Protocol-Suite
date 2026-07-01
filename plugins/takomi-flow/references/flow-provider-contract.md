@@ -61,7 +61,15 @@ First-run agents should also check for an existing trusted Chrome DevTools endpo
 curl http://127.0.0.1:9222/json/version
 ```
 
-If the endpoint exists, reuse it with `--cdp-url http://127.0.0.1:9222`. If it does not exist, run `trusted-chrome` and ask the user to sign into Google Flow manually. MCP is optional; every MCP operation has a CLI equivalent through `node scripts/takomi-flow.mjs`.
+If the endpoint exists, reuse it with `--cdp-url http://127.0.0.1:9222`. If it does not exist, run `trusted-chrome` and ask the user to sign into Google Flow manually. Browser commands should start from trusted Chrome/CDP by default; Playwright-launched browser contexts are only an explicit fallback. MCP is optional; every MCP operation has a CLI equivalent through `node scripts/takomi-flow.mjs`.
+
+Repeated generations should reuse a Flow project instead of creating a new one. Pass `projectUrl` / `--project-url`, or attach to trusted Chrome while it is already on a `/project/` editor tab. TakomiFlow prefers the current project by default, does not click `New project` unless `allowNewProject=true` / `--allow-new-project` is set, and can recover a stale or broken chat by starting one fresh chat inside the same project.
+
+Flow should be treated as one active paid generation at a time. A gray preview placeholder plus scheduled, queue, or ready-shortly copy means the generation was accepted and is still in progress; do not classify it as failed or submit another paid generation until the current media is ready and downloaded.
+
+During polling, stale scheduled or failure text may remain visible after the current media is ready. The agent should probe for an open media view or ready media tile and exit as soon as the top toolbar Download control is available, instead of waiting for the full timeout.
+
+The Flow project name can be edited from the top-left header title/date-time input after opening the project.
 
 Run this after install or edits:
 
@@ -97,7 +105,8 @@ verified without pressing Create.
 Live video durations are `4`, `6`, `8`, and `10` seconds. If the agent asks for an unsupported
 duration, Flow may ask a follow-up. A verified generation also asked for explicit approval before
 spending 7 credits for one video. After output creation, opening the generated media reveals a
-toolbar `download` button that saves the MP4.
+top toolbar download icon. Aim for the button with tooltip, title, aria label, or visible text
+`Download`; clicking it saves the MP4.
 
 Use templates when starting a request from scratch:
 
@@ -137,6 +146,11 @@ Agents can read `takomi-flow://schemas/request` for the JSON Schema version of t
   "outputDir": "C:/Users/johno/.takomi-flow/runs",
   "allowSpend": false,
   "extractFrames": 4,
+  "projectUrl": "https://labs.google/fx/tools/flow/project/example",
+  "reuseCurrentProject": true,
+  "allowNewProject": false,
+  "freshChatOnFailure": true,
+  "editorWaitMs": 90000,
   "notes": "Optional agent notes for traceability."
 }
 ```
@@ -156,6 +170,11 @@ Agents can discover the same fields from `capabilities.requestFields`.
 - `allowSpend`: Must be `true` for generation submission.
 - `extractFrames`: Optional number of review frames to extract from downloaded videos.
 - `sourceAssets`: Optional array of local file paths for future image/video-to-video flows.
+- `projectUrl`: Optional existing Flow project/editor URL to reuse.
+- `reuseCurrentProject`: Prefer an already open Flow project tab when attached through CDP. Defaults to `true`.
+- `allowNewProject`: Permit clicking `New project` when no reusable project/editor exists. Defaults to `false`.
+- `freshChatOnFailure`: Try one fresh chat inside the same project when prompt or submit controls are broken. Defaults to `true`.
+- `editorWaitMs`: Optional wait budget for Flow editor readiness.
 
 ## Validation JSON
 
@@ -183,6 +202,10 @@ Agents can read `takomi-flow://schemas/result` for the JSON Schema version of ru
   "kind": "video",
   "prompt": "cinematic AI lab scene with practical lighting",
   "projectUrl": "https://labs.google/fx/tools/flow/project/example",
+  "projectSession": {
+    "projectUrl": "https://labs.google/fx/tools/flow/project/example",
+    "recovered": false
+  },
   "settingsPlan": {
     "requested": {
       "mode": "text-to-video",

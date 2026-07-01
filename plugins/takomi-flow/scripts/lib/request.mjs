@@ -23,9 +23,14 @@ export function normalizeRequest(input) {
     mode: input.mode || (kind === 'video' ? 'text-to-video' : 'text-to-image'),
     modelHint: input.modelHint || input.model || 'best-available',
     outputDir: path.resolve(input.outputDir || input['output-dir'] || defaultRunsDir()),
-    allowSpend: Boolean(input.allowSpend || input['allow-spend'] || false),
+    allowSpend: toOptionalBoolean(input.allowSpend ?? input['allow-spend'], false),
     extractFrames: Math.max(0, Number.parseInt(input.extractFrames || input['extract-frames'] || '0', 10) || 0),
     sourceAssets: normalizeList(input.sourceAssets || input.assets),
+    projectUrl: input.projectUrl || input['project-url'] || undefined,
+    reuseCurrentProject: toOptionalBoolean(input.reuseCurrentProject ?? input['reuse-current-project'], true),
+    allowNewProject: toOptionalBoolean(input.allowNewProject ?? input['allow-new-project'], false),
+    freshChatOnFailure: toOptionalBoolean(input.freshChatOnFailure ?? input['fresh-chat-on-failure'], true),
+    editorWaitMs: toOptionalNumber(input.editorWaitMs || input['editor-wait-ms']),
     notes: input.notes || undefined,
   };
 }
@@ -46,6 +51,12 @@ function toOptionalNumber(value) {
   if (value === undefined || value === null || value === '') return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toOptionalBoolean(value, defaultValue) {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  if (typeof value === 'boolean') return value;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
 function normalizeList(value) {

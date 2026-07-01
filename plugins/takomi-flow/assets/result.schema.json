@@ -18,6 +18,7 @@
     "prompt": { "type": "string" },
     "flowUrl": { "type": "string" },
     "projectUrl": { "type": "string" },
+    "projectSession": { "type": "object" },
     "settingsPlan": { "type": "object" },
     "assets": {
       "type": "array",

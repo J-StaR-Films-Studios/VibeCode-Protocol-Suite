@@ -1,10 +1,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { FLOW_URL } from './paths.mjs';
+import { openGeneratedMediaById } from './flow-media.mjs';
 
 export async function openFlow(page) {
   await page.goto(FLOW_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
-  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
 }
 
 export async function capture(page, run, name) {
@@ -43,7 +44,7 @@ export async function ensureProjectEditor(page) {
     try {
       await locator.click({ timeout: 10000 });
       await page.waitForURL(/\/project\//, { timeout: 30000 }).catch(() => {});
-      await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
       return page.url().includes('/project/') && await waitForProjectEditor(page);
     } catch {}
   }
@@ -51,7 +52,7 @@ export async function ensureProjectEditor(page) {
 }
 
 async function waitForProjectEditor(page) {
-  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
   const ready = page.locator('body').filter({ hasText: /what do you want to create|start creating|add media/i });
   await ready.waitFor({ state: 'visible', timeout: 60000 }).catch(() => {});
   return (await page.locator('div[role="textbox"], textarea:not(.g-recaptcha-response)').count().catch(() => 0)) > 0;
@@ -59,21 +60,41 @@ async function waitForProjectEditor(page) {
 
 export async function fillPrompt(page, prompt) {
   const candidates = [
-    page.locator('div[role="textbox"]').filter({ hasText: /what do you want to create/i }).last(),
-    page.locator('div[role="textbox"]').last(),
-    page.locator('textarea:not(.g-recaptcha-response):not([name*="recaptcha"])').last(),
+    page.locator('textarea:not(.g-recaptcha-response):not([name*="recaptcha"]):visible').last(),
+    page.locator('[contenteditable="true"][role="textbox"]:visible').last(),
+    page.locator('div[role="textbox"]:visible').last(),
   ];
   for (const locator of candidates) {
     if (!(await locator.count().catch(() => 0))) continue;
     try {
       await locator.click({ timeout: 8000 });
-      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A').catch(() => {});
-      await page.keyboard.type(prompt, { delay: 2 });
-      const matched = await page.locator('body').filter({ hasText: prompt.slice(0, 40) }).count().catch(() => 0);
-      if (matched) return true;
+      if (!(await fillEditable(locator, page, prompt))) continue;
+      if (await editableContains(locator, prompt)) return true;
     } catch {}
   }
   return false;
+}
+
+async function fillEditable(locator, page, prompt) {
+  if (await locator.fill(prompt, { timeout: 8000 }).then(() => true).catch(() => false)) return true;
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A').catch(() => {});
+  await page.keyboard.insertText(prompt).catch(async () => {
+    await page.keyboard.type(prompt, { delay: 5 });
+  });
+  return true;
+}
+
+async function editableContains(locator, prompt) {
+  const expected = compactText(prompt).slice(0, 80);
+  const actual = await locator.evaluate(element => {
+    const value = element.value || element.innerText || element.textContent || '';
+    return value.replace(/\s+/g, ' ').trim();
+  }).catch(() => '');
+  return compactText(actual).includes(expected);
+}
+
+function compactText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 export async function submitGeneration(page) {
@@ -85,6 +106,7 @@ export async function submitGeneration(page) {
   for (const button of preferred) {
     if (!(await button.count().catch(() => 0))) continue;
     try {
+      if (await button.isDisabled().catch(() => false)) continue;
       await button.click({ timeout: 8000 });
       return true;
     } catch {}
@@ -97,6 +119,7 @@ export async function submitGeneration(page) {
   for (const button of buttons) {
     if (!(await button.count().catch(() => 0))) continue;
     try {
+      if (await button.isDisabled().catch(() => false)) continue;
       await button.click({ timeout: 8000 });
       return true;
     } catch {}
@@ -104,17 +127,19 @@ export async function submitGeneration(page) {
   return false;
 }
 
-export async function tryDownloadAssets(page, run, maxDownloads = 1) {
+export async function tryDownloadAssets(page, run, maxDownloads = 1, options = {}) {
   const assets = [];
-  await openGeneratedMedia(page);
+  const allowRenderedImageFallback = options.allowRenderedImageFallback !== false;
+  await openGeneratedMedia(page, options.mediaIds || []);
   for (let i = 0; i < maxDownloads; i += 1) {
-    const button = page.locator('button').filter({ hasText: /download\s*Download|download/i }).first();
+    const button = downloadButton(page);
     if (!(await button.count().catch(() => 0))) break;
     const [completed] = await Promise.all([
       page.waitForEvent('download', { timeout: 30000 }).catch(() => null),
       button.click({ timeout: 5000 }).catch(() => null),
     ]);
     if (!completed) {
+      if (!allowRenderedImageFallback) break;
       const imagePath = await downloadLargestRenderedImage(page, run, i).catch(() => null);
       if (!imagePath) break;
       assets.push(imagePath);
@@ -141,8 +166,11 @@ async function downloadLargestRenderedImage(page, run, index) {
   return filePath;
 }
 
-export async function openGeneratedMedia(page) {
-  if (await page.locator('button').filter({ hasText: /download\s*Download/i }).count().catch(() => 0)) return true;
+export async function openGeneratedMedia(page, mediaIds = []) {
+  if (await downloadButton(page).count().catch(() => 0)) return true;
+  for (const mediaId of mediaIds) {
+    if (await openGeneratedMediaById(page, mediaId)) return true;
+  }
   const candidates = [
     page.getByAltText(/video thumbnail|generated image/i).first(),
     page.locator('img[src*="media.getMediaUrlRedirect"]').last(),
@@ -162,4 +190,15 @@ export async function openGeneratedMedia(page) {
 
 export async function hasText(page, pattern) {
   return (await page.locator('body').filter({ hasText: pattern }).count().catch(() => 0)) > 0;
+}
+
+export function downloadButton(page) {
+  return page.locator([
+    'button[aria-label*="Download" i]',
+    '[role="button"][aria-label*="Download" i]',
+    'button[title*="Download" i]',
+    '[role="button"][title*="Download" i]',
+    'button:has-text("download")',
+    '[role="button"]:has-text("download")',
+  ].join(', ')).first();
 }

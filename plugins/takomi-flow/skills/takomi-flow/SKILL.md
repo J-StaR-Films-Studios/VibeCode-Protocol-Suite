@@ -69,7 +69,6 @@ If Git is unavailable, ask the user to download the VibeCode Protocol Suite ZIP 
 ## Agent Tool Surface
 
 Prefer MCP tools when they are available in the active Codex session. Use the CLI commands as the stable fallback.
-
 MCP tools:
 
 - `takomi_flow_capabilities`
@@ -116,7 +115,13 @@ Browser-opening MCP tools require `allowBrowser=true`. Generation still requires
 - Use public Flow UI automation only.
 - Do not bypass captchas, login challenges, quotas, safety checks, rate limits, or hidden endpoints.
 - Prefer headed mode first so the user can handle Google login, consent, quota, and safety prompts.
+- Browser commands should start from trusted Chrome/CDP by default; use Playwright-launched browsers only as an explicit fallback.
 - Never submit a paid generation unless the user explicitly requested it and `allowSpend` or `TAKOMI_FLOW_ALLOW_SPEND=true` is set.
+- Reuse the current Flow project or pass `projectUrl`; create new projects only when the user asks or `allowNewProject` is set.
+- Treat Flow as one active generation at a time: wait for the current approved generation to finish and download it before submitting another paid generation.
+- A gray preview placeholder with scheduled, queue, or ready-shortly copy means the generation is in progress, not failed.
+- If stale scheduled or failure text remains after media is ready, probe/open the generated media and use the top toolbar Download control instead of waiting for the full timeout.
+- Download generated media by opening the media and clicking the top toolbar `Download` icon/button.
 - Keep credentials out of prompts, logs, metadata, and project files.
 - Store run artifacts in a predictable folder and report the exact result paths.
 
@@ -138,6 +143,7 @@ node scripts/takomi-flow.mjs smoke
 node scripts/takomi-flow.mjs template --kind video
 node scripts/takomi-flow.mjs prepare --kind video --prompt "cinematic AI lab scene" --variations 2
 node scripts/takomi-flow.mjs workflow --kind video --prompt "cinematic AI lab scene" --variations 2
+node scripts/takomi-flow.mjs workflow --kind video --prompt "cinematic AI lab scene" --project-url "<Flow project URL>" --reuse-current-project
 node scripts/takomi-flow.mjs validate --request output/takomi-flow/requests/<file>.json
 node scripts/takomi-flow.mjs generate --request output/takomi-flow/requests/<file>.json
 node scripts/takomi-flow.mjs inspect --run output/takomi-flow/<runId>/run.json
@@ -173,6 +179,9 @@ Important defaults:
    - Keep that Chrome window open and use `--cdp-url http://127.0.0.1:9222` for observe/generate.
    - A signed-in dashboard should show project cards and a `New project` button during `observe`.
    - The project editor prompt textbox currently contains `What do you want to create?`.
+   - Leave Chrome on the desired project editor or pass `--project-url`; TakomiFlow does not click `New project` unless `--allow-new-project` is set.
+   - Rename a project by editing the top-left header title/date-time input.
+   - If the chat breaks, keep the same project and let `freshChatOnFailure` try one fresh chat before manual recovery.
    - Prefer video durations `4`, `6`, `8`, or `10` seconds to avoid a Flow follow-up question.
    - Use `bootstrap` only when Google accepts the launched browser.
    - Ask the user to log into Google Flow manually in the opened browser.

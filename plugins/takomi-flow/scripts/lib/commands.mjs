@@ -10,14 +10,20 @@ export async function handleCommand(command, args) {
   if (command === 'workflow') return printJson(await api.workflow({
     ...args,
     outputDir: args['output-dir'],
-    allowSpend: Boolean(args['allow-spend']),
+    allowSpend: booleanArg(args['allow-spend']),
     extractFrames: args['extract-frames'],
     sourceAssets: args.assets,
-    allowBrowser: Boolean(args['allow-browser']),
+    allowBrowser: booleanArg(args['allow-browser']),
     profileDir: args['profile-dir'],
     browserChannel: args['browser-channel'],
     cdpUrl: args['cdp-url'],
-    submit: Boolean(args.submit),
+    headless: booleanArg(args.headless),
+    submit: booleanArg(args.submit),
+    projectUrl: args['project-url'],
+    reuseCurrentProject: args['reuse-current-project'],
+    allowNewProject: args['allow-new-project'],
+    freshChatOnFailure: args['fresh-chat-on-failure'],
+    editorWaitMs: args['editor-wait-ms'],
   }));
   if (command === 'template') return template(args);
   if (command === 'examples') return printJson(api.examples({ name: args.name }));
@@ -26,7 +32,7 @@ export async function handleCommand(command, args) {
     chromePath: args['chrome-path'],
     port: args.port,
     url: args.url,
-    printCommand: Boolean(args['print-command']),
+    printCommand: booleanArg(args['print-command']),
   }));
   if (command === 'validate') return printJson(api.validate({ request: args.request }));
   if (command === 'bootstrap') return bootstrap(args);
@@ -40,10 +46,10 @@ export async function handleCommand(command, args) {
   if (command === 'plan') return printJson(api.plan({
     ...args,
     outputDir: args['output-dir'],
-    allowSpend: Boolean(args['allow-spend']),
+    allowSpend: booleanArg(args['allow-spend']),
     extractFrames: args['extract-frames'],
     sourceAssets: args.assets,
-    submit: Boolean(args.submit),
+    submit: booleanArg(args.submit),
     targetDir: args['target-dir'],
   }));
   if (command === 'observe') return observe(args);
@@ -53,7 +59,12 @@ export async function handleCommand(command, args) {
     profileDir: args['profile-dir'],
     browserChannel: args['browser-channel'],
     cdpUrl: args['cdp-url'],
-    headless: Boolean(args.headless),
+    headless: booleanArg(args.headless),
+    projectUrl: args['project-url'],
+    reuseCurrentProject: args['reuse-current-project'],
+    allowNewProject: args['allow-new-project'],
+    freshChatOnFailure: args['fresh-chat-on-failure'],
+    editorWaitMs: args['editor-wait-ms'],
   }));
   if (command === 'selftest') return printJson(await api.selftest({ outputDir: args['output-dir'] }));
   if (command === 'inspect') return printJson(api.inspect({ run: args.run }));
@@ -69,7 +80,7 @@ export async function handleCommand(command, args) {
     run: args.run,
     targetDir: args['target-dir'],
     frames: args.frames || 0,
-    includeFrames: Boolean(args['include-frames']),
+    includeFrames: booleanArg(args['include-frames']),
     reportPath: args['report-path'],
   }));
   if (command === 'report') return printJson(api.report({
@@ -81,13 +92,19 @@ export async function handleCommand(command, args) {
   throw new Error(`Unknown command: ${command}`);
 }
 
+function booleanArg(value) {
+  if (value === undefined || value === null || value === '') return false;
+  if (typeof value === 'boolean') return value;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
 async function observe(cliArgs) {
   printJson(await api.observe({
     profileDir: cliArgs['profile-dir'],
     outputDir: cliArgs['output-dir'],
     browserChannel: cliArgs['browser-channel'],
     cdpUrl: cliArgs['cdp-url'],
-    headless: Boolean(cliArgs.headless),
+    headless: booleanArg(cliArgs.headless),
   }));
 }
 
@@ -126,7 +143,7 @@ async function bootstrap(cliArgs) {
     downloadsDir: run.downloadsDir,
     browserChannel: cliArgs['browser-channel'],
     cdpUrl: cliArgs['cdp-url'],
-    headless: Boolean(cliArgs.headless),
+    headless: booleanArg(cliArgs.headless),
   });
   try {
     await openFlow(browser.page);
@@ -151,7 +168,7 @@ async function smoke(cliArgs) {
     downloadsDir: run.downloadsDir,
     browserChannel: cliArgs['browser-channel'],
     cdpUrl: cliArgs['cdp-url'],
-    headless: Boolean(cliArgs.headless),
+    headless: booleanArg(cliArgs.headless),
   });
   const result = baseResult('ok', run, { command: 'smoke', flowUrl: FLOW_URL, profileDir });
   try {

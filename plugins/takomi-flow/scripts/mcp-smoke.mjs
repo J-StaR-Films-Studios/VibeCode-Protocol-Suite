@@ -6,10 +6,12 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const client = new Client({ name: 'takomi-flow-smoke', version: '0.1.0' });
+const pluginRoot = path.resolve(import.meta.dirname, '..');
 const reviewRunDir = path.join(os.tmpdir(), 'takomi-flow-mcp-smoke-review');
 const transport = new StdioClientTransport({
   command: 'node',
   args: ['scripts/mcp-server.mjs'],
+  cwd: pluginRoot,
 });
 
 try {

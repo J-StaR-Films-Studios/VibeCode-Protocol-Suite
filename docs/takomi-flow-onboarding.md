@@ -44,6 +44,16 @@ If all you have is a skill, use the bundled `takomi-flow` skill. It is the singl
    node plugins/takomi-flow/scripts/takomi-flow.mjs observe --allow-browser --cdp-url http://127.0.0.1:9222
    ```
 
+## Reusing One Flow Project
+
+For repeated generations, leave trusted Chrome open on the Flow project editor and reuse it:
+
+```powershell
+node plugins/takomi-flow/scripts/takomi-flow.mjs workflow --kind video --prompt "cinematic lab scene" --project-url "https://labs.google/fx/tools/flow/project/..." --submit --allow-browser --allow-spend --cdp-url http://127.0.0.1:9222
+```
+
+TakomiFlow does not click `New project` unless `--allow-new-project` is set. If a chat surface is stale or broken, it tries one fresh chat inside the same project before asking for manual help.
+
 ## MCP Or CLI
 
 - If the harness supports MCP, use TakomiFlow MCP tools.

@@ -60,6 +60,30 @@
       "items": { "type": "string" },
       "default": []
     },
+    "projectUrl": {
+      "type": "string",
+      "description": "Existing Google Flow project/editor URL to reuse for this generation."
+    },
+    "reuseCurrentProject": {
+      "type": "boolean",
+      "default": true,
+      "description": "When attached to Chrome, prefer an already open Flow project tab."
+    },
+    "allowNewProject": {
+      "type": "boolean",
+      "default": false,
+      "description": "Permit TakomiFlow to click New project when no reusable project/editor is available."
+    },
+    "freshChatOnFailure": {
+      "type": "boolean",
+      "default": true,
+      "description": "Try one same-project fresh chat recovery when prompt or submit controls are broken."
+    },
+    "editorWaitMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "description": "Maximum time to wait for the Flow project editor to become usable."
+    },
     "notes": {
       "type": "string"
     }

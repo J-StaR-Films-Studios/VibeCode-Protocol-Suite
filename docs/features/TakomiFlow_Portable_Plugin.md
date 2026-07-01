@@ -26,6 +26,8 @@ Move the proven TakomiFlow Google Flow automation into this repository as the so
 - First-run agents should run `doctor`, then check whether `http://127.0.0.1:9222` is already serving Chrome DevTools Protocol.
 - If CDP is alive, agents should reuse it.
 - If CDP is missing, agents should start `trusted-chrome` and ask the user to sign into Google Flow manually.
+- For repeated generations, agents should reuse the current Flow project tab or pass `projectUrl`; clicking `New project` requires explicit `allowNewProject`.
+- If a project chat is stale or broken, agents should recover by creating a fresh chat inside the same project before asking for manual intervention.
 - Agents should prefer MCP tools when the harness supports MCP and the plugin is installed.
 - Agents should offer plugin installation/repair in Codex only after user approval.
 - Agents should fall back to CLI commands and standalone skill instructions when MCP or plugins are absent.
@@ -44,9 +46,10 @@ Move the proven TakomiFlow Google Flow automation into this repository as the so
 3. Agent checks for an existing trusted Chrome CDP instance.
 4. Agent reuses the instance or launches trusted Chrome.
 5. User signs in manually when needed.
-6. Agent prepares and validates a Flow request.
-7. Agent submits only with explicit spend approval.
-8. Agent records `projectUrl`, downloads assets, catalogs outputs, and writes a report.
+6. Agent resolves the target project from `projectUrl` or the current project tab.
+7. Agent prepares and validates a Flow request.
+8. Agent submits only with explicit spend approval.
+9. Agent records `projectUrl`, downloads assets, catalogs outputs, and writes a report.
 
 ## Database Schema
 
@@ -66,6 +69,7 @@ Persistent state is file-based:
 - A fresh computer can bootstrap by running the repo installer or directly invoking the plugin CLI from this repo.
 - Global/user writes must be explicit installer actions, not hidden side effects.
 - Project URLs must be captured for every generated Flow project.
+- New Flow projects are opt-in; project reuse is the default.
 
 ## Verification
 

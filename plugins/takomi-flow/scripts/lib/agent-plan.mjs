@@ -51,6 +51,11 @@ function mcpSequence(request, options) {
     allowSpend: request.allowSpend,
     extractFrames: request.extractFrames,
     sourceAssets: request.sourceAssets,
+    projectUrl: request.projectUrl,
+    reuseCurrentProject: request.reuseCurrentProject,
+    allowNewProject: request.allowNewProject,
+    freshChatOnFailure: request.freshChatOnFailure,
+    editorWaitMs: request.editorWaitMs,
     submit: options.submit,
     allowBrowser: options.submit,
   };
@@ -95,6 +100,11 @@ function optionArgs(request, submit) {
   if (request.outputDir) args.push(`--output-dir "${escapeArg(request.outputDir)}"`);
   if (request.extractFrames) args.push(`--extract-frames ${request.extractFrames}`);
   if (request.sourceAssets.length) args.push(`--assets "${escapeArg(request.sourceAssets.join(','))}"`);
+  if (request.projectUrl) args.push(`--project-url "${escapeArg(request.projectUrl)}"`);
+  if (request.reuseCurrentProject) args.push('--reuse-current-project');
+  if (request.allowNewProject) args.push('--allow-new-project');
+  if (request.freshChatOnFailure === false) args.push('--fresh-chat-on-failure=false');
+  if (request.editorWaitMs) args.push(`--editor-wait-ms ${request.editorWaitMs}`);
   if (submit) args.push('--submit --allow-browser --allow-spend');
   return args.length ? ` ${args.join(' ')}` : '';
 }

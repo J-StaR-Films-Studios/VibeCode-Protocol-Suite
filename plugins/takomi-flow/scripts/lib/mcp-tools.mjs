@@ -28,6 +28,11 @@ export function registerTools(server) {
     allowSpend: z.boolean().optional(),
     extractFrames: z.number().int().nonnegative().optional(),
     sourceAssets: z.array(z.string()).optional(),
+    projectUrl: z.string().optional(),
+    reuseCurrentProject: z.boolean().optional(),
+    allowNewProject: z.boolean().optional(),
+    freshChatOnFailure: z.boolean().optional(),
+    editorWaitMs: z.number().int().positive().optional(),
     submit: z.boolean().optional(),
     targetDir: z.string().optional(),
   }, args => api.plan(args));
@@ -53,6 +58,11 @@ function registerRequestTools(register) {
     allowSpend: z.boolean().optional(),
     extractFrames: z.number().int().nonnegative().optional(),
     sourceAssets: z.array(z.string()).optional(),
+    projectUrl: z.string().optional(),
+    reuseCurrentProject: z.boolean().optional(),
+    allowNewProject: z.boolean().optional(),
+    freshChatOnFailure: z.boolean().optional(),
+    editorWaitMs: z.number().int().positive().optional(),
     notes: z.string().optional(),
   };
   register('takomi_flow_prepare', 'Create a prepared request JSON file for a Flow image or video generation.', requestShape, args => api.prepare(args));
@@ -86,6 +96,11 @@ function registerBrowserTools(register) {
     browserChannel: z.string().optional(),
     cdpUrl: z.string().optional(),
     headless: z.boolean().optional(),
+    projectUrl: z.string().optional(),
+    reuseCurrentProject: z.boolean().optional(),
+    allowNewProject: z.boolean().optional(),
+    freshChatOnFailure: z.boolean().optional(),
+    editorWaitMs: z.number().int().positive().optional(),
   }, args => requireBrowser(args, () => api.generate(args)));
 }
 

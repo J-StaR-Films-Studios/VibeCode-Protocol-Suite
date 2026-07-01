@@ -11,5 +11,9 @@
   "allowSpend": false,
   "extractFrames": 4,
   "sourceAssets": [],
+  "projectUrl": "",
+  "reuseCurrentProject": true,
+  "allowNewProject": false,
+  "freshChatOnFailure": true,
   "notes": "Set allowSpend=true only after explicit user approval."
 }
