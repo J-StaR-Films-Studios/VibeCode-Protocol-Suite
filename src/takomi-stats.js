@@ -18,6 +18,7 @@ const pc = {
 
 // USD per million tokens: input, cached input, output.
 const PRICES = {
+  'gpt-6-astra': [10.00, 1.00, 50.00],
   'gpt-5.6-luna': [0.20, 0.02, 1.20],
   'gpt-5.6-sol': [5.00, 0.50, 30.00],
   'gpt-5.6-terra': [2.00, 0.20, 12.00],
@@ -36,7 +37,59 @@ const PRICES = {
   'gpt-4o': [2.50, 1.25, 10.00],
   'o4-mini': [1.10, 0.275, 4.40],
   'claude-sonnet-4-6': [3.00, 0.30, 15.00],
+  'gemini-3.8-flash': [0.75, 0.075, 3.75],
+  'gemini-3.7-flash': [0.75, 0.075, 3.75],
+  'gemini-3.6-flash': [1.50, 0.15, 7.50],
+  'gemini-3.5-flash': [1.50, 0.15, 9.00],
+  'gemini-3-flash': [0.50, 0.05, 3.00],
+  'gemini-3-flash-preview': [0.50, 0.05, 3.00],
+  'gemini-3.1-pro-preview': [2.00, 0.20, 12.00],
+  'gemini-2.5-pro': [1.25, 0.125, 10.00],
+  'gemini-2.5-flash': [0.30, 0.03, 2.50],
+  'gemini-2.0-flash': [0.10, 0.025, 0.40],
 };
+
+const MODEL_ALIASES = {
+  'ar-gpt-6-astra': 'gpt-6-astra',
+  'ar-gpt-5.6-luna': 'gpt-5.6-luna',
+  'ar-gpt-5.6-sol': 'gpt-5.6-sol',
+  'ar-gpt-5.6-terra': 'gpt-5.6-terra',
+  'gpt-6': 'gpt-6-astra',
+  'gemini-default': 'gemini-3.5-flash',
+  'gemini-flash-latest': 'gemini-3-flash',
+  'gemini-pro-d': 'gemini-3.1-pro-preview',
+  'gemini-3.5-pro': 'gemini-3.1-pro-preview',
+  'gemini-3.6-flash-exp-b': 'gemini-3.6-flash',
+  'gemini-3.6-flash-high': 'gemini-3.6-flash',
+  'gemini-3.6-flash-low': 'gemini-3.6-flash',
+  'gemini-3.7-flash-control': 'gemini-3.7-flash',
+  'gemini-3.7-flash-tiered': 'gemini-3.7-flash',
+  'gemini-3.7-flash-high': 'gemini-3.7-flash',
+  'gemini-flash-safety-le2': 'gemini-3.7-flash',
+  'gemini-37-flash-vs-gemini-31-pro': 'gemini-3.7-flash',
+  'gemini-3.8-flash-preview': 'gemini-3.8-flash',
+  'gemini-3.8-flash-high': 'gemini-3.8-flash',
+  'gemini-3.8-flash-low': 'gemini-3.8-flash',
+  'gemini-3.8-flash-exp': 'gemini-3.8-flash',
+  'gemini-3.1-pro-low': 'gemini-3.1-pro-preview',
+  'gemini-3.1-pro-high': 'gemini-3.1-pro-preview',
+  'gemini-pro-default': 'gemini-3.1-pro-preview',
+  'gpt-5.1-codex-mini': 'gpt-5-mini',
+  'gpt-5.1-codex-max': 'gpt-5.1',
+  'gpt-5.3-codex-spark': 'gpt-5.3-codex',
+  'claude-sonnet-4.6': 'claude-sonnet-4-6',
+};
+
+function canonicalModel(raw) {
+  let m = String(raw || 'unknown').toLowerCase().trim();
+  if (m.startsWith('openai-codex/')) m = m.slice('openai-codex/'.length);
+  else if (m.startsWith('openai/')) m = m.slice('openai/'.length);
+  else if (m.startsWith('antigravity/')) m = m.slice('antigravity/'.length);
+  else if (m.startsWith('google/')) m = m.slice('google/'.length);
+  else if (m.startsWith('anthropic/')) m = m.slice('anthropic/'.length);
+  m = m.replace(/\[(low|medium|high|xhigh|max|ultra)\]$/, '');
+  return MODEL_ALIASES[m] || m;
+}
 
 async function exists(target) { try { await fs.access(target); return true; } catch { return false; } }
 function safeJson(line) { try { return JSON.parse(line); } catch { return null; } }
@@ -47,13 +100,67 @@ const LEGACY_GPT_5_6_PRICES = {
   'gpt-5.6-terra': [2.50, 0.25, 15.00],
 };
 
+const RATE_SCHEDULES = {
+  'gpt-5.6-luna': [
+    { until: GPT_5_6_PRICE_CHANGE_AT, price: [1.00, 0.10, 6.00] },
+    { price: [0.20, 0.02, 1.20] },
+  ],
+  'gpt-5.6-terra': [
+    { until: GPT_5_6_PRICE_CHANGE_AT, price: [2.50, 0.25, 15.00] },
+    { price: [2.00, 0.20, 12.00] },
+  ],
+  'gemini-3.8-flash': [
+    { until: Date.parse('2027-01-01T00:00:00.000Z'), price: [0.75, 0.075, 3.75] },
+    { price: [1.50, 0.15, 7.50] },
+  ],
+  'gemini-3.7-flash': [
+    { until: Date.parse('2027-01-01T00:00:00.000Z'), price: [0.75, 0.075, 3.75] },
+    { price: [1.50, 0.15, 7.50] },
+  ],
+};
+
 function add(map, key, patch) { const row = map.get(key) || { key, input: 0, cache: 0, output: 0, total: 0, cost: 0, events: 0 }; for (const [k,v] of Object.entries(patch)) row[k] = (row[k] || 0) + (Number(v) || 0); if (!Object.prototype.hasOwnProperty.call(patch, 'events')) row.events += 1; map.set(key, row); }
-function priceForUsage(model, timestamp) {
-  const usageAt = timestampMs(timestamp);
-  if (usageAt !== null && usageAt < GPT_5_6_PRICE_CHANGE_AT && LEGACY_GPT_5_6_PRICES[model]) return LEGACY_GPT_5_6_PRICES[model];
-  return PRICES[model];
+
+function findDiscount(discounts, model, timestamp) {
+  if (!Array.isArray(discounts) || !discounts.length) return 0;
+  const canon = canonicalModel(model);
+  const month = typeof timestamp === 'string' && timestamp.length >= 7 ? timestamp.slice(0, 7) : null;
+  const day = typeof timestamp === 'string' && timestamp.length >= 10 ? timestamp.slice(0, 10) : null;
+  for (const rule of discounts) {
+    if (!rule || typeof rule !== 'object') continue;
+    if (rule.model && canonicalModel(rule.model) !== canon) continue;
+    if (rule.month && month && rule.month !== month) continue;
+    if (rule.start && day && day < rule.start) continue;
+    if (rule.end && day && day > rule.end) continue;
+    const pct = Number(rule.discountPct ?? rule.discount_pct ?? rule.discount ?? 0);
+    if (pct > 0) return Math.min(pct, 100) / 100;
+  }
+  return 0;
 }
-function cost(model, input, cache, output, additiveCache = true, timestamp) { const p = priceForUsage(model, timestamp); if (!p) return 0; const nonCached = additiveCache ? input : Math.max(input - cache, 0); return (nonCached*p[0] + cache*p[1] + output*p[2]) / 1_000_000; }
+
+function priceForUsage(model, timestamp) {
+  const canon = canonicalModel(model);
+  const usageAt = timestampMs(timestamp);
+  const schedule = RATE_SCHEDULES[canon];
+  if (schedule && usageAt !== null) {
+    for (const tier of schedule) {
+      if (!tier.until || usageAt < tier.until) return tier.price;
+    }
+  }
+  if (usageAt !== null && usageAt < GPT_5_6_PRICE_CHANGE_AT && LEGACY_GPT_5_6_PRICES[canon]) {
+    return LEGACY_GPT_5_6_PRICES[canon];
+  }
+  return PRICES[canon];
+}
+
+function cost(model, input, cache, output, additiveCache = true, timestamp, discounts = []) {
+  const p = priceForUsage(model, timestamp);
+  if (!p) return 0;
+  const nonCached = additiveCache ? input : Math.max(input - cache, 0);
+  const base = (nonCached * p[0] + cache * p[1] + output * p[2]) / 1_000_000;
+  const disc = findDiscount(discounts, model, timestamp);
+  return disc > 0 ? base * (1 - disc) : base;
+}
 function fmtTokens(n) { if (n >= 1e9) return `${(n/1e9).toFixed(2)}B`; if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
 function fmtCount(n) { if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
 function fmtPercent(n) { const value = Number(n) || 0; return `${(value * 100).toFixed(value >= 0.995 ? 1 : 0)}%`; }
@@ -175,7 +282,7 @@ function pushTask(taskRows, task) {
   taskRows.push(task);
 }
 
-async function scanPiSessions(root, source, events, sessionRows = [], taskRows = []) {
+async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], discounts = []) {
   let scannedFiles = 0;
   for (const file of await files(root)) {
     scannedFiles += 1;
@@ -224,7 +331,7 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
           const cache = +u.cacheRead || +u.cachedInput || +u.cache_read || 0;
           const output = +u.output || +u.outputTokens || 0;
           const total = +u.totalTokens || +u.total || (input + cache + output);
-          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, output, total, cost: cost(msgModel, input, cache, output, true, ts) });
+          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, output, total, cost: cost(msgModel, input, cache, output, true, ts, discounts) });
         }
 
         if (msg.role === 'user') {
@@ -390,6 +497,7 @@ async function readStatsLocalConfig(cwd, home, explicitPath) {
     runHistory: configs.flatMap(c => Array.isArray(c.runHistory) ? c.runHistory : c.runHistory ? [c.runHistory] : []),
     runHistoryFiles: configs.flatMap(c => Array.isArray(c.runHistoryFiles) ? c.runHistoryFiles : c.runHistoryFiles ? [c.runHistoryFiles] : []),
     projectRoots: configs.flatMap(c => Array.isArray(c.projectRoots) ? c.projectRoots : c.projectRoots ? [c.projectRoots] : []),
+    discounts: configs.flatMap(c => Array.isArray(c.discounts) ? c.discounts : c.discounts ? [c.discounts] : []),
   };
 }
 
@@ -397,6 +505,7 @@ export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
   const localConfig = await readStatsLocalConfig(cwd, home, opts.statsConfig || process.env.TAKOMI_STATS_CONFIG);
+  const discounts = opts.discounts || localConfig.discounts || [];
   const rawEvents = [], rawSessions = [], rawTasks = [];
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
@@ -421,7 +530,7 @@ export async function collectTakomiStats(opts = {}) {
     if (scannedRoots.has(key)) return;
     scannedRoots.add(key);
     const present = await exists(source.root);
-    const filesScanned = present ? await scanPiSessions(source.root, source.source, rawEvents, rawSessions, rawTasks) : 0;
+    const filesScanned = present ? await scanPiSessions(source.root, source.source, rawEvents, rawSessions, rawTasks, discounts) : 0;
     sourceRoots.push({ ...source, exists: present, files: filesScanned });
   }
   for (const source of sessionSources) await scanSource(source);
@@ -447,7 +556,7 @@ export async function collectTakomiStats(opts = {}) {
     runs.push(...fileRuns);
     runHistorySources.push({ ...entry, exists: present, runs: fileRuns.length });
   }
-  const byDay = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
+  const byDay = new Map(), byMonth = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
   let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
   for (const s of sessionRows) { totals.toolCalls += s.toolCalls; totals.turns += s.turns; }
   for (const e of events) {
@@ -459,14 +568,17 @@ export async function collectTakomiStats(opts = {}) {
       continue;
     }
     totals.input += e.input; totals.cache += e.cache; totals.output += e.output; totals.total += e.total; totals.cost += e.cost;
-    add(byDay, e.day, e); add(byModel, e.model, e); add(bySource, e.source, e); add(byProject, e.project, e);
+    add(byDay, e.day, e);
+    const month = e.day && e.day.length >= 7 ? e.day.slice(0, 7) : 'unknown';
+    add(byMonth, month, e);
+    add(byModel, e.model, e); add(bySource, e.source, e); add(byProject, e.project, e);
   }
   const byAgent = new Map(); let longestRun = null;
   for (const r of runs) { add(byAgent, r.agent || 'unknown', { total: 0, events: 1 }); if (!longestRun || (+r.duration||0) > (+longestRun.duration||0)) longestRun = r; }
   const topSessions = [...sessionRows].sort((a,b)=>(b.activeMs||0)-(a.activeMs||0) || b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
   const topTasks = [...taskRows].sort((a,b)=>taskDuration(b)-taskDuration(a) || b.toolCalls-a.toolCalls).slice(0, 20);
   const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, statsConfigFiles: localConfig.configFiles || [], totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, statsConfigFiles: localConfig.configFiles || [], totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, sourceRoots, runHistorySources, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byMonth: [...byMonth.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -784,6 +896,18 @@ function renderFocusedView(stats, opts = {}) {
       { width: 36, align: 'left', get: r => pc.white(taskLabel(r, 36)) },
     ]],
     daily: ['Daily Usage', [...stats.byDay].reverse(), [
+      { width: 12, align: 'left', get: r => pc.white(r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
+    ]],
+    months: ['Monthly Usage', [...(stats.byMonth || [])].reverse(), [
+      { width: 12, align: 'left', get: r => pc.white(r.key) },
+      { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
+    ]],
+    monthly: ['Monthly Usage', [...(stats.byMonth || [])].reverse(), [
       { width: 12, align: 'left', get: r => pc.white(r.key) },
       { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
       { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },

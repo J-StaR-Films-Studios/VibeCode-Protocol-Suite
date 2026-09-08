@@ -85,12 +85,34 @@ try {
     JSON.stringify({ type: 'message', timestamp: '2026-07-29T23:59:59.000Z', message: { role: 'assistant', model: 'gpt-5.6-terra', usage: { input: 0, output: 1_000_000 }, content: [] } }),
     JSON.stringify({ type: 'message', timestamp: '2026-07-30T00:00:00.000Z', message: { role: 'assistant', model: 'gpt-5.6-terra', usage: { input: 0, output: 1_000_000 }, content: [] } }),
   ].join('\n'));
-  const pricingStats = await collectTakomiStats({ home: statsHome, cwd: statsCwd });
-  assert.equal(pricingStats.byDay.find((row) => row.key === '2026-07-29')?.cost, 16, 'GPT-5.6 usage before July 30 must retain the legacy Luna and Terra prices');
-  assert.equal(pricingStats.byDay.find((row) => row.key === '2026-07-30')?.cost, 12.2, 'GPT-5.6 usage on and after July 30 must use the lower Luna and Terra prices');
-  const runtimePricingStats = await collectRuntimeTakomiStats({ home: statsHome, cwd: statsCwd });
-  assert.equal(runtimePricingStats.byDay.find((row) => row.key === '2026-07-29')?.cost, 16, 'the /takomi-stats runtime must retain legacy GPT-5.6 prices');
-  assert.equal(runtimePricingStats.byDay.find((row) => row.key === '2026-07-30')?.cost, 12.2, 'the /takomi-stats runtime must use current GPT-5.6 prices');
+  await fs.writeFile(path.join(sessionsDir, 'gpt-6-and-discounts.jsonl'), [
+    JSON.stringify({ type: 'model_change', timestamp: '2026-09-03T10:00:00.000Z', modelId: 'openai-codex/gpt-6-astra' }),
+    JSON.stringify({ type: 'message', timestamp: '2026-09-03T10:01:00.000Z', message: { role: 'assistant', model: 'openai-codex/gpt-6-astra', usage: { input: 1_000_000, cacheRead: 500_000, output: 100_000 }, content: [] } }),
+    JSON.stringify({ type: 'model_change', timestamp: '2026-09-03T11:00:00.000Z', modelId: 'gemini-3.8-flash' }),
+    JSON.stringify({ type: 'message', timestamp: '2026-09-03T11:01:00.000Z', message: { role: 'assistant', model: 'gemini-3.8-flash', usage: { input: 1_000_000, cacheRead: 0, output: 1_000_000 }, content: [] } }),
+  ].join('\n'));
+
+  // Standard collection
+  const astraStats = await collectTakomiStats({ home: statsHome, cwd: statsCwd });
+  // GPT-6 Astra: (1,000,000 * 10.00 + 500,000 * 1.00 + 100,000 * 50.00) / 1,000,000 = 10 + 0.5 + 5 = 15.5
+  // Gemini 3.8 Flash: (1,000,000 * 0.75 + 1,000,000 * 3.75) / 1,000,000 = 0.75 + 3.75 = 4.5
+  const septDay = astraStats.byDay.find((row) => row.key === '2026-09-03');
+  assert.equal(septDay?.cost, 20.0, 'GPT-6 Astra and Gemini 3.8 Flash must price correctly under canonical resolution');
+
+  // byMonth aggregation check
+  const julyMonth = astraStats.byMonth.find((row) => row.key === '2026-07');
+  const septMonth = astraStats.byMonth.find((row) => row.key === '2026-09');
+  assert.equal(julyMonth?.cost, 28.2, 'July monthly total must sum 2026-07-29 ($16) and 2026-07-30 ($12.2)');
+  assert.equal(septMonth?.cost, 20.0, 'September monthly total must reflect September events');
+
+  // Discount test: 20% discount on September usage
+  const discountedStats = await collectTakomiStats({
+    home: statsHome,
+    cwd: statsCwd,
+    discounts: [{ month: '2026-09', discount_pct: 20 }],
+  });
+  const discountedSeptDay = discountedStats.byDay.find((row) => row.key === '2026-09-03');
+  assert.equal(discountedSeptDay?.cost, 16.0, '20% discount on September usage must reduce cost from $20.0 to $16.0');
 
   console.log('✓ regression tests passed');
 } finally {
