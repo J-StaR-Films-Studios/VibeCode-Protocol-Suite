@@ -47,9 +47,11 @@ try {
     'agent-recovery',
     'avoid-feature-creep',
     'git-commit-generation',
+    'unslop',
   ]);
   assert.equal(core.includes('context7'), false, 'context7 must not be core');
   assert.equal(core.includes('spawn-task'), false, 'spawn-task must not be core');
+  assert.equal(catalog.getSkillCategory('unslop'), 'core', 'unslop must use the core category');
   assert.equal(catalog.getSkillCategory('frontend-ui'), 'frontend', 'catalog taxonomy must expose the installer category');
   assert.equal(catalog.getSkillCategory('web-dev-standards'), 'dev-workflows', 'standards must use the dev-workflows category');
   assert.equal(catalog.getSkillCategory('hyperframes'), 'video-motion', 'hyperframes must use the video-motion category');

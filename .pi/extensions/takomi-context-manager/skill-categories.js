@@ -7,6 +7,7 @@ export const CORE_SKILLS = [
   'agent-recovery',
   'avoid-feature-creep',
   'git-commit-generation',
+  'unslop',
 ];
 
 export const SKILL_CATEGORIES = [
@@ -14,7 +15,8 @@ export const SKILL_CATEGORIES = [
     id: 'core',
     title: 'Core / Recommended',
     color: 'cyan',
-    description: 'Essential always-active skills for baseline agent development.',
+    description:
+      'Essential always-active skills for baseline agent development and writing quality.',
     skills: CORE_SKILLS,
   },
   {
