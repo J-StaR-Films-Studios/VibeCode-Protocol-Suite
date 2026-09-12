@@ -489,8 +489,10 @@ async function executeAndAssert(harness, expectedMessageCount, previousSnapshot,
       toolOutputExpanded: false,
       customHeader: undefined,
       builtInHeader: undefined,
+      loadedResourcesContainer: { children: [] },
       chatContainer: { children: [historicalResult] },
       ui: { requestRender() {} },
+      showStatus() {},
       setToolsExpanded: InteractiveMode.prototype.setToolsExpanded,
     };
     const editor = new CustomEditor({}, {}, new KeybindingsManager());

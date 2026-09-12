@@ -30,6 +30,8 @@ export type TakomiSubagentToolTask = {
   acceptance?: TakomiAcceptanceInput;
 };
 
+type ResolvedTakomiSubagentToolTask = TakomiSubagentToolTask & { cwd: string };
+
 export type TakomiSubagentToolParams = Partial<TakomiSubagentToolTask> & {
   action?: "list" | "get" | "models" | "status" | "interrupt" | "resume" | "doctor";
   tasks?: TakomiSubagentToolTask[];
@@ -469,6 +471,7 @@ export async function executeTakomiSubagentTool(
   // runtime state. None of those are project-agent authorization.
   const userGateAutoAuthorized = hasUserGateAutoProvenance(ctx.sessionManager.getEntries());
   const agentScope = params.agentScope ?? "both";
+  const projectAgentsAuthorized = userGateAutoAuthorized || hostTrustsProjectAgents();
 
   if (params.action) {
     if (params.action === "list") {
@@ -536,6 +539,30 @@ export async function executeTakomiSubagentTool(
         takomi: { action: params.action, agentScope },
       });
     }
+    if (params.action === "resume" && !projectAgentsAuthorized && agentScope !== "user") {
+      const projectAgents = discoverTakomiAgents(rootCwd, agentScope).filter((agent) => agent.source === "project");
+      if (projectAgents.length > 0) {
+        const names = [...new Set(projectAgents.map((agent) => agent.name))].join(", ");
+        if (!ctx.hasUI) {
+          return textResult(
+            `Blocked: resuming under this project may revive a repo-controlled Takomi agent and requires interactive approval. Agents: ${names}`,
+            { results: [], action: params.action, agentScope, reason: "project-agent-approval-required" },
+            true,
+          );
+        }
+        const ok = await ctx.ui.confirm(
+          "Resume project-controlled Takomi agent?",
+          `Project-controlled personas available at this run root: ${names}\n\nResume only if this repository and its subagent settings are trusted.`,
+        );
+        if (!ok) {
+          return textResult(
+            "Canceled: project-controlled agent resume not approved.",
+            { results: [], action: params.action, agentScope, reason: "project-agent-denied" },
+            true,
+          );
+        }
+      }
+    }
     try {
       const nativeResult: any = await engine.execute(
         "takomi-tool",
@@ -568,7 +595,7 @@ export async function executeTakomiSubagentTool(
   const mode = resolveMode(params);
   const routingSnapshot = await loadTakomiModelRoutingSnapshot(rootCwd);
   const registryModels = availableRegistryModels(ctx);
-  let tasks: TakomiSubagentToolTask[];
+  let tasks: ResolvedTakomiSubagentToolTask[];
   let taskCwdWasExplicit: boolean[];
   try {
     const rawTasks = resolveTasks(params);
@@ -651,7 +678,6 @@ export async function executeTakomiSubagentTool(
   }
 
   const fingerprint = createRunFingerprint(rootCwd, mode, tasks, params, agentScope);
-  const projectAgentsAuthorized = userGateAutoAuthorized || hostTrustsProjectAgents();
   const recentHardStop = consumeExpiredHardStop(pi, fingerprint);
   const authorizationOverridesHardStop = projectAgentsAuthorized && isProjectAgentApprovalHardStop(recentHardStop);
   const consumesReviewGate = recentHardStop?.reason === "review-gate"
@@ -690,6 +716,7 @@ export async function executeTakomiSubagentTool(
       title: task.task,
       agent: task.agent,
       task: task.task,
+      cwd: task.cwd,
       workflow: task.workflow,
       model: task.model,
       fallbackModels: task.fallbackModels,
@@ -709,7 +736,10 @@ export async function executeTakomiSubagentTool(
   }
   try {
     const nativeParams: TakomiSubagentToolParams = mode === "single"
-      ? { ...params, ...tasks[0]!, cwd: rootCwd, agentScope }
+      // tasks[0].cwd is the resolved canonical launch dir (it equals rootCwd
+      // when nothing explicit was given). Carry it, never the root, so the
+      // previewed plan cwd and the executed cwd cannot disagree.
+      ? { ...params, ...tasks[0]!, cwd: tasks[0]!.cwd ?? rootCwd, agentScope }
       : mode === "parallel"
         ? { ...params, cwd: rootCwd, tasks, agentScope }
         : { ...params, cwd: rootCwd, chain: tasks, agentScope };

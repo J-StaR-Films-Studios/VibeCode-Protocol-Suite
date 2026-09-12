@@ -37,6 +37,19 @@ const routingStub = dataModule(`
   export function stripThinkingSuffix(model) { const match = model.match(/:(?:off|minimal|low|medium|high|xhigh)$/i); return { baseModel: match ? model.slice(0, -match[0].length) : model, thinkingSuffix: match?.[0] ?? "" }; }
 `);
 const aliasesStub = dataModule(`export function resolveAgentName(name) { return name; }`);
+const agentRuntimeStub = dataModule(`
+  export function getAgentDir() { return globalThis.__takomiTestAgentDir; }
+  export function parseFrontmatter(content) {
+    const match = content.match(/^---\\r?\\n([\\s\\S]*?)\\r?\\n---\\r?\\n?([\\s\\S]*)$/);
+    if (!match) return { frontmatter: {}, body: content };
+    const frontmatter = {};
+    for (const line of match[1].split(/\\r?\\n/)) {
+      const separator = line.indexOf(":");
+      if (separator > 0) frontmatter[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+    }
+    return { frontmatter, body: match[2] };
+  }
+`);
 const agentsStub = dataModule(`
   export function discoverTakomiAgents() {
     return ["project-agent", "second-agent"].map((name) => ({ name, source: "project", defaultContext: globalThis.__takomiTestAgentDefaultContext }));
@@ -88,11 +101,27 @@ const toolRunnerUrl = await transpile("tool-runner.ts", {
   "./subagent-ux": uxStub,
 });
 const { executeTakomiSubagentTool, findTaskCwdMismatch, taskRequiresWrite } = await import(toolRunnerUrl);
+const agentsUrl = await transpile("agents.ts", {
+  "@earendil-works/pi-coding-agent": agentRuntimeStub,
+});
+const { discoverTakomiAgents } = await import(agentsUrl);
 
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "takomi-project-agent-gate-test-"));
 const externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), "takomi-subagent-target-test-"));
+const userAgentRoot = path.join(tempRoot, "user-agent-root");
+const userAgentsDir = path.join(userAgentRoot, "agents");
+const nestedProjectAgentsDir = path.join(tempRoot, ".pi", "agents", "nested");
 await fs.mkdir(path.join(tempRoot, "subdir"));
+await fs.mkdir(userAgentsDir, { recursive: true });
+await fs.mkdir(nestedProjectAgentsDir, { recursive: true });
+await fs.writeFile(path.join(userAgentsDir, "coder.md"), "---\nname: coder\ndescription: User coder\n---\nUser coder prompt.\n");
+await fs.writeFile(path.join(userAgentsDir, "reviewer.md"), "---\nname: reviewer\ndescription: User reviewer\n---\nUser reviewer prompt.\n");
+await fs.writeFile(path.join(nestedProjectAgentsDir, "coder.md"), "---\nname: coder\ndescription: Nested project coder\n---\nNested project coder prompt.\n");
+await fs.writeFile(path.join(tempRoot, ".pi", "settings.json"), JSON.stringify({
+  subagents: { agentOverrides: { reviewer: { subagentOnlyExtensions: ["./untrusted-extension.ts"] } } },
+}));
 const originalTrustOverride = process.env.TAKOMI_TRUST_PROJECT_AGENTS;
+globalThis.__takomiTestAgentDir = userAgentRoot;
 globalThis.__takomiTestExecutions = 0;
 globalThis.__takomiTestProfile = {};
 globalThis.__takomiTestAgentDefaultContext = undefined;
@@ -164,6 +193,14 @@ async function assertChangedLaunchRequiresNewReview(name, initialParams, changed
 try {
   delete process.env.TAKOMI_TRUST_PROJECT_AGENTS;
 
+  const discoveredBoth = discoverTakomiAgents(tempRoot, "both");
+  const nestedCoder = discoveredBoth.find((agent) => agent.name === "coder");
+  const overriddenReviewer = discoveredBoth.find((agent) => agent.name === "reviewer");
+  assert.equal(nestedCoder?.source, "project", "nested project personas are visible to the project-agent trust gate");
+  assert.equal(nestedCoder?.description, "Nested project coder", "recursive discovery matches native project-agent precedence");
+  assert.equal(overriddenReviewer?.source, "project", "project settings that can inject child extensions require project trust");
+  assert.equal(discoverTakomiAgents(tempRoot, "user").find((agent) => agent.name === "reviewer")?.source, "user", "user-only discovery ignores project settings overrides");
+
   assert.equal(taskRequiresWrite({ task: "Do not edit files.", requiredCapabilities: [] }), false, "explicit read-only capabilities override write-language inference");
   assert.equal(taskRequiresWrite({ task: "Do not edit or modify files." }), false, "negated write prose remains read-only when capabilities are omitted");
   assert.equal(taskRequiresWrite({ task: "Do not edit files, but update configuration." }), true, "a positive write request after a contrast is not hidden by earlier negation");
@@ -218,6 +255,26 @@ try {
   assert.match(models.result.content[0].text, /Strict allowlist: disabled/, "Takomi model inspection explains registry-guided selection when no allowlist is configured");
   assert.match(models.result.content[0].text, /Available registry models:/, "Takomi model inspection exposes the executable registry set to the parent model");
   assert.doesNotMatch(models.result.content[0].text, /Builtin agent .* not found/, "Takomi model inspection cannot produce the native builtin lookup failure");
+
+  const blockedResume = await launch({
+    params: { action: "resume", id: "run-1", message: "continue", agentScope: "both" },
+    hasUI: false,
+  });
+  assert.equal(blockedResume.executions, 0, "noninteractive resume cannot bypass project-agent authorization");
+  assert.equal(blockedResume.result.details.reason, "project-agent-approval-required", "resume trust failures expose a machine-readable reason");
+
+  const approvedResume = await launch({
+    params: { action: "resume", id: "run-1", message: "continue", agentScope: "both" },
+    responses: [true],
+  });
+  assert.equal(approvedResume.confirms.length, 1, "interactive resume asks before reviving a project-controlled persona");
+  assert.equal(approvedResume.executions, 1, "approved project-controlled resume reaches native execution");
+
+  const userOnlyResume = await launch({
+    params: { action: "resume", id: "run-1", message: "continue", agentScope: "user" },
+    hasUI: false,
+  });
+  assert.equal(userOnlyResume.executions, 1, "user-only resume does not require project-agent approval");
 
   // A model can persist takomi_mode's visible auto launch state, but cannot
   // create the dedicated user command provenance entry.
@@ -454,6 +511,7 @@ try {
 } finally {
   if (originalTrustOverride === undefined) delete process.env.TAKOMI_TRUST_PROJECT_AGENTS;
   else process.env.TAKOMI_TRUST_PROJECT_AGENTS = originalTrustOverride;
+  delete globalThis.__takomiTestAgentDir;
   delete globalThis.__takomiTestExecutions;
   delete globalThis.__takomiTestProfile;
   delete globalThis.__takomiTestAgentDefaultContext;

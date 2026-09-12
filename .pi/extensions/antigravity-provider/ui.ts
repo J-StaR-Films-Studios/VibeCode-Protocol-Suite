@@ -30,6 +30,18 @@ export function installAntigravityUiBridge(
       case "streaming":
         setStatus(activeCtx, `antigravity streaming ${model}`);
         break;
+      case "thinking":
+        setStatus(
+          activeCtx,
+          `antigravity thinking ${model}${event.message ? `- ${event.message}` : ""}`.slice(0, 160),
+        );
+        break;
+      case "tool_activity":
+        setStatus(activeCtx, `antigravity tool: ${event.message || "working..."}`.slice(0, 160));
+        break;
+      case "plan":
+        setStatus(activeCtx, `antigravity ${event.message || "planning..."}`.slice(0, 160));
+        break;
       case "success":
         setStatus(activeCtx, `antigravity active (${model.trim()})`);
         break;

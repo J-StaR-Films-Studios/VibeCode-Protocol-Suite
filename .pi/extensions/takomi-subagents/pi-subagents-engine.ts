@@ -88,7 +88,11 @@ function buildTakomiTaskPrompt(task: TakomiSubagentToolTask): string {
 function modelWithThinking(model: string | undefined, thinking: string | undefined): string | undefined {
   const level = normalizeThinking(thinking);
   if (!model || !level || level === "off") return model;
-  if (new RegExp(`:(${THINKING_LEVELS.join("|")})$`, "i").test(model)) return model;
+  // Some providers expose effort as part of the model id (for example,
+  // antigravity/gemini-3.8-flash-low), while Pi's generic convention uses a
+  // colon suffix. Do not turn the provider's model id into a second variant.
+  const suffixPattern = `(?:-|:)(${THINKING_LEVELS.join("|")})$`;
+  if (new RegExp(suffixPattern, "i").test(model)) return model;
   return `${model}:${level}`;
 }
 
@@ -99,16 +103,35 @@ function isPathInside(root: string, candidate: string): boolean {
 
 function resolveRelativeCwd(root: string, value: string | undefined, label: string): string {
   const lexicalRoot = path.resolve(root);
-  const lexicalCandidate = value
-    ? path.isAbsolute(value) ? path.resolve(value) : path.resolve(lexicalRoot, value)
-    : lexicalRoot;
-  if (!isPathInside(lexicalRoot, lexicalCandidate)) throw new Error(`${label} escapes the current workspace.`);
+  if (value && path.isAbsolute(value)) {
+    const lexicalCandidate = path.resolve(value);
+    let realCandidate: string;
+    try {
+      realCandidate = fs.realpathSync(lexicalCandidate);
+    } catch {
+      throw new Error(`${label} must be an existing directory: ${lexicalCandidate}`);
+    }
+    if (!fs.statSync(realCandidate).isDirectory()) throw new Error(`${label} must be an existing directory: ${lexicalCandidate}`);
+    return realCandidate;
+  }
 
-  const realRoot = fs.realpathSync(lexicalRoot);
-  const realCandidate = fs.realpathSync(lexicalCandidate);
-  const stat = fs.statSync(realCandidate);
-  if (!stat.isDirectory()) throw new Error(`${label} must be a directory inside the current workspace.`);
-  if (!isPathInside(realRoot, realCandidate)) throw new Error(`${label} escapes the current workspace.`);
+  const lexicalCandidate = value ? path.resolve(lexicalRoot, value) : lexicalRoot;
+  if (!isPathInside(lexicalRoot, lexicalCandidate)) {
+    throw new Error(`${label} escapes the current workspace; use an explicit absolute cwd for an external target.`);
+  }
+
+  let realRoot: string;
+  let realCandidate: string;
+  try {
+    realRoot = fs.realpathSync(lexicalRoot);
+    realCandidate = fs.realpathSync(lexicalCandidate);
+  } catch {
+    throw new Error(`${label} must be an existing directory: ${lexicalCandidate}`);
+  }
+  if (!fs.statSync(realCandidate).isDirectory()) throw new Error(`${label} must be an existing directory: ${lexicalCandidate}`);
+  if (!isPathInside(realRoot, realCandidate)) {
+    throw new Error(`${label} escapes the current workspace; use an explicit absolute cwd for an external target.`);
+  }
   return realCandidate;
 }
 
@@ -135,6 +158,8 @@ function defaultChildExtensions(): string[] {
   const candidates = roots.flatMap((root) => [
     path.join(root, "extensions", "oauth-router", "index.ts"),
     path.join(root, "extensions", "oauth-router", "index.js"),
+    path.join(root, "extensions", "antigravity-provider", "index.ts"),
+    path.join(root, "extensions", "antigravity-provider", "index.js"),
   ]);
   return candidates.filter((candidate) => fs.existsSync(candidate));
 }

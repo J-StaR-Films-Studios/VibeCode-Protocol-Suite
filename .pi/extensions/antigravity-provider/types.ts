@@ -24,7 +24,14 @@ export interface AntigravityOptions {
   effort?: "low" | "medium" | "high";
 }
 
-export type AntigravityUiEventPhase = "start" | "streaming" | "success" | "error";
+export type AntigravityUiEventPhase =
+  | "start"
+  | "streaming"
+  | "thinking"
+  | "tool_activity"
+  | "plan"
+  | "success"
+  | "error";
 
 export interface AntigravityUiEvent {
   phase: AntigravityUiEventPhase;
@@ -33,3 +40,18 @@ export interface AntigravityUiEvent {
 }
 
 export type AntigravityUiReporter = (event: AntigravityUiEvent) => void;
+
+export interface AntigravityBinaryLinkConfig {
+  /** Explicit link to an existing server binary (or ANTIGRAVITY_ACP_BIN). */
+  binaryPath?: string;
+  /** Harness helper path (or ANTIGRAVITY_ACP_HARNESS). Defaults to sibling. */
+  harnessPath?: string;
+}
+
+/**
+ * Subagent/tool policy: unlimited. The ACP permission handler auto-selects
+ * the agent-preferred allow option and the client advertises terminal
+ * support, so main-agent turns and spawned subagents can execute tools.
+ * This is an explicit user decision — do not add a deny gate here.
+ */
+export const ANTIGRAVITY_TOOL_POLICY = "unlimited" as const;

@@ -16,6 +16,7 @@ type PlanTaskInput = {
   title?: string;
   agent: string;
   task: string;
+  cwd: string;
   role?: TakomiRole;
   stage?: VibeLifecycleStage;
   workflow?: TakomiWorkflowId | string;
@@ -56,6 +57,7 @@ export function createTakomiDelegationPlan(input: PlanInput): TakomiDelegationPl
       title: task.title ?? task.task.split(/\r?\n/).find(Boolean)?.slice(0, 80) ?? `Task ${index + 1}`,
       agent: task.agent,
       task: task.task,
+      cwd: task.cwd,
       role: task.role,
       stage: task.stage,
       workflow: task.workflow,
@@ -81,6 +83,7 @@ export function renderTakomiDelegationPlan(plan: TakomiDelegationPlan): string {
     const fallback = task.fallbackModels?.length ? ` | fallbacks=${task.fallbackModels.length}` : "";
     lines.push([
       `${task.id}: ${task.agent}`,
+      `cwd=${task.cwd}`,
       task.model ? `model=${task.model}` : "model=default",
       task.thinking ? `thinking=${task.thinking}` : "thinking=default",
       task.workflow ? `workflow=${task.workflow}` : "",

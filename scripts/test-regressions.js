@@ -7,7 +7,7 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { hashPath, copyOwnedTree } from '../src/owned-tree.js';
-import { collectTakomiStats } from '../src/takomi-stats.js';
+import { collectTakomiStats, getSessionTurns } from '../src/takomi-stats.js';
 import { collectTakomiStats as collectRuntimeTakomiStats } from '../.pi/extensions/takomi-runtime/takomi-stats.js';
 import { getSourceCheckoutLaunchArgs } from '../src/pi-harness.js';
 
@@ -113,6 +113,47 @@ try {
   });
   const discountedSeptDay = discountedStats.byDay.find((row) => row.key === '2026-09-03');
   assert.equal(discountedSeptDay?.cost, 16.0, '20% discount on September usage must reduce cost from $20.0 to $16.0');
+
+  // Cache persistence test
+  const cacheFile = path.join(statsHome, '.pi', 'takomi', 'cache', 'stats-cache.json');
+  assert.ok(await fs.pathExists(cacheFile), 'stats cache file must be created at ~/.pi/takomi/cache/stats-cache.json');
+  const cacheContent = await fs.readJson(cacheFile);
+  assert.equal(cacheContent.version, 2, 'stats cache must use version 2');
+  const cachedKeys = Object.keys(cacheContent.entries || {});
+  assert.ok(cachedKeys.length >= 3, 'stats cache must contain entries for created session files');
+
+  // Cache hit test: verify identical results on reload
+  const cachedStats = await collectTakomiStats({ home: statsHome, cwd: statsCwd });
+  assert.equal(cachedStats.totals.input, astraStats.totals.input, 'cached stats run must match fresh scan input totals');
+  assert.equal(cachedStats.totals.cost, astraStats.totals.cost, 'cached stats run must match fresh scan cost totals');
+
+  // Runtime parity test: verify runtime collector also produces matching totals
+  const runtimeStats = await collectRuntimeTakomiStats({ home: statsHome, cwd: statsCwd });
+  assert.equal(runtimeStats.totals.input, astraStats.totals.input, 'runtime extension stats must match core package input totals');
+  assert.equal(runtimeStats.totals.cost, astraStats.totals.cost, 'runtime extension stats must match core package cost totals');
+
+  // getSessionTurns test: turn-by-turn inspector extraction
+  const sessionFile = path.join(sessionsDir, 'session.jsonl');
+  const turns = await getSessionTurns(sessionFile);
+  assert.equal(turns.length, 1, 'session turns should extract 1 turn');
+  assert.equal(turns[0].title, 'hello', 'turn title should match user prompt');
+  assert.equal(turns[0].model, 'gpt-5.4', 'turn model should reflect assistant model');
+  assert.equal(turns[0].input, 10, 'turn input tokens should match usage');
+  assert.equal(turns[0].cache, 2, 'turn cache tokens should match usage');
+  assert.equal(turns[0].output, 3, 'turn output tokens should match usage');
+  assert.equal(turns[0].total, 15, 'turn total tokens should match usage');
+  assert.deepEqual(turns[0].tools, ['takomi_subagent'], 'turn tools should record invoked tool names');
+
+  // CLI test: takomi stats default (non-interactive stdout), --static, and --json flags
+  const { stdout: defaultOut } = await execFileAsync(process.execPath, [cli, 'stats', '--home', statsHome, '--cwd', statsCwd], { cwd: repoRoot, env });
+  assert.match(defaultOut, /Coding activity dashboard|Takomi/i, 'default stats invocation should output static dashboard to stdout');
+
+  const { stdout: staticOut } = await execFileAsync(process.execPath, [cli, 'stats', '--static', '--home', statsHome, '--cwd', statsCwd], { cwd: repoRoot, env });
+  assert.match(staticOut, /Coding activity dashboard|Takomi/i, 'stats --static should print static dashboard header');
+
+  const { stdout: jsonOut } = await execFileAsync(process.execPath, [cli, 'stats', '--json', '--home', statsHome, '--cwd', statsCwd], { cwd: repoRoot, env });
+  const parsedJson = JSON.parse(jsonOut);
+  assert.equal(parsedJson.totals.input, 4000010, 'stats --json should output valid stats JSON');
 
   console.log('✓ regression tests passed');
 } finally {

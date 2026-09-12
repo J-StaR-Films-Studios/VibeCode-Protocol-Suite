@@ -2,6 +2,7 @@ import { createReadStream, promises as fs } from 'node:fs';
 import readline from 'node:readline';
 import os from 'os';
 import path from 'path';
+import { loadStatsCache, saveStatsCache, serializeRow, deserializeRow, getStatsCachePath } from './takomi-cache.js';
 
 const colorEnabled = process.env.NO_COLOR !== '1' && process.env.NO_COLOR !== 'true';
 const ansi = (open, close) => (value) => colorEnabled ? `\u001b[${open}m${value}\u001b[${close}m` : String(value);
@@ -91,6 +92,17 @@ function canonicalModel(raw) {
   return MODEL_ALIASES[m] || m;
 }
 
+// Session transcripts may store an unprefixed model id with the provider in a
+// separate field (e.g. model 'claude-sonnet-4-6' with provider 'antigravity').
+// Qualify those so subscription usage prices at zero and groups distinctly
+// instead of billing at the matching commercial API rate.
+function qualifyAntigravityModel(model, provider) {
+  if (provider === 'antigravity' && typeof model === 'string' && model && !model.startsWith('antigravity/')) {
+    return `antigravity/${model}`;
+  }
+  return model;
+}
+
 async function exists(target) { try { await fs.access(target); return true; } catch { return false; } }
 function safeJson(line) { try { return JSON.parse(line); } catch { return null; } }
 function dayOf(ts) { return typeof ts === 'string' && ts.length >= 10 ? ts.slice(0, 10) : 'unknown'; }
@@ -139,6 +151,10 @@ function findDiscount(discounts, model, timestamp) {
 }
 
 function priceForUsage(model, timestamp) {
+  // Antigravity rides the Google subscription ($0 marginal API cost), and its
+  // reported token counts are chars/4 estimates, not metered usage. Pricing
+  // them at Gemini API rates would fabricate spend, so they price at zero.
+  if (typeof model === 'string' && model.startsWith('antigravity/')) return [0, 0, 0];
   const canon = canonicalModel(model);
   const usageAt = timestampMs(timestamp);
   const schedule = RATE_SCHEDULES[canon];
@@ -282,14 +298,48 @@ function pushTask(taskRows, task) {
   taskRows.push(task);
 }
 
-async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], discounts = []) {
+async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], discounts = [], statsCache = null, onCacheUpdate = null) {
   let scannedFiles = 0;
+  const discountsKey = JSON.stringify(discounts || []);
   for (const file of await files(root)) {
     scannedFiles += 1;
+    const resolvedPath = path.resolve(file);
+    let st = null;
+    if (statsCache) {
+      try {
+        st = await fs.stat(file);
+        const cached = statsCache[resolvedPath];
+        if (cached && cached.mtimeMs === st.mtimeMs && (cached.discountsKey || '[]') === discountsKey) {
+          const row = deserializeRow(cached.row);
+          if (row && (row.messages || row.toolCalls || row.turns)) {
+            sessionRows.push(row);
+          }
+          if (cached.events?.length) {
+            for (let i = 0; i < cached.events.length; i++) events.push(cached.events[i]);
+          }
+          if (cached.tasks?.length) {
+            for (let i = 0; i < cached.tasks.length; i++) taskRows.push(cached.tasks[i]);
+          }
+          continue;
+        }
+      } catch {
+        // File may be inaccessible, fall through
+      }
+    }
+
     let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null, currentTaskTracker = null;
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [] };
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [], total: 0, input: 0, cache: 0, output: 0, cost: 0, models: new Map() };
     const rowTracker = createActivityTracker();
     const toolCalls = new Map();
+    const fileEvents = [];
+    const fileTasks = [];
+
+    function pushFileTask(task) {
+      if (!task?.end || task.end === task.start) return;
+      task.activeMs = activeDuration(task.activityIntervals || []);
+      taskRows.push(task);
+      fileTasks.push(task);
+    }
 
     let lines;
     try {
@@ -311,7 +361,9 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         row.roles.set(role, (row.roles.get(role) || 0) + 1);
         row.stages.set(stage, (row.stages.get(stage) || 0) + 1);
         row.workflows.set(workflow, (row.workflows.get(workflow) || 0) + 1);
-        events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'role', role, stage, workflow, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+        const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'role', role, stage, workflow, input: 0, cache: 0, output: 0, total: 0, cost: 0 };
+        events.push(evt);
+        if (statsCache) fileEvents.push(evt);
       }
 
       const msg = obj.type === 'message' && obj.message ? obj.message : null;
@@ -321,7 +373,7 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         if (!ts) continue;
 
         const msgProvider = msg.provider || msg.api || provider;
-        const msgModel = msg.model || msg.modelId || model;
+        const msgModel = qualifyAntigravityModel(msg.model || msg.modelId || model, msgProvider);
         provider = msgProvider || provider;
         model = msgModel || model;
 
@@ -331,11 +383,20 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
           const cache = +u.cacheRead || +u.cachedInput || +u.cache_read || 0;
           const output = +u.output || +u.outputTokens || 0;
           const total = +u.totalTokens || +u.total || (input + cache + output);
-          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, output, total, cost: cost(msgModel, input, cache, output, true, ts, discounts) });
+          const c = cost(msgModel, input, cache, output, true, ts, discounts);
+          row.total += total;
+          row.input += input;
+          row.cache += cache;
+          row.output += output;
+          row.cost += c;
+          row.models.set(msgModel, (row.models.get(msgModel) || 0) + total);
+          const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, output, total, cost: c };
+          events.push(evt);
+          if (statsCache) fileEvents.push(evt);
         }
 
         if (msg.role === 'user') {
-          pushTask(taskRows, currentTask);
+          pushFileTask(currentTask);
           currentTask = null;
           currentTaskTracker = createActivityTracker(ts);
           row.turns += 1;
@@ -366,7 +427,9 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
               noteToolStart(rowTracker, callId, ts);
               if (currentTaskTracker) noteToolStart(currentTaskTracker, callId, ts);
             }
-            events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+            const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 };
+            events.push(evt);
+            if (statsCache) fileEvents.push(evt);
           }
           continue;
         }
@@ -388,13 +451,30 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
     } catch {
       continue;
     }
-    pushTask(taskRows, currentTask);
     if (currentTaskTracker && currentTask) {
       currentTask.activityIntervals = currentTaskTracker.intervals;
     }
+    pushFileTask(currentTask);
     row.activityIntervals = rowTracker.intervals;
     row.activeMs = activeDuration(rowTracker.intervals);
     if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
+
+    if (statsCache) {
+      try {
+        if (!st) st = await fs.stat(file);
+        statsCache[resolvedPath] = {
+          mtimeMs: st.mtimeMs,
+          row: serializeRow(row),
+          events: fileEvents,
+          tasks: fileTasks,
+          discountsKey,
+        };
+        if (onCacheUpdate) onCacheUpdate();
+      } catch {
+        // Ignore stat or caching error
+      }
+    }
+
   }
   return scannedFiles;
 }
@@ -506,6 +586,10 @@ export async function collectTakomiStats(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const localConfig = await readStatsLocalConfig(cwd, home, opts.statsConfig || process.env.TAKOMI_STATS_CONFIG);
   const discounts = opts.discounts || localConfig.discounts || [];
+  const cacheFile = opts.cacheFile || getStatsCachePath(home);
+  const cache = opts.noCache ? null : await loadStatsCache(cacheFile);
+  let cacheDirty = false;
+  const onCacheUpdate = () => { cacheDirty = true; };
   const rawEvents = [], rawSessions = [], rawTasks = [];
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
@@ -530,7 +614,7 @@ export async function collectTakomiStats(opts = {}) {
     if (scannedRoots.has(key)) return;
     scannedRoots.add(key);
     const present = await exists(source.root);
-    const filesScanned = present ? await scanPiSessions(source.root, source.source, rawEvents, rawSessions, rawTasks, discounts) : 0;
+    const filesScanned = present ? await scanPiSessions(source.root, source.source, rawEvents, rawSessions, rawTasks, discounts, cache, onCacheUpdate) : 0;
     sourceRoots.push({ ...source, exists: present, files: filesScanned });
   }
   for (const source of sessionSources) await scanSource(source);
@@ -539,6 +623,9 @@ export async function collectTakomiStats(opts = {}) {
   const discoveredSessionRoots = await discoverProjectSessionRoots(configuredProjectRoots);
   for (const root of linkedSessionRoots) await scanSource({ source: 'project-linked', root, default: false });
   for (const [index, root] of discoveredSessionRoots.entries()) await scanSource({ source: `project-root-${index + 1}`, root, default: false });
+  if (cacheDirty && cache && !opts.noCache) {
+    await saveStatsCache(cache, cacheFile);
+  }
   const sinceDay = parseSince(opts.since);
   const events = rawEvents.filter(e => !sinceDay || e.day >= sinceDay);
   const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
@@ -1300,7 +1387,123 @@ export function renderTakomiStats(stats, opts = {}) {
   return renderTakomiStatsOverview(stats, opts);
 }
 
+export async function getSessionTurns(file, discounts = []) {
+  const turns = [];
+  if (!file || !(await exists(file))) return turns;
+  let currentTurn = null;
+  let currentModel = 'unknown';
+  let currentProvider = '';
+  let lines;
+  try {
+    lines = readline.createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+  } catch {
+    return turns;
+  }
+
+  try {
+    for await (const line of lines) {
+      const obj = safeJson(line);
+      if (!obj) continue;
+      if (obj.type === 'model_change') {
+        currentModel = obj.modelId || currentModel;
+        currentProvider = obj.provider || currentProvider;
+      }
+      const msg = obj.type === 'message' && obj.message ? obj.message : null;
+      if (!msg) continue;
+      const ts = obj.timestamp || msg.timestamp || '';
+      if (msg.role === 'user') {
+        if (currentTurn) turns.push(currentTurn);
+        const textPart = Array.isArray(msg.content) ? msg.content.find((p) => p?.type === 'text')?.text || '' : '';
+        currentTurn = {
+          turnIndex: turns.length + 1,
+          start: ts,
+          end: ts,
+          title: String(textPart).replace(/\s+/g, ' ').trim(),
+          model: currentModel,
+          input: 0,
+          cache: 0,
+          output: 0,
+          total: 0,
+          cost: 0,
+          tools: [],
+        };
+        continue;
+      }
+      if (msg.role === 'assistant') {
+        const msgModel = qualifyAntigravityModel(
+          msg.model || msg.modelId || currentModel,
+          msg.provider || msg.api || currentProvider,
+        );
+        currentModel = msgModel;
+        currentProvider = msg.provider || msg.api || currentProvider;
+        if (currentTurn) {
+          currentTurn.end = ts;
+          currentTurn.model = msgModel;
+          if (msg.usage) {
+            const inp = +msg.usage.input || +msg.usage.inputTokens || 0;
+            const ca = +msg.usage.cacheRead || +msg.usage.cachedInput || +msg.usage.cache_read || 0;
+            const out = +msg.usage.output || +msg.usage.outputTokens || 0;
+            const tot = +msg.usage.totalTokens || +msg.usage.total || (inp + ca + out);
+            const c = cost(msgModel, inp, ca, out, true, ts, discounts);
+            currentTurn.input += inp;
+            currentTurn.cache += ca;
+            currentTurn.output += out;
+            currentTurn.total += tot;
+            currentTurn.cost += c;
+          }
+          if (Array.isArray(msg.content)) {
+            for (const p of msg.content) {
+              if (p && p.type === 'toolCall' && p.name && !currentTurn.tools.includes(p.name)) {
+                currentTurn.tools.push(p.name);
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+  if (currentTurn) turns.push(currentTurn);
+  return turns;
+}
+
 export async function printTakomiStats(options = {}) {
   const stats = await collectTakomiStats(options);
-  if (options.json) console.log(JSON.stringify(stats, null, 2)); else console.log(renderTakomiStats(stats, options));
+  if (options.json) {
+    console.log(JSON.stringify(stats, null, 2));
+    return;
+  }
+  if (options.web) {
+    const { startTakomiWebServer } = await import('./takomi-web.js');
+    startTakomiWebServer(stats, options.port || 8766, { open: options.open !== false });
+    return;
+  }
+  if (options.interactive || options.tui || options.watch) {
+    const { launchTakomiTUI } = await import('./takomi-tui.js');
+    launchTakomiTUI(stats, options);
+    return;
+  }
+  console.log(renderTakomiStats(stats, options));
 }
+
+export {
+  renderProfileCard,
+  renderTakomiStatsOverview,
+  renderTakomiStatsFull,
+  renderHighlights,
+  renderSignals,
+  renderRankedBars,
+  renderCompactSessions,
+  renderCompactTools,
+  heatmapGrid,
+  calcStreaks,
+  sectionTitle,
+  statCard,
+  sessionDuration,
+  taskDuration,
+  cleanProjectName,
+  shortDate,
+  fmtTokens,
+  fmtMoney,
+  fmtPercent,
+  ms,
+};

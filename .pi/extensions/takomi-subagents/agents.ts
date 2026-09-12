@@ -46,34 +46,52 @@ function normalizeThinking(value?: string): TakomiThinkingLevel | undefined {
 function loadAgentsFromDirectory(agentsDir: string, source: "user" | "project"): TakomiAgentConfig[] {
   if (!fs.existsSync(agentsDir)) return [];
 
-  const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
   const agents: TakomiAgentConfig[] = [];
+  const visit = (directory: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
+    } catch {
+      return;
+    }
 
-  for (const entry of entries) {
-    if (!entry.name.endsWith(".md")) continue;
-    const filePath = path.join(agentsDir, entry.name);
-    const content = fs.readFileSync(filePath, "utf8");
-    const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
-    if (!frontmatter.name || !frontmatter.description) continue;
+    for (const entry of entries) {
+      const filePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(filePath);
+        continue;
+      }
+      if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+      if (!entry.name.endsWith(".md") || entry.name.endsWith(".chain.md")) continue;
 
-    if (!TAKOMI_PUBLIC_AGENT_SET.has(frontmatter.name)) continue;
+      let content: string;
+      try {
+        content = fs.readFileSync(filePath, "utf8");
+      } catch {
+        continue;
+      }
+      const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
+      if (!frontmatter.name || !frontmatter.description) continue;
+      if (!TAKOMI_PUBLIC_AGENT_SET.has(frontmatter.name)) continue;
 
-    agents.push({
-      name: frontmatter.name,
-      description: frontmatter.description,
-      tools: splitList(frontmatter.tools),
-      model: frontmatter.model,
-      fallbackModels: splitList(frontmatter.fallbackModels ?? frontmatter.fallback_models),
-      thinking: normalizeThinking(frontmatter.thinking),
-      defaultContext: frontmatter.defaultContext === "fork" || frontmatter.defaultContext === "fresh"
-        ? frontmatter.defaultContext
-        : undefined,
-      systemPrompt: body,
-      filePath,
-      source,
-    });
-  }
+      agents.push({
+        name: frontmatter.name,
+        description: frontmatter.description,
+        tools: splitList(frontmatter.tools),
+        model: frontmatter.model,
+        fallbackModels: splitList(frontmatter.fallbackModels ?? frontmatter.fallback_models),
+        thinking: normalizeThinking(frontmatter.thinking),
+        defaultContext: frontmatter.defaultContext === "fork" || frontmatter.defaultContext === "fresh"
+          ? frontmatter.defaultContext
+          : undefined,
+        systemPrompt: body,
+        filePath,
+        source,
+      });
+    }
+  };
 
+  visit(agentsDir);
   return agents;
 }
 
@@ -85,17 +103,38 @@ function isDirectory(target: string): boolean {
   }
 }
 
-function findNearestProjectAgentsDirs(cwd: string): string[] {
+function findNearestProjectRoot(cwd: string): string | undefined {
   let current = cwd;
   while (true) {
-    const candidates = [
-      path.join(current, ".pi", "agents"),
-      path.join(current, ".agents"),
-    ].filter(isDirectory);
-    if (candidates.length > 0) return candidates;
+    if (isDirectory(path.join(current, ".pi")) || isDirectory(path.join(current, ".agents"))) return current;
     const parent = path.dirname(current);
-    if (parent === current) return [];
+    if (parent === current) return undefined;
     current = parent;
+  }
+}
+
+function findNearestProjectAgentsDirs(cwd: string): string[] {
+  const projectRoot = findNearestProjectRoot(cwd);
+  if (!projectRoot) return [];
+  return [
+    path.join(projectRoot, ".pi", "agents"),
+    path.join(projectRoot, ".agents"),
+  ].filter(isDirectory);
+}
+
+function projectAgentOverrideNames(cwd: string): Set<string> {
+  const projectRoot = findNearestProjectRoot(cwd);
+  if (!projectRoot) return new Set();
+  const settingsPath = path.join(projectRoot, ".pi", "settings.json");
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as {
+      subagents?: { agentOverrides?: Record<string, unknown> };
+    };
+    const overrides = settings.subagents?.agentOverrides;
+    if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) return new Set();
+    return new Set(Object.keys(overrides).filter((name) => TAKOMI_PUBLIC_AGENT_SET.has(name)));
+  } catch {
+    return new Set();
   }
 }
 
@@ -112,6 +151,13 @@ export function discoverTakomiAgents(cwd: string, scope: TakomiAgentScope = "bot
   }
   for (const agent of localAgents) {
     merged.set(agent.name, agent);
+  }
+
+  if (scope !== "user") {
+    for (const name of projectAgentOverrideNames(cwd)) {
+      const agent = merged.get(name);
+      if (agent) merged.set(name, { ...agent, source: "project" });
+    }
   }
 
   return [...merged.values()];

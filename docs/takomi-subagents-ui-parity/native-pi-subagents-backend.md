@@ -50,6 +50,30 @@ takomi_subagent(params)
   -> render using pi-subagents renderSubagentResult()
 ```
 
+## External working directories
+
+`cwd` is launch configuration, not task prose. The following working-directory contract is normative for direct, parallel, chain, async, management, and worktree requests:
+
+- When top-level `cwd` is omitted, the run inherits Pi's current/default project directory. When a task-level `cwd` is omitted, that task inherits the resolved parent run directory.
+- A relative `cwd` resolves against its declared parent and must remain inside that parent both lexically and after realpath resolution. A symlink or Windows junction must not be used to escape the parent.
+- An explicit absolute `cwd` may target an accessible directory outside the parent workspace. External absolute directories are supported intentionally; they are not workspace-escape errors.
+- Every accepted directory must already exist and must be a directory. Missing paths and regular files are rejected before launch.
+- Accepted paths are canonicalized with filesystem realpath resolution. Native execution, structured plan details, and rendered previews use the canonical path rather than an unresolved alias, symlink, or junction path.
+- A path mentioned only in the task text never changes launch `cwd`. When task prose clearly identifies another existing project but no explicit `cwd` was supplied, Takomi may block with corrective feedback; it does not infer or launch into that directory automatically.
+- Manual and preview-only delegation plans show each task's canonical `cwd`. `details.plan.tasks[*].cwd` and the rendered plan must agree with the path forwarded to native execution.
+- Project-agent trust gates remain active for external directories. Selecting an external `cwd` does not authorize repository-controlled agent prompts. Discovery covers nested project-agent definitions, and project settings that override a canonical persona are treated as project control because they can alter child tools or extensions.
+- Resuming a run under a root with project-controlled personas requires the same user/host authorization boundary; management actions cannot bypass the launch-time trust gate.
+- A top-level external `cwd` becomes the Takomi project/profile and routing boundary for that run. A per-task absolute `cwd` changes only that child's execution directory; it does not create an independent per-task Takomi profile, routing policy, or trust scope.
+- Changing `cwd` does not auto-load executable extensions from the target project. Takomi retains its explicit child-extension policy and must not scan an external target's `.pi/extensions` merely because the child executes there.
+
+Callers should therefore omit `cwd` only for the current project, use a contained relative path for a child directory within the parent, and provide an explicit absolute path whenever the intended project is external.
+
+## Detached async restoration boundary
+
+Live detached async launches correctly carry canonical external directories into native `pi-subagents` execution and result handoff. Cross-restart hydration across multiple project roots is separate future work.
+
+After a Pi/Takomi restart, Takomi does not yet claim that it can safely rediscover and hydrate every detached result launched from an external root. Supporting that requires an integrity-bound provenance design that records and validates the canonical project root, run identity, session location, and result/artifact locations without weakening path confinement. Until that design exists, the supported contract is live external async launch and handoff, not cross-restart multi-root result hydration.
+
 ## What Takomi still owns
 
 - Genesis/Design/Build lifecycle semantics

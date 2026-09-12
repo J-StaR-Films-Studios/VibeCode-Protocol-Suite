@@ -1383,6 +1383,13 @@ program
   .option('--stats-config <path>', 'Local stats config JSON file (defaults to ~/.takomi/stats.local.json, then .takomi-stats.local.json)')
   .option('--since <date|range>', 'Filter from YYYY-MM-DD or relative range like 7d, 4w, 3m')
   .option('--limit <n>', 'Rows per section', '8')
+  .option('-s, --static', 'Print static terminal view')
+  .option('--plain', 'Print static terminal view')
+  .option('-i, --interactive', 'Launch interactive TUI')
+  .option('--tui', 'Launch interactive TUI')
+  .option('-w, --watch', 'Watch active session in real time')
+  .option('--web', 'Launch lightweight self-contained Takomi stats web dashboard')
+  .option('--no-open', 'Do not automatically open the browser for the web dashboard')
   .action((view, options) => printTakomiStats({ ...options, view, limit: Number(options.limit) || 8 }));
 
 // Per-project setup (legacy alias)

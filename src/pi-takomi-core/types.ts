@@ -57,6 +57,7 @@ export type TakomiDelegationPlanTask = {
   title: string;
   agent: string;
   task: string;
+  cwd: string;
   role?: TakomiRole;
   stage?: VibeLifecycleStage;
   workflow?: TakomiWorkflowId | string;

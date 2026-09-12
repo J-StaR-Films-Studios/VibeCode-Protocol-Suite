@@ -3,6 +3,56 @@ import readline from 'node:readline';
 import os from 'os';
 import path from 'path';
 
+// Mirror note: the cache helpers below intentionally duplicate src/takomi-cache.js
+// because global Pi installs do not sync src/ (see scripts/sync-pi-global.ps1),
+// so this extension must stay self-contained. Keep both copies identical;
+// scripts/test-stats-cache-parity.js fails the suite when they drift.
+const CACHE_VERSION = 2;
+function getStatsCachePath(home = os.homedir()) {
+  return path.join(home, '.pi', 'takomi', 'cache', 'stats-cache.json');
+}
+function serializeRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    roles: Object.fromEntries(row.roles || []),
+    stages: Object.fromEntries(row.stages || []),
+    workflows: Object.fromEntries(row.workflows || []),
+    models: Object.fromEntries(row.models || []),
+  };
+}
+function deserializeRow(cached) {
+  if (!cached) return null;
+  return {
+    ...cached,
+    roles: new Map(Object.entries(cached.roles || {})),
+    stages: new Map(Object.entries(cached.stages || {})),
+    workflows: new Map(Object.entries(cached.workflows || {})),
+    models: new Map(Object.entries(cached.models || {})),
+  };
+}
+async function loadStatsCache(cacheFile = getStatsCachePath()) {
+  try {
+    const raw = await fs.readFile(cacheFile, 'utf8');
+    const data = JSON.parse(raw);
+    if (data && data.version === CACHE_VERSION && data.entries && typeof data.entries === 'object') {
+      return data.entries;
+    }
+  } catch {}
+  return {};
+}
+async function saveStatsCache(entries, cacheFile = getStatsCachePath()) {
+  try {
+    await fs.mkdir(path.dirname(cacheFile), { recursive: true });
+    const payload = JSON.stringify({
+      version: CACHE_VERSION,
+      updatedAt: new Date().toISOString(),
+      entries,
+    });
+    await fs.writeFile(cacheFile, payload, 'utf8');
+  } catch {}
+}
+
 const colorEnabled = process.env.NO_COLOR !== '1' && process.env.NO_COLOR !== 'true';
 const ansi = (open, close) => (value) => colorEnabled ? `\u001b[${open}m${value}\u001b[${close}m` : String(value);
 const pc = {
@@ -92,6 +142,17 @@ function canonicalModel(raw) {
   return MODEL_ALIASES[m] || m;
 }
 
+// Session transcripts may store an unprefixed model id with the provider in a
+// separate field (e.g. model 'claude-sonnet-4-6' with provider 'antigravity').
+// Qualify those so subscription usage prices at zero and groups distinctly
+// instead of billing at the matching commercial API rate.
+function qualifyAntigravityModel(model, provider) {
+  if (provider === 'antigravity' && typeof model === 'string' && model && !model.startsWith('antigravity/')) {
+    return `antigravity/${model}`;
+  }
+  return model;
+}
+
 async function exists(target) { try { await fs.access(target); return true; } catch { return false; } }
 function safeJson(line) { try { return JSON.parse(line); } catch { return null; } }
 function dayOf(ts) { return typeof ts === 'string' && ts.length >= 10 ? ts.slice(0, 10) : 'unknown'; }
@@ -140,6 +201,12 @@ function findDiscount(discounts, model, timestamp) {
 }
 
 function priceForUsage(model, timestamp, prices = PRICES) {
+  // Antigravity rides the Google subscription ($0 marginal API cost), and its
+  // reported token counts are chars/4 estimates, not metered usage. Pricing
+  // them at API rates would fabricate spend, so they price at zero on every
+  // path, including transcript scans where the model arrives as a bare string.
+  const rawId = typeof model === 'string' ? model : model?.id;
+  if (typeof rawId === 'string' && rawId.startsWith('antigravity/')) return [0, 0, 0];
   const canon = canonicalModel(model);
   const usageAt = timestampMs(timestamp);
   const schedule = RATE_SCHEDULES[canon];
@@ -250,10 +317,45 @@ function pushTask(taskRows, task) {
   taskRows.push(task);
 }
 
-async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], prices = PRICES, discounts = []) {
+async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], prices = PRICES, discounts = [], statsCache = null, onCacheUpdate = null) {
+  const discountsKey = JSON.stringify(discounts || []);
   for (const file of await files(root)) {
+    const resolvedPath = path.resolve(file);
+    let st = null;
+    if (statsCache) {
+      try {
+        st = await fs.stat(file);
+        const cached = statsCache[resolvedPath];
+        if (cached && cached.mtimeMs === st.mtimeMs && (cached.discountsKey || '[]') === discountsKey) {
+          const row = deserializeRow(cached.row);
+          if (row && (row.messages || row.toolCalls || row.turns)) {
+            sessionRows.push(row);
+          }
+          if (cached.events?.length) {
+            for (let i = 0; i < cached.events.length; i++) events.push(cached.events[i]);
+          }
+          if (cached.tasks?.length) {
+            for (let i = 0; i < cached.tasks.length; i++) taskRows.push(cached.tasks[i]);
+          }
+          continue;
+        }
+      } catch {
+        // File may be inaccessible, fall through
+      }
+    }
+
     let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null;
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityTimestamps: [] };
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityTimestamps: [], total: 0, input: 0, cache: 0, output: 0, cost: 0, models: new Map() };
+    const fileEvents = [];
+    const fileTasks = [];
+
+    function pushFileTask(task) {
+      if (!task?.end || task.end === task.start) return;
+      task.activeMs = activeDuration(task.activityTimestamps || []);
+      taskRows.push(task);
+      fileTasks.push(task);
+    }
+
     let lines;
     try {
       lines = readline.createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
@@ -273,14 +375,18 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
         row.roles.set(role, (row.roles.get(role) || 0) + 1);
         row.stages.set(stage, (row.stages.get(stage) || 0) + 1);
         row.workflows.set(workflow, (row.workflows.get(workflow) || 0) + 1);
-        events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'role', role, stage, workflow, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+        const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'role', role, stage, workflow, input: 0, cache: 0, output: 0, total: 0, cost: 0 };
+        events.push(evt);
+        if (statsCache) fileEvents.push(evt);
       }
       const msg = obj.type === 'message' && obj.message ? obj.message : null;
-      const ts = msg ? obj.timestamp || msg.timestamp || '' : '';
+      const ts = obj.timestamp || msg?.timestamp || '';
       if (msg) {
         row.messages += 1;
+        provider = msg.provider || msg.api || provider;
+        model = qualifyAntigravityModel(msg.model || msg.modelId || model, provider);
         if (msg.role === 'user') {
-          pushTask(taskRows, currentTask);
+          pushFileTask(currentTask);
           row.turns += 1;
           const textPart = (msg.content || []).find(p => p?.type === 'text')?.text || '';
           currentTask = { source, file, session, project: projectKey(file), cwd, start: ts, end: ts, provider, model, turns: 1, toolCalls: 0, title: String(textPart).replace(/\s+/g, ' ').trim(), activityTimestamps: [] };
@@ -299,18 +405,50 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
             const count = Array.isArray(args.tasks) ? args.tasks.length : Array.isArray(args.chain) ? args.chain.length : 1;
             row.subagentCalls += count;
           }
-          events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 });
+          const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'tool', tool: name, input: 0, cache: 0, output: 0, total: 0, cost: 0 };
+          events.push(evt);
+          if (statsCache) fileEvents.push(evt);
         }
       }
       const u = msg && msg.usage;
-      if (u) events.push({ source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: +u.input||0, cache: +u.cacheRead||0, cacheWrite: +u.cacheWrite||0, output: +u.output||0, total: +u.totalTokens||0, cost: cost(model, +u.input||0, +u.cacheRead||0, +u.output||0, +u.cacheWrite||0, prices, ts, discounts) });
+      if (u) {
+        const inp = +u.input || 0;
+        const cr = +u.cacheRead || 0;
+        const cw = +u.cacheWrite || 0;
+        const out = +u.output || 0;
+        const tot = +u.totalTokens || (inp + cr + out);
+        const c = cost(model, inp, cr, out, cw, prices, ts, discounts);
+        row.total += tot;
+        row.input += inp;
+        row.cache += cr;
+        row.output += out;
+        row.cost += c;
+        row.models.set(model, (row.models.get(model) || 0) + tot);
+        const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: inp, cache: cr, cacheWrite: cw, output: out, total: tot, cost: c };
+        events.push(evt);
+        if (statsCache) fileEvents.push(evt);
+      }
       }
     } catch {
       continue;
     }
-    pushTask(taskRows, currentTask);
+    pushFileTask(currentTask);
     row.activeMs = activeDuration(row.activityTimestamps);
     if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
+
+    if (statsCache) {
+      try {
+        if (!st) st = await fs.stat(file);
+        statsCache[resolvedPath] = {
+          mtimeMs: st.mtimeMs,
+          row: serializeRow(row),
+          events: fileEvents,
+          tasks: fileTasks,
+          discountsKey,
+        };
+        if (onCacheUpdate) onCacheUpdate();
+      } catch {}
+    }
   }
 }
 
@@ -326,13 +464,20 @@ export async function collectTakomiStats(opts = {}) {
   const home = opts.home || os.homedir();
   const cwd = opts.cwd || process.cwd();
   const discounts = opts.discounts || [];
+  const cacheFile = opts.cacheFile || getStatsCachePath(home);
+  const cache = opts.noCache ? null : await loadStatsCache(cacheFile);
+  let cacheDirty = false;
+  const onCacheUpdate = () => { cacheDirty = true; };
   const rawEvents = [], rawSessions = [], rawTasks = [];
   const prices = await loadPrices(home);
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
-  await scanPiSessions(globalSessions, 'pi-global', rawEvents, rawSessions, rawTasks, prices, discounts);
-  if (projectSessions !== globalSessions) await scanPiSessions(projectSessions, 'pi-project', rawEvents, rawSessions, rawTasks, prices, discounts);
-  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions, rawTasks, prices, discounts);
+  await scanPiSessions(globalSessions, 'pi-global', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate);
+  if (projectSessions !== globalSessions) await scanPiSessions(projectSessions, 'pi-project', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate);
+  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate);
+  if (cacheDirty && cache && !opts.noCache) {
+    await saveStatsCache(cache, cacheFile);
+  }
   const sinceDay = parseSince(opts.since);
   const events = rawEvents.filter(e => !sinceDay || e.day >= sinceDay);
   const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
