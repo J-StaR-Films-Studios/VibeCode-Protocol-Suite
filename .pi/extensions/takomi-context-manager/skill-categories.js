@@ -46,6 +46,7 @@ export const SKILL_CATEGORIES = [
       'web-dev-standards',
       'ai-sdk',
       'git-github-tools',
+      'pr-babysitter',
       'context7',
       'jules',
       'anti-gravity',
@@ -129,6 +130,7 @@ export const SKILL_CATEGORIES = [
     description: 'Skill authoring, prompt engineering, context optimization, SDD, and task spawning.',
     skills: [
       'agent-engineering',
+      'role-delivery',
     ],
   },
 ];
