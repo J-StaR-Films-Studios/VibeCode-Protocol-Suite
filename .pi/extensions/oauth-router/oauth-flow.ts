@@ -2,12 +2,7 @@ import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import type { AuthEvent, AuthPrompt, ModelAuth, OAuthCredential, OAuthCredentials, Provider } from "@earendil-works/pi-ai";
-import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
-import { githubCopilotProvider } from "@earendil-works/pi-ai/providers/github-copilot";
-import { kimiCodingProvider } from "@earendil-works/pi-ai/providers/kimi-coding";
-import { openaiCodexProvider } from "@earendil-works/pi-ai/providers/openai-codex";
-import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
-import { xaiProvider } from "@earendil-works/pi-ai/providers/xai";
+import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { RouterProviderQuotaWindow, RouterProviderUsageSnapshot, RouterUpstreamConfig, StoredRouterAccount } from "./types.ts";
 
@@ -57,14 +52,25 @@ async function promptRequired(ctx: ExtensionContext, message: string, placeholde
   return response;
 }
 
-const oauthProviders: readonly Provider[] = [
-  anthropicProvider(),
-  githubCopilotProvider(),
-  kimiCodingProvider(),
-  openaiCodexProvider(),
-  openrouterProvider(),
-  xaiProvider(),
-];
+// Pi only aliases "@earendil-works/pi-ai/providers/all" for extensions, not the
+// individual "@earendil-works/pi-ai/providers/<name>" subpaths, so resolve the
+// OAuth-capable providers out of the aliased builtin catalog instead.
+const OAUTH_PROVIDER_IDS = [
+  "anthropic",
+  "github-copilot",
+  "kimi-coding",
+  "openai-codex",
+  "openrouter",
+  "xai",
+] as const;
+
+const oauthProviders: readonly Provider[] = (() => {
+  const byId = new Map(builtinProviders().map((provider) => [provider.id, provider]));
+  return OAUTH_PROVIDER_IDS.flatMap((id) => {
+    const provider = byId.get(id);
+    return provider?.auth.oauth ? [provider] : [];
+  });
+})();
 
 function getOAuthProvider(providerId: string) {
   const provider = oauthProviders.find((candidate) => candidate.id === providerId);
