@@ -31,6 +31,9 @@ Do not commit or move those credential/state files into the repository.
 
 - Registers provider: `oauth-router`
 - Exposes selectable models such as:
+  - `oauth-router/gpt-6-astra`
+  - `oauth-router/gpt-6-sol`
+  - `oauth-router/gpt-6-luna`
   - `oauth-router/gpt-5.6-luna`
   - `oauth-router/gpt-5.6-sol`
   - `oauth-router/gpt-5.6-terra`
@@ -81,13 +84,15 @@ Do not commit or move those credential/state files into the repository.
 - Auth mode: OAuth
 - OAuth provider: `openai-codex`
 - API: `openai-codex-responses`
-- Default models: `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
+- Default models: `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
 
 ### `openai-compatible`
 
 - Auth mode: API key fallback
 - API: `openai-responses`
-- Default models: `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
+- Default models: `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
+
+GPT-6 Astra, Sol, and Luna use OpenAI Standard short-context API rates. The router advertises a 240K context window for each, below the 272K long-context pricing threshold. Codex OAuth access depends on the account and rollout. See [OpenAI's Codex model list](https://developers.openai.com/codex/models).
 
 ## Setup / verification
 

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { hashPath, copyOwnedTree } from '../src/owned-tree.js';
 import { collectTakomiStats, getSessionTurns } from '../src/takomi-stats.js';
 import { collectTakomiStats as collectRuntimeTakomiStats } from '../.pi/extensions/takomi-runtime/takomi-stats.js';
+import { DEFAULT_CONFIG as ROUTER_DEFAULT_CONFIG } from '../.pi/extensions/oauth-router/config.ts';
 import { getSourceCheckoutLaunchArgs } from '../src/pi-harness.js';
 
 const execFileAsync = promisify(execFile);
@@ -20,6 +21,20 @@ try {
   const packageJson = await fs.readJson(path.join(repoRoot, 'package.json'));
   assert.ok(!packageJson.files.includes('plugins'), 'npm package allowlist must not include the entire plugins tree because nested pnpm node_modules contain hard links rejected by npm');
   assert.ok(packageJson.files.includes('plugins/takomi-flow/scripts'), 'npm package retains Takomi Flow runtime scripts through explicit allowlisting');
+
+  for (const [id, rates] of [
+    ['gpt-6-astra', { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 }],
+    ['gpt-6-sol', { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 }],
+    ['gpt-6-luna', { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }],
+  ]) {
+    const model = ROUTER_DEFAULT_CONFIG.models.find((entry) => entry.id === id);
+    assert.deepEqual(model?.cost, rates, `${id} must have OpenAI Standard rates`);
+    assert.equal(model?.contextWindow, 240000, `${id} must stay in the short-context pricing tier`);
+    assert.equal(model?.maxTokens, 128000);
+    for (const upstream of ROUTER_DEFAULT_CONFIG.upstreams) {
+      assert.ok(upstream.modelIds.includes(id), `${upstream.id} must expose ${id}`);
+    }
+  }
 
   const cli = path.join(repoRoot, 'bin', 'takomi.js');
   const env = {
@@ -118,7 +133,7 @@ try {
   const cacheFile = path.join(statsHome, '.pi', 'takomi', 'cache', 'stats-cache.json');
   assert.ok(await fs.pathExists(cacheFile), 'stats cache file must be created at ~/.pi/takomi/cache/stats-cache.json');
   const cacheContent = await fs.readJson(cacheFile);
-  assert.equal(cacheContent.version, 2, 'stats cache must use version 2');
+  assert.equal(cacheContent.version, 3, 'stats cache must use version 3');
   const cachedKeys = Object.keys(cacheContent.entries || {});
   assert.ok(cachedKeys.length >= 3, 'stats cache must contain entries for created session files');
 
@@ -154,6 +169,38 @@ try {
   const { stdout: jsonOut } = await execFileAsync(process.execPath, [cli, 'stats', '--json', '--home', statsHome, '--cwd', statsCwd], { cwd: repoRoot, env });
   const parsedJson = JSON.parse(jsonOut);
   assert.equal(parsedJson.totals.input, 4000010, 'stats --json should output valid stats JSON');
+
+  const newGpt6File = path.join(sessionsDir, 'gpt-6-sol-luna.jsonl');
+  await fs.writeFile(newGpt6File, [
+    JSON.stringify({ type: 'message', timestamp: '2026-09-24T00:00:00Z', message: { role: 'user', content: [{ type: 'text', text: 'test prices' }] } }),
+    ...[
+      ['gpt-6-sol', 24, 1000], ['gpt-6-sol', 25, 1001],
+      ['gpt-6-luna', 26, 1000], ['gpt-6-luna', 27, 1001],
+    ].map(([model, day, cacheWrite]) => JSON.stringify({
+      type: 'message', timestamp: `2026-09-${day}T00:00:01Z`, message: {
+        role: 'assistant', model: `openai-codex/${model}[high]`,
+        usage: { input: 100_000, cacheRead: 171_000, cacheWrite, output: 10_000 }, content: [],
+      },
+    })),
+  ].join('\n'));
+  const solLunaStats = await collectTakomiStats({ home: statsHome, cwd: statsCwd });
+  const solLunaRuntimeStats = await collectRuntimeTakomiStats({ home: statsHome, cwd: statsCwd });
+  const expectedByDay = new Map([
+    ['2026-09-24', (100_000 * 2 + 171_000 * 0.2 + 1000 * 2.5 + 10_000 * 10) / 1_000_000],
+    ['2026-09-25', (100_000 * 4 + 171_000 * 0.4 + 1001 * 5 + 10_000 * 15) / 1_000_000],
+    ['2026-09-26', (100_000 * 0.1 + 171_000 * 0.01 + 1000 * 0.125 + 10_000 * 0.5) / 1_000_000],
+    ['2026-09-27', (100_000 * 0.2 + 171_000 * 0.02 + 1001 * 0.25 + 10_000 * 0.75) / 1_000_000],
+  ]);
+  for (const statsResult of [solLunaStats, solLunaRuntimeStats]) {
+    assert.equal(statsResult.totals.cacheWrite, 4002, 'GPT-6 cache-write tokens must appear in both stats collectors');
+    for (const [day, expected] of expectedByDay) {
+      const actual = statsResult.byDay.find((row) => row.key === day)?.cost;
+      assert.ok(Math.abs(actual - expected) < 1e-10, `${day} GPT-6 rate and cache write cost must match OpenAI pricing`);
+    }
+  }
+  const newGpt6Turns = await getSessionTurns(newGpt6File);
+  const expectedTotal = [...expectedByDay.values()].reduce((sum, value) => sum + value, 0);
+  assert.ok(Math.abs(newGpt6Turns[0].cost - expectedTotal) < 1e-10, 'turn inspector must use the same Sol/Luna pricing');
 
   console.log('✓ regression tests passed');
 } finally {

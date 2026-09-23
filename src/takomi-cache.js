@@ -7,7 +7,7 @@ import os from 'node:os';
 // not sync src/ (see scripts/sync-pi-global.ps1), so the extension must stay
 // self-contained. Keep both copies identical; scripts/test-stats-cache-parity.js
 // fails the suite when they drift.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 export function getStatsCachePath(home = os.homedir()) {
   return path.join(home, '.pi', 'takomi', 'cache', 'stats-cache.json');

@@ -7,7 +7,7 @@ import path from 'path';
 // because global Pi installs do not sync src/ (see scripts/sync-pi-global.ps1),
 // so this extension must stay self-contained. Keep both copies identical;
 // scripts/test-stats-cache-parity.js fails the suite when they drift.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 function getStatsCachePath(home = os.homedir()) {
   return path.join(home, '.pi', 'takomi', 'cache', 'stats-cache.json');
 }
@@ -70,6 +70,8 @@ const pc = {
 // keeping Stats aligned with custom/new models without another hard-coded edit.
 const PRICES = {
   'gpt-6-astra': [10.00, 1.00, 50.00, 12.50],
+  'gpt-6-sol': [2.00, 0.20, 10.00, 2.50],
+  'gpt-6-luna': [0.10, 0.01, 0.50, 0.125],
   'gpt-5.6-luna': [0.20, 0.02, 1.20, 0.25],
   'gpt-5.6-sol': [5.00, 0.50, 30.00, 6.25],
   'gpt-5.6-terra': [2.00, 0.20, 12.00, 2.50],
@@ -222,7 +224,11 @@ function priceForUsage(model, timestamp, prices = PRICES) {
 function cost(model, input, cache, output, cacheWrite = 0, prices = PRICES, timestamp, discounts = []) {
   const p = priceForUsage(model, timestamp, prices);
   if (!p) return 0;
-  const base = (input*p[0] + cache*p[1] + output*p[2] + cacheWrite*(p[3] ?? p[0])) / 1_000_000;
+  const isNewGpt6 = ['gpt-6-sol', 'gpt-6-luna'].includes(canonicalModel(model));
+  const longContext = isNewGpt6 && input + cache + cacheWrite > 272_000;
+  const base = (input*p[0]*(longContext ? 2 : 1) + cache*p[1]*(longContext ? 2 : 1)
+    + output*p[2]*(longContext ? 1.5 : 1)
+    + cacheWrite*(p[3] ?? p[0])*(longContext ? 2 : 1)) / 1_000_000;
   const disc = findDiscount(discounts, model, timestamp);
   return disc > 0 ? base * (1 - disc) : base;
 }

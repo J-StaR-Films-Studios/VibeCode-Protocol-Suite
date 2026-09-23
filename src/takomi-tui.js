@@ -416,6 +416,8 @@ export function launchTakomiTUI(stats, options = {}) {
     const modelRates = [
       { name: 'gemini-3.8-flash', in: '$0.75', cache: '$0.075', out: '$3.75', status: 'Promo until 2027-01-01' },
       { name: 'gpt-6-astra', in: '$10.00', cache: '$1.000', out: '$50.00', status: 'Standard canonical' },
+      { name: 'gpt-6-sol', in: '$2.00', cache: '$0.200', out: '$10.00', status: 'Standard; >272K higher' },
+      { name: 'gpt-6-luna', in: '$0.10', cache: '$0.010', out: '$0.50', status: 'Standard; >272K higher' },
       { name: 'gpt-5.6-terra', in: '$2.00', cache: '$0.200', out: '$12.00', status: 'Price drop post-July 30' },
       { name: 'gpt-5.6-luna', in: '$0.20', cache: '$0.020', out: '$1.20', status: 'Price drop post-July 30' },
     ];

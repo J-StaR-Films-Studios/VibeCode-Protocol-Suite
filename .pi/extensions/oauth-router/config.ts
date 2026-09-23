@@ -20,6 +20,33 @@ const LEGACY_GPT_5_6_COSTS = {
 
 const DEFAULT_MODELS: RouterModelConfig[] = [
   {
+    id: "gpt-6-astra",
+    name: "GPT-6 Astra",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: { input: 10.00, output: 50.00, cacheRead: 1.00, cacheWrite: 12.50 },
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
+    maxTokens: 128000,
+  },
+  {
+    id: "gpt-6-sol",
+    name: "GPT-6 Sol",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: { input: 2.00, output: 10.00, cacheRead: 0.20, cacheWrite: 2.50 },
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
+    maxTokens: 128000,
+  },
+  {
+    id: "gpt-6-luna",
+    name: "GPT-6 Luna",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: { input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125 },
+    contextWindow: SAFE_CODEX_CONTEXT_WINDOW,
+    maxTokens: 128000,
+  },
+  {
     id: "gpt-5.4-mini",
     name: "GPT-5.4 Mini",
     reasoning: true,
@@ -84,7 +111,7 @@ const DEFAULT_UPSTREAMS: RouterUpstreamConfig[] = [
     api: "openai-responses",
     authMode: "api-key",
     enabled: true,
-    modelIds: ["gpt-5.4-mini", "gpt-5.4", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"],
+    modelIds: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.4-mini", "gpt-5.4", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"],
   },
   {
     id: "chatgpt-codex",
@@ -95,7 +122,7 @@ const DEFAULT_UPSTREAMS: RouterUpstreamConfig[] = [
     authMode: "oauth",
     oauthProviderId: "openai-codex",
     enabled: true,
-    modelIds: ["gpt-5.4-mini", "gpt-5.4", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"],
+    modelIds: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.4-mini", "gpt-5.4", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"],
     usageProbe: {
       enabled: true,
       timeoutMs: 8_000,

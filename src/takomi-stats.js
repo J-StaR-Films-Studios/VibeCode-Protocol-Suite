@@ -20,6 +20,8 @@ const pc = {
 // USD per million tokens: input, cached input, output.
 const PRICES = {
   'gpt-6-astra': [10.00, 1.00, 50.00],
+  'gpt-6-sol': [2.00, 0.20, 10.00],
+  'gpt-6-luna': [0.10, 0.01, 0.50],
   'gpt-5.6-luna': [0.20, 0.02, 1.20],
   'gpt-5.6-sol': [5.00, 0.50, 30.00],
   'gpt-5.6-terra': [2.00, 0.20, 12.00],
@@ -131,7 +133,7 @@ const RATE_SCHEDULES = {
   ],
 };
 
-function add(map, key, patch) { const row = map.get(key) || { key, input: 0, cache: 0, output: 0, total: 0, cost: 0, events: 0 }; for (const [k,v] of Object.entries(patch)) row[k] = (row[k] || 0) + (Number(v) || 0); if (!Object.prototype.hasOwnProperty.call(patch, 'events')) row.events += 1; map.set(key, row); }
+function add(map, key, patch) { const row = map.get(key) || { key, input: 0, cache: 0, cacheWrite: 0, output: 0, total: 0, cost: 0, events: 0 }; for (const [k,v] of Object.entries(patch)) row[k] = (row[k] || 0) + (Number(v) || 0); if (!Object.prototype.hasOwnProperty.call(patch, 'events')) row.events += 1; map.set(key, row); }
 
 function findDiscount(discounts, model, timestamp) {
   if (!Array.isArray(discounts) || !discounts.length) return 0;
@@ -169,11 +171,16 @@ function priceForUsage(model, timestamp) {
   return PRICES[canon];
 }
 
-function cost(model, input, cache, output, additiveCache = true, timestamp, discounts = []) {
+function cost(model, input, cache, output, additiveCache = true, timestamp, discounts = [], cacheWrite = 0) {
   const p = priceForUsage(model, timestamp);
   if (!p) return 0;
   const nonCached = additiveCache ? input : Math.max(input - cache, 0);
-  const base = (nonCached * p[0] + cache * p[1] + output * p[2]) / 1_000_000;
+  const isNewGpt6 = ['gpt-6-sol', 'gpt-6-luna'].includes(canonicalModel(model));
+  const longContext = isNewGpt6 && nonCached + cache + cacheWrite > 272_000;
+  const base = (nonCached * p[0] * (longContext ? 2 : 1)
+    + cache * p[1] * (longContext ? 2 : 1)
+    + output * p[2] * (longContext ? 1.5 : 1)
+    + (isNewGpt6 ? cacheWrite * p[0] * 1.25 * (longContext ? 2 : 1) : 0)) / 1_000_000;
   const disc = findDiscount(discounts, model, timestamp);
   return disc > 0 ? base * (1 - disc) : base;
 }
@@ -328,7 +335,7 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
     }
 
     let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null, currentTaskTracker = null;
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [], total: 0, input: 0, cache: 0, output: 0, cost: 0, models: new Map() };
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityIntervals: [], total: 0, input: 0, cache: 0, cacheWrite: 0, output: 0, cost: 0, models: new Map() };
     const rowTracker = createActivityTracker();
     const toolCalls = new Map();
     const fileEvents = [];
@@ -383,14 +390,16 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
           const cache = +u.cacheRead || +u.cachedInput || +u.cache_read || 0;
           const output = +u.output || +u.outputTokens || 0;
           const total = +u.totalTokens || +u.total || (input + cache + output);
-          const c = cost(msgModel, input, cache, output, true, ts, discounts);
+          const cacheWrite = +u.cacheWrite || 0;
+          const c = cost(msgModel, input, cache, output, true, ts, discounts, cacheWrite);
           row.total += total;
           row.input += input;
           row.cache += cache;
+          row.cacheWrite += cacheWrite;
           row.output += output;
           row.cost += c;
           row.models.set(msgModel, (row.models.get(msgModel) || 0) + total);
-          const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, output, total, cost: c };
+          const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider: msgProvider, model: msgModel, project: projectKey(file), kind: 'usage', input, cache, cacheWrite, output, total, cost: c };
           events.push(evt);
           if (statsCache) fileEvents.push(evt);
         }
@@ -644,7 +653,7 @@ export async function collectTakomiStats(opts = {}) {
     runHistorySources.push({ ...entry, exists: present, runs: fileRuns.length });
   }
   const byDay = new Map(), byMonth = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
-  let totals = { input: 0, cache: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
+  let totals = { input: 0, cache: 0, cacheWrite: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
   for (const s of sessionRows) { totals.toolCalls += s.toolCalls; totals.turns += s.turns; }
   for (const e of events) {
     if (e.kind === 'tool') { add(byTool, e.tool || 'unknown', { total: 0, events: 1 }); continue; }
@@ -654,7 +663,7 @@ export async function collectTakomiStats(opts = {}) {
       add(byWorkflow, e.workflow || 'unknown', { total: 0, events: 1 });
       continue;
     }
-    totals.input += e.input; totals.cache += e.cache; totals.output += e.output; totals.total += e.total; totals.cost += e.cost;
+    totals.input += e.input; totals.cache += e.cache; totals.cacheWrite += e.cacheWrite || 0; totals.output += e.output; totals.total += e.total; totals.cost += e.cost;
     add(byDay, e.day, e);
     const month = e.day && e.day.length >= 7 ? e.day.slice(0, 7) : 'unknown';
     add(byMonth, month, e);
@@ -1444,7 +1453,7 @@ export async function getSessionTurns(file, discounts = []) {
             const ca = +msg.usage.cacheRead || +msg.usage.cachedInput || +msg.usage.cache_read || 0;
             const out = +msg.usage.output || +msg.usage.outputTokens || 0;
             const tot = +msg.usage.totalTokens || +msg.usage.total || (inp + ca + out);
-            const c = cost(msgModel, inp, ca, out, true, ts, discounts);
+            const c = cost(msgModel, inp, ca, out, true, ts, discounts, +msg.usage.cacheWrite || 0);
             currentTurn.input += inp;
             currentTurn.cache += ca;
             currentTurn.output += out;

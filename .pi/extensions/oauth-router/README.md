@@ -41,12 +41,14 @@ The extension ships with two default upstream profiles:
    - auth mode: OAuth
    - oauth provider: `openai-codex`
    - api: `openai-codex-responses`
-   - default models: `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
+   - default models: `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
 
 2. `openai-compatible`
    - auth mode: API key fallback
    - api: `openai-responses`
-   - default models: `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
+   - default models: `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`
+
+GPT-6 Astra, Sol, and Luna use OpenAI Standard short-context API rates. The router caps their advertised context at 240K tokens, below the 272K long-context pricing threshold. Codex OAuth access still depends on the account and rollout. See [OpenAI's Codex model list](https://developers.openai.com/codex/models).
 
 Edit `~/.pi/agent/oauth-router/config.json` to add more upstreams, swap endpoints, change model catalogs, or tune retry behavior. By default client-side transport failures such as `Codex SSE response headers timed out after 10000ms` retry the same account 5 times with exponential backoff (`5s`, `10s`, `20s`, `40s`, then capped at `60s`) before router failover. While this is happening, Pi's footer shows the active retry/failover/error state so the UI no longer looks frozen. These failures are recorded but do not cool down an account unless `clientNetworkPenaltyMs` is set above `0`.
 
@@ -62,7 +64,7 @@ Edit `~/.pi/agent/oauth-router/config.json` to add more upstreams, swap endpoint
    - `/router-status`
    - `/router-usage`
 5. Select a model:
-   - `oauth-router/gpt-5.6-sol`
+   - `oauth-router/gpt-6-sol`
 
 ## Account storage format
 
