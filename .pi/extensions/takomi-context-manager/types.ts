@@ -59,6 +59,7 @@ export type ContextReport = {
   candidates: CandidateContext[];
   loadedByTool: string[];
   loadedPolicies: string[];
+  continueWithoutRoutingPolicy?: boolean;
   readFiles: string[];
   editedFiles: string[];
   writtenFiles: string[];

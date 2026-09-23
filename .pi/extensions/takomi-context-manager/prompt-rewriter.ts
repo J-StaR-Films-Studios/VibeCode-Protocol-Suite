@@ -32,10 +32,10 @@ function renderProgressiveRule(config: ContextManagerConfig): string {
     "- Load full skill instructions only for skills you will actually use.",
     "",
     "Policy loading:",
-    "- Model/subagent/lifecycle policies are lazy-loaded policy packs.",
-    "- The active routing policy may come from the project or the bundled Takomi harness default.",
-    "- Use policy_manifest or policy_load when you need to inspect or quote a policy explicitly.",
-    "- If takomi_subagent is blocked for missing policy context, the gate has already loaded the required policy for this session; retry the tool call and follow it.",
+    "- Model-routing guidance is supplied before delegation when available; other policies are loaded on demand.",
+    "- The active routing policy may come from the project, global settings, or the bundled Takomi harness default.",
+    "- Use policy_manifest or policy_load when you need to inspect or quote another policy explicitly.",
+    "- If no routing policy exists, ask the user before continuing with harness defaults or setting one up.",
   ].join("\n");
 }
 
@@ -46,8 +46,7 @@ function compactHeavyPolicyBlocks(prompt: string, config: ContextManagerConfig):
     const modelRoutingRegex = /(Project|Bundled) Takomi model routing policy is active\. Apply it when choosing parent\/subagent models and escalation levels:\s*\n\n# Takomi Model Routing Policy[\s\S]*?(?=\nAvailable model context from Pi registry:)/;
     if (modelRoutingRegex.test(next)) {
       next = next.replace(modelRoutingRegex, [
-        "Project Takomi model routing policy is available as a lazy-loaded policy pack.",
-        "The subagent prerequisite gate can provide this policy automatically on first blocked takomi_subagent attempt, then the agent should retry.",
+        "Takomi model routing policy is provided by the context manager before delegation.",
         "",
       ].join("\n"));
       removedSections.push("full model routing policy");
@@ -56,7 +55,7 @@ function compactHeavyPolicyBlocks(prompt: string, config: ContextManagerConfig):
   if (config.promptCompaction.compactModelRegistry) {
     const registryRegex = /Available model context from Pi registry:[^\n]*(?:\n|$)/;
     if (registryRegex.test(next)) {
-      next = next.replace(registryRegex, "Available model registry context exists. The subagent policy gate will provide model routing context if needed.\n");
+      next = next.replace(registryRegex, "Available model registry context exists. Use exact provider-qualified model IDs when delegating.\n");
       removedSections.push("verbose model registry list");
     }
   }

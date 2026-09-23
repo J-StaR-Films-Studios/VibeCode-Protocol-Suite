@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadConfig, DEFAULT_CONFIG } from "./config";
-import { createState } from "./state";
+import { createState, syncReportLedger } from "./state";
 import { collectSkillsFromOptions, collectSkillsFromXml, discoverSkillsFromFilesystem, enrichSkillsWithInstallerTaxonomy, mergeSkills } from "./skill-registry";
 import { discoverPolicies } from "./policy-registry";
 import { findCandidates } from "./context-router";
@@ -42,9 +42,20 @@ export default function takomiContextManager(pi: ExtensionAPI) {
     state.report.cwd = ctx.cwd;
     state.report.skillCount = 0;
     restoreReportFromSession(state, ctx);
+    if (!state.policies.has("model-routing")) {
+      state.loadedPolicies.delete("model-routing");
+      syncReportLedger(state);
+    }
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
+    // Re-resolve between turns so a policy saved after a pause (or one that
+    // replaces the bundled fallback) is visible before the next delegation.
+    state.policies = await discoverPolicies(ctx.cwd, config);
+    if (!state.policies.has("model-routing")) {
+      state.loadedPolicies.delete("model-routing");
+      syncReportLedger(state);
+    }
     const optionSkills = collectSkillsFromOptions(event.systemPromptOptions);
     const xmlSkills = collectSkillsFromXml(event.systemPrompt);
     const suppliedSkills = [...optionSkills, ...xmlSkills];
@@ -57,7 +68,17 @@ export default function takomiContextManager(pi: ExtensionAPI) {
     const candidates = findCandidates(event.prompt, state.skills, config);
     const rewrite = rewritePrompt(event.systemPrompt, state.skills, candidates, config);
     const routingSummary = renderCompactTakomiModelRoutingSummary(await loadTakomiModelRoutingSnapshot(ctx.cwd));
-    const rewrittenPrompt = routingSummary ? `${rewrite.prompt}\n\n${routingSummary}` : rewrite.prompt;
+    // The model must see routing guidance before choosing a subagent model.
+    // A tool_call hook runs too late to supply it without blocking and retrying.
+    const routingPolicy = state.policies.get("model-routing");
+    const policyContext = routingPolicy
+      ? `Takomi model-routing policy:\n\n${routingPolicy.content}`
+      : "";
+    if (policyContext) {
+      state.loadedPolicies.add("model-routing");
+      syncReportLedger(state);
+    }
+    const rewrittenPrompt = [rewrite.prompt, routingSummary, policyContext].filter(Boolean).join("\n\n");
     state.report = {
       ...state.report,
       timestamp: new Date().toISOString(),
@@ -68,7 +89,7 @@ export default function takomiContextManager(pi: ExtensionAPI) {
       duplicateExtensionWarnings,
       promptRewrite: {
         attempted: true,
-        changed: rewrite.changed || Boolean(routingSummary),
+        changed: rewrite.changed || Boolean(routingSummary) || Boolean(policyContext),
         originalLength: event.systemPrompt.length,
         rewrittenLength: rewrittenPrompt.length,
         removedSections: rewrite.removedSections,

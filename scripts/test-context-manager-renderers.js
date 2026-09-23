@@ -10,6 +10,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "takomi-context-renderer-test-"));
 const outDir = path.join(repoRoot, ".tmp", `context-manager-renderers-${process.pid}`);
 const tsconfigPath = path.join(tempRoot, "tsconfig.json");
+const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
 
 async function addJsExtensions(directory) {
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
@@ -72,11 +74,18 @@ try {
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/diagnostics.ts"),
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/diagnostics-tools.ts"),
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/model-policy-gate.ts"),
+      path.join(repoRoot, ".pi/extensions/takomi-context-manager/prerequisite-gates.ts"),
+      path.join(repoRoot, ".pi/extensions/takomi-context-manager/index.ts"),
     ],
   }, null, 2));
   execFileSync(process.execPath, [path.join(repoRoot, "node_modules/typescript/bin/tsc"), "-p", tsconfigPath], { cwd: repoRoot, stdio: "inherit" });
   await addJsExtensions(outDir);
   await fs.mkdir(path.join(outDir, "src"), { recursive: true });
+  await fs.mkdir(path.join(outDir, ".pi", "takomi"), { recursive: true });
+  await fs.copyFile(path.join(repoRoot, ".pi", "takomi", "model-routing.md"), path.join(outDir, ".pi", "takomi", "model-routing.md"));
+  const isolatedHome = path.join(tempRoot, "isolated-home");
+  process.env.HOME = isolatedHome;
+  process.env.USERPROFILE = isolatedHome;
   await Promise.all([
     fs.copyFile(path.join(repoRoot, "src", "skills-catalog.js"), path.join(outDir, "src", "skills-catalog.js")),
     fs.copyFile(path.join(repoRoot, "src", "utils.js"), path.join(outDir, "src", "utils.js")),
@@ -91,10 +100,14 @@ try {
   const registry = await moduleAt(".pi/extensions/takomi-context-manager/skill-registry.js");
   const renderers = await moduleAt(".pi/extensions/takomi-context-manager/tool-renderers.js");
   const { createState } = await moduleAt(".pi/extensions/takomi-context-manager/state.js");
+  const { restoreReportFromSession } = await moduleAt(".pi/extensions/takomi-context-manager/session-state.js");
   const { registerSkillTools } = await moduleAt(".pi/extensions/takomi-context-manager/skill-tools.js");
   const { registerPolicyTools } = await moduleAt(".pi/extensions/takomi-context-manager/policy-tools.js");
   const { registerDiagnostics } = await moduleAt(".pi/extensions/takomi-context-manager/diagnostics-tools.js");
   const { installModelPolicyGate } = await moduleAt(".pi/extensions/takomi-context-manager/model-policy-gate.js");
+  const { installPrerequisiteGates } = await moduleAt(".pi/extensions/takomi-context-manager/prerequisite-gates.js");
+  const { default: contextManager } = await moduleAt(".pi/extensions/takomi-context-manager/index.js");
+  const { resolveTakomiRoutingPolicy } = await moduleAt(".pi/extensions/takomi-runtime/routing-policy.js");
   const codingAgent = await import("@earendil-works/pi-coding-agent");
   const tui = await import("@earendil-works/pi-tui");
 
@@ -518,8 +531,92 @@ try {
   assert.ok(gateSelections.at(-1).options.every((option) => !/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]|\x1B/.test(option)), "failure recovery options must remove ANSI, OSC, and C0 controls");
   assert.match(failureRecovery.content[0].text, new RegExp(maliciousPolicyModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "failure recovery guidance keeps the raw selected model ID for routing");
 
+  const prerequisiteHandlers = new Map();
+  const savedEntries = [];
+  const missingState = createState();
+  installPrerequisiteGates({
+    on: (event, handler) => prerequisiteHandlers.set(event, handler),
+    appendEntry: (customType, data) => savedEntries.push({ type: "custom", customType, data }),
+  }, missingState, () => ({ toolPrerequisites: { takomi_subagent: [{ type: "policies", policies: ["model-routing"] }] } }));
+  const prerequisiteCall = prerequisiteHandlers.get("tool_call");
+  const delegation = { toolName: "takomi_subagent" };
+  const missingContext = {
+    cwd: tempRoot,
+    hasUI: true,
+    ui: { select: async () => "Continue with harness defaults for this session" },
+  };
+  assert.equal(await prerequisiteCall(delegation, missingContext), undefined, "session-only approval allows the first delegation without retry");
+  assert.equal(await prerequisiteCall(delegation, { ...missingContext, ui: { select: async () => { throw Error("asked twice"); } } }), undefined, "session approval persists without saving a policy");
+  assert.equal(missingState.loadedPolicies.has("model-routing"), false, "absence is not reported as a loaded policy");
+  const resumedState = createState();
+  resumedState.report.cwd = tempRoot;
+  restoreReportFromSession(resumedState, { sessionManager: { getEntries: () => savedEntries } });
+  assert.equal(resumedState.report.continueWithoutRoutingPolicy, true, "session approval survives restoring the same session");
+  const unrelatedState = createState();
+  unrelatedState.report.cwd = path.join(tempRoot, "other-project");
+  restoreReportFromSession(unrelatedState, { sessionManager: { getEntries: () => savedEntries } });
+  assert.equal(unrelatedState.report.continueWithoutRoutingPolicy, false, "session approval does not cross project boundaries");
+  const setupState = createState();
+  installPrerequisiteGates({ on: (event, handler) => prerequisiteHandlers.set(event, handler), appendEntry: () => undefined }, setupState,
+    () => ({ toolPrerequisites: { takomi_subagent: [{ type: "policies", policies: ["model-routing"] }] } }));
+  const setup = await prerequisiteHandlers.get("tool_call")(delegation, { ...missingContext, ui: { select: async () => "Set up a routing policy" } });
+  assert.equal(setup.block, true, "setup choice pauses delegation");
+  assert.equal(setup.terminate, true, "setup choice does not retry automatically");
+  assert.match(setup.reason, /project or globally/, "setup offers explicit persistence scopes");
+  const headless = await prerequisiteHandlers.get("tool_call")(delegation, { cwd: tempRoot, hasUI: false });
+  assert.equal(headless.block, true, "no UI does not silently approve delegation");
+
+  const contextHandlers = new Map();
+  contextManager({
+    on: (event, handler) => contextHandlers.set(event, [...(contextHandlers.get(event) ?? []), handler]),
+    registerTool: () => undefined,
+    registerCommand: () => undefined,
+    appendEntry: () => undefined,
+  });
+  const promptContext = { cwd: tempRoot, sessionManager: { getEntries: () => [] } };
+  await contextHandlers.get("session_start")[0]({}, promptContext);
+  const promptEvent = { prompt: "delegate this", systemPrompt: "Base prompt", systemPromptOptions: { skills: [] } };
+  assert.equal((await resolveTakomiRoutingPolicy(tempRoot)).source, "bundled", "first-run test uses bundled guidance, not a machine's global policy");
+  const firstPrompt = await contextHandlers.get("before_agent_start")[0](promptEvent, promptContext);
+  assert.match(firstPrompt.systemPrompt, /Takomi model-routing policy:/, "available fallback is supplied before the first delegation decision");
+  assert.match(firstPrompt.systemPrompt, /Sol Low/, "full policy guidance reaches the model without a tool retry");
+  assert.equal(await contextHandlers.get("tool_call")[0](delegation, promptContext), undefined, "first delegation is not blocked after routing guidance is supplied");
+  const nextPrompt = await contextHandlers.get("before_agent_start")[0](promptEvent, promptContext);
+  assert.match(nextPrompt.systemPrompt, /Takomi model-routing policy:/, "routing guidance remains available on later turns");
+  await fs.mkdir(path.join(tempRoot, ".pi", "takomi"), { recursive: true });
+  await fs.writeFile(path.join(tempRoot, ".pi", "takomi", "model-routing.md"), "# New project routing guidance\n");
+  const updatedPrompt = await contextHandlers.get("before_agent_start")[0](promptEvent, promptContext);
+  assert.match(updatedPrompt.systemPrompt, /New project routing guidance/, "new project policy replaces the cached bundled policy before delegation");
+  assert.doesNotMatch(updatedPrompt.systemPrompt, /Sol Low/, "old bundled guidance is removed from the next turn");
+
+  await fs.rm(path.join(outDir, ".pi", "takomi", "model-routing.md"));
+  const headlessProject = path.join(tempRoot, "headless-project");
+  await fs.mkdir(headlessProject);
+  const headlessHandlers = new Map();
+  contextManager({
+    on: (event, handler) => headlessHandlers.set(event, [...(headlessHandlers.get(event) ?? []), handler]),
+    registerTool: () => undefined,
+    registerCommand: () => undefined,
+    appendEntry: () => undefined,
+  });
+  const headlessContext = { cwd: headlessProject, hasUI: false, sessionManager: { getEntries: () => [] } };
+  await headlessHandlers.get("session_start")[0]({}, headlessContext);
+  const missingPrompt = await headlessHandlers.get("before_agent_start")[0](promptEvent, headlessContext);
+  assert.doesNotMatch(missingPrompt.systemPrompt, /Takomi model-routing policy:/, "missing policy does not inject a phantom policy");
+  const blockedHeadless = await headlessHandlers.get("tool_call")[0](delegation, headlessContext);
+  assert.equal(blockedHeadless.block, true, "headless delegation pauses without a policy");
+  await fs.mkdir(path.join(headlessProject, ".pi", "takomi"), { recursive: true });
+  await fs.writeFile(path.join(headlessProject, ".pi", "takomi", "model-routing.md"), "# Policy installed after headless pause\n");
+  const installedPrompt = await headlessHandlers.get("before_agent_start")[0](promptEvent, headlessContext);
+  assert.match(installedPrompt.systemPrompt, /Policy installed after headless pause/, "later policy is discovered before the next delegation");
+  assert.equal(await headlessHandlers.get("tool_call")[0](delegation, headlessContext), undefined, "new policy allows delegation without another block");
+
   console.log("✓ context-manager renderer checks passed");
 } finally {
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
   await fs.rm(tempRoot, { recursive: true, force: true });
   await fs.rm(outDir, { recursive: true, force: true });
 }

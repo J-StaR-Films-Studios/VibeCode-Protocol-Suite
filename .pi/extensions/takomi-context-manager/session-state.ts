@@ -108,7 +108,9 @@ export function restoreReportFromSession(state: ContextManagerState, ctx: unknow
     }
   }
 
+  const sameCwd = latestSnapshot?.cwd === state.report.cwd;
   state.report = mergeReports(state.report, latestSnapshot);
+  state.report.continueWithoutRoutingPolicy = sameCwd && latestSnapshot?.continueWithoutRoutingPolicy === true;
   state.report.loadedByTool ??= [];
   state.report.loadedPolicies ??= [];
   state.report.blockedActions ??= [];

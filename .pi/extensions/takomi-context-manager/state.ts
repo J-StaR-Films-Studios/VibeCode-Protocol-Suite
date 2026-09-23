@@ -19,6 +19,7 @@ export function createEmptyReport(): ContextReport {
     candidates: [],
     loadedByTool: [],
     loadedPolicies: [],
+    continueWithoutRoutingPolicy: false,
     readFiles: [],
     editedFiles: [],
     writtenFiles: [],

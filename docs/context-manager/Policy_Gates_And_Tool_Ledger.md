@@ -52,7 +52,9 @@ Requires:
 
 - `model-routing`
 
-If missing, the extension blocks the first attempted `takomi_subagent` call, returns the required policy content in the block reason, marks the policy as loaded for the session, and tells the agent to retry the original `takomi_subagent` call while following the policy.
+When a project, global, or bundled routing policy is available, the context manager puts its guidance in the system prompt before delegation. The first `takomi_subagent` call does not need a blocked retry. The routing text remains available on later turns.
+
+If no routing policy is available, the first delegation asks the user to continue with harness defaults for this session or set up a routing policy. Continuing is session-only and writes no files. Setting up pauses delegation so the user can choose project or global scope through `/takomi routing`. Without an interactive UI, delegation pauses instead of assuming consent. Other configured policy prerequisites still use the block-and-load gate.
 
 No global read-before-edit/write gate is installed. The earlier read-before-edit idea was only an analogy and is intentionally not enforced by `takomi-context-manager`.
 
@@ -71,11 +73,4 @@ This is visible through `context_report`.
 
 ## Behavior Philosophy
 
-The gate is intentionally visible instead of silently injecting policy context. A blocked tool call becomes an audit trail:
-
-1. Agent attempts sensitive tool.
-2. Gate blocks and explains missing context.
-3. Agent calls `policy_load`.
-4. Agent retries the original tool with the required context loaded.
-
-This mirrors prerequisite safety systems in other harnesses while applying the idea only to model/subagent policy context for this extension.
+Available routing guidance is supplied before the model chooses a subagent, rather than blocking the call after the choice. When no policy exists, the gate records a pause or the user's session-only approval. Other configured prerequisites still block and supply missing policy context for retry.
