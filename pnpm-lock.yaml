@@ -10,6 +10,11 @@ overrides:
   ws: 8.21.0
   brace-expansion: 5.0.7
 
+patchedDependencies:
+  pi-subagents@0.31.0:
+    hash: 0a018f9d3267220420355897b49e90d2ce95abdaf1c578b247a62434265ffa86
+    path: patches/pi-subagents@0.31.0.patch
+
 importers:
 
   .:
@@ -25,7 +30,7 @@ importers:
         version: 11.3.4
       pi-subagents:
         specifier: 0.31.0
-        version: 0.31.0(@earendil-works/pi-agent-core@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-ai@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.0)(zod@4.3.6))
+        version: 0.31.0(patch_hash=0a018f9d3267220420355897b49e90d2ce95abdaf1c578b247a62434265ffa86)(@earendil-works/pi-agent-core@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-ai@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.0)(zod@4.3.6))
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
@@ -1401,7 +1406,7 @@ snapshots:
 
   path-key@3.1.1: {}
 
-  pi-subagents@0.31.0(@earendil-works/pi-agent-core@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-ai@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.0)(zod@4.3.6)):
+  pi-subagents@0.31.0(patch_hash=0a018f9d3267220420355897b49e90d2ce95abdaf1c578b247a62434265ffa86)(@earendil-works/pi-agent-core@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-ai@0.84.4(ws@8.21.0)(zod@4.3.6))(@earendil-works/pi-coding-agent@0.84.4(ws@8.21.0)(zod@4.3.6)):
     dependencies:
       '@earendil-works/pi-tui': 0.74.0
       jiti: 2.7.0

@@ -1,3 +1,9 @@
+import { patchPiSubagentsRenderer } from './patch-pi-subagents-renderer.js';
+
+// npm ignores pnpm.patchedDependencies. Keep npm and pnpm installations on the
+// same pinned renderer before displaying optional installation guidance.
+patchPiSubagentsRenderer();
+
 try {
   if (process.env.TAKOMI_SUPPRESS_POSTINSTALL === '1') process.exit(0);
   if (process.env.CI === 'true' || process.env.CI === '1') process.exit(0);

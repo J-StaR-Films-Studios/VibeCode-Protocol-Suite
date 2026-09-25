@@ -367,6 +367,7 @@ async function fireLifecycle(harness, event) {
 }
 
 function renderWidgetText(widget) {
+  if (Array.isArray(widget)) return widget.join("\n");
   const component = typeof widget === "function" ? widget(undefined, identityTheme) : widget;
   assert.ok(component && typeof component.render === "function", "running widget exposes a production TUI component");
   return component.render(100).join("\n");
@@ -475,13 +476,17 @@ async function executeAndAssert(harness, expectedMessageCount, previousSnapshot,
   }
   const runningWidget = harness.widgets.at(-1);
   assert.ok(runningWidget?.value, "async-started immediately leaves one visible widget");
-  assert.match(renderWidgetText(runningWidget.value), /running/i, "rendered production widget labels the post-spawn run as running");
+  const initialWidgetText = renderWidgetText(runningWidget.value);
+  assert.match(initialWidgetText, /running/i, "rendered production widget labels the post-spawn run as running");
+  assert.match(initialWidgetText, /Ctrl\+O for live detail/, "collapsed widget shows a compact run summary and expansion hint in both ownership modes");
+  assert.doesNotMatch(initialWidgetText, /Step 1\/4/, "collapsed widget hides step-by-step detail in both ownership modes");
   assert.equal(new Set(harness.widgets.filter((entry) => entry.value).map((entry) => entry.key)).size, 1, "native and Takomi rendering share one widget key");
   assert.equal(activeResultWatchers.size, 1, "exactly one native result watcher is active");
   assert.equal(activeHeartbeatTimerCount(), 1, "one 125ms Takomi heartbeat serves every running widget row");
 
   const widgetCountBeforeHeartbeat = harness.widgets.length;
   const renderRequestsBeforeHeartbeat = harness.renderRequests;
+  if (!exerciseKeyDispatch) harness.ctx.ui.setToolsExpanded(true);
   if (exerciseKeyDispatch) {
     let historicalExpanded = false;
     const historicalResult = { setExpanded(value) { historicalExpanded = value; } };
@@ -512,9 +517,13 @@ async function executeAndAssert(harness, expectedMessageCount, previousSnapshot,
   assert.equal(heartbeatFrames[0].pendingRow, heartbeatFrames[1].pendingRow, "pending row remains semantically static across heartbeat frames");
   assert.equal(heartbeatFrames[0].completedRow, heartbeatFrames[1].completedRow, "completed row remains semantically static across heartbeat frames");
   assert.equal(heartbeatFrames[0].failedRow, heartbeatFrames[1].failedRow, "failed row remains semantically static across heartbeat frames");
-  if (exerciseKeyDispatch) {
-    assert.equal(heartbeatFrames.at(-1).toolsExpanded, true, "heartbeat rebuilds the widget from the current global expansion state");
-  }
+  assert.equal(heartbeatFrames.at(-1).toolsExpanded, true, "heartbeat rebuilds the widget from the current global expansion state");
+  assert.match(heartbeatFrames.at(-1).frame, /Step 1\/4/, "expanded widget shows the hidden step detail in both ownership modes");
+  harness.ctx.ui.setToolsExpanded(false);
+  await waitForCondition(() => {
+    const text = renderWidgetText(harness.widgets.at(-1)?.value);
+    return text.includes("Ctrl+O for live detail") && !text.includes("Step 1/4");
+  }, 1000, "collapsed widget did not hide expanded step detail");
 
   await harness.waitForMessages(expectedMessageCount);
   assert.equal(harness.messages.length, expectedMessageCount, "each async execution emits exactly one completion card");
