@@ -43,7 +43,13 @@ Do not commit vault data into the repository.
 /vault-status
 /vault-revoke [grant-id | credential-id | all]
 /vault-find <service> [host]
+/vault-export <path>
+/vault-import <path>
 ```
+
+Export and import require human Pi UI and a confirmation showing the resolved path. Export exclusively creates a new file with mode `0600` on POSIX and shows a random 256-bit transfer key once in the UI. Save it separately from the file. The file alone cannot be opened, but anyone with both file and key can import it repeatedly offline. This is not cryptographically one-time. Never paste the key in chat or pass it in command arguments.
+
+Import asks for the key through masked Pi TUI input, authenticates the bounded archive before writing, and refuses a destination with an existing `vault.json`, `key.json`, or `grants.json`, including an empty file. It re-encrypts fields under a new local key and does not transfer grants, audit history, or one-time credential status. Back up existing vault data separately; import never merges or overwrites it. Keep the archive and key secure until you deliberately discard both. Import and /vault-add require an interactive Pi TUI for secret entry; RPC and non-interactive modes refuse it. Passwords and tokens in vault_request use the same masked prompt. Usernames and labels remain visible. Cancelling secret entry saves nothing. On Windows, file permissions depend on the destination directory's inherited ACLs because Node's POSIX mode is not enforced.
 
 ## Agent tools
 
@@ -71,10 +77,11 @@ Injection trusts the agent process with use. The guarantee is that secrets never
 ## Security notes
 
 - tool and command output redacts secret values
-- audit log records IDs and decisions, but some results still include caller-supplied commands, paths, reasons, or errors; do not put secrets in tool arguments
+- audit log stores IDs, targets, decisions, and expiry only
 - target binding is enforced in code, so a grant for one host cannot be used on another
 - revoking Takomi permission does not invalidate the real key at the provider; rotate leaked keys there
-- permanent `.env` writes need a session or target grant and fresh UI confirmation of the resolved path and env key names; no UI or a declined prompt denies the write, and the prompt warns that values are plaintext on disk
+- permanent `.env` writes need a session or target grant and are flagged as plaintext on disk
+- Pi's pre-send input hook warns on likely pasted PEM private keys, GitHub tokens, and labeled AWS access key IDs; TUI users may explicitly send anyway, while non-interactive matches are blocked. The warning does not show the value. This is best-effort, not universal prevention: attachments, other formats, and input paths outside this hook are not covered
 
 ## Setup
 

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { DATA_ROOT, writeJsonFile } from "./config.ts";
 import { deleteIfEphemeral, getCredential, getFieldValue, touchUsed } from "./vault-store.ts";
 import { spendGrant } from "./grant-store.ts";
@@ -47,7 +47,7 @@ function quoteEnvValue(value: string): string {
 }
 
 function checkEnvName(name: string) {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Refusing to write invalid env var name: ${name}`);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error("Refusing to write invalid env var name.");
 }
 
 function cleanupEphemeral(credentialId: string, grantScope: string) {
@@ -60,7 +60,7 @@ function cleanupEphemeral(credentialId: string, grantScope: string) {
 function scrubOutput(text: string, secrets: string[]): string {
   let out = text;
   for (const secret of secrets) {
-    if (secret && secret.length >= 4 && out.includes(secret)) {
+    if (secret && out.includes(secret)) {
       out = out.split(secret).join("[REDACTED]");
     }
   }
@@ -100,10 +100,10 @@ export function execWithEnv(input: {
       windowsHide: true,
     });
     const spawnError = (result as { error?: Error }).error;
-    if (spawnError) throw new Error(`Command failed to start: ${spawnError.message}`);
+    if (spawnError) throw new Error("Command failed to start.");
 
     touchUsed(input.credentialId);
-    logAudit({ at: Date.now(), credentialId: input.credentialId, agent: grant.agent, event: "used", target: input.target, result: `env exec ${input.command} exit=${result.status ?? -1}` });
+    logAudit({ at: Date.now(), credentialId: input.credentialId, event: "used", grantId: grant.grantId, tool: "terminal", operation: grant.operation, target: grant.target });
 
     return {
       exitCode: result.status ?? -1,
@@ -139,10 +139,10 @@ export function execWithStdin(input: {
       windowsHide: true,
     });
     const spawnError = (result as { error?: Error }).error;
-    if (spawnError) throw new Error(`Command failed to start: ${spawnError.message}`);
+    if (spawnError) throw new Error("Command failed to start.");
 
     touchUsed(input.credentialId);
-    logAudit({ at: Date.now(), credentialId: input.credentialId, agent: grant.agent, event: "used", target: input.target, result: `stdin exec ${input.command} exit=${result.status ?? -1}` });
+    logAudit({ at: Date.now(), credentialId: input.credentialId, event: "used", grantId: grant.grantId, tool: "terminal", operation: grant.operation, target: grant.target });
 
     return {
       exitCode: result.status ?? -1,
@@ -159,6 +159,7 @@ export function writeTempEnvFile(input: {
   credentialId: string;
   target: string;
   path: string;
+  expectedParent: string;
   entries: Record<string, string>;
   persistent: boolean;
   operation?: string;
@@ -171,23 +172,19 @@ export function writeTempEnvFile(input: {
     return `${envVar}=${quoteEnvValue(getFieldValue(credential, fieldName))}`;
   });
   const grant = spendGrant({ grantId: input.grantId, credentialId: input.credentialId, target: input.target, tool: "file", operation: input.operation ?? "use", agent: "pi", fields: Object.values(input.entries), persistent: input.persistent });
-  writeFileSync(input.path, `${lines.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
   try {
-    chmodSync(input.path, 0o600);
-  } catch {
-    // Best effort on Windows.
-  }
-
-  try {
+    // Check the parent the UI confirmed immediately before exclusive creation.
+    if (realpathSync(dirname(input.path)) !== input.expectedParent) {
+      throw new Error("Destination parent changed after confirmation.");
+    }
+    writeFileSync(input.path, `${lines.join("\n")}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    try {
+      chmodSync(input.path, 0o600);
+    } catch {
+      // Best effort on Windows.
+    }
     touchUsed(input.credentialId);
-    logAudit({
-      at: Date.now(),
-      credentialId: input.credentialId,
-      agent: grant.agent,
-      event: "used",
-      target: input.target,
-      result: input.persistent ? `permanent env file ${input.path}` : `temporary env file ${input.path}`,
-    });
+    logAudit({ at: Date.now(), credentialId: input.credentialId, event: "used", grantId: grant.grantId, tool: "file", operation: grant.operation, target: grant.target });
     if (!input.persistent) trackTempFile(input.path);
   } finally {
     cleanupEphemeral(input.credentialId, grant.scope);

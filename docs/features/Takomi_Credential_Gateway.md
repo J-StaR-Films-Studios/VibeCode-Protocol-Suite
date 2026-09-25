@@ -2,7 +2,7 @@
 
 ## Status
 
-Vault v1 is shipped in the Pi extension. BLD-001 closes grant and structured-storage bypasses; the remaining v2 features are not shipped.
+Vault v1 is shipped in the Pi extension. BLD-001 closes grant and structured-storage bypasses. A bounded v2 pass adds approximate discovery, a redacted per-credential audit command, and human confirmation for every env-file write. Human-only encrypted export/import and TUI-only masked secret entry are implemented. A best-effort input hook warns on a narrow set of likely pasted keys. Browser fill remains unimplemented.
 
 ## Working Name
 
@@ -88,7 +88,7 @@ Deferred to v2 or later: SSH private keys with `sign` instead of `read`, TOTP se
 - Agent flow in two tools with different intent:
   - `credentials.request` is human facing. It may interrupt execution and show secure UI.
   - `credentials.use` is machine facing. It consumes an existing grant through an adapter.
-- Semantic lookup by service and project in v1 is exact match on service plus host only. No fuzzy search in v1.
+- `/vault-find` and `vault_find` offer approximate service-name discovery with an optional exact host filter. `vault_request` still selects existing credentials by exact service and host only.
 - Per credential permissions view: which agents may discover, which may use on which target, read status.
 - One command revoke that kills session grants immediately.
 - Audit timeline per credential with no secret values.
@@ -104,9 +104,12 @@ Deferred to v2 or later: SSH private keys with `sign` instead of `read`, TOTP se
 /vault-status
 /vault-revoke [grant-id | credential-id | all]
 /vault-find <service> [host]
+/vault-audit [id]
+/vault-export <path>
+/vault-import <path>
 ```
 
-Export and import are v2. Until then, moving machines means copying the vault directory and re-establishing the OS key or passphrase.
+Export creates a new encrypted archive at the confirmed destination and shows a randomly generated 256-bit transfer key once through human UI. The archive alone is unusable. Anyone who copies both file and key can reuse them offline; the key is not cryptographically one-time. Import confirms the source, asks for the key through masked Pi TUI rather than command arguments, authenticates the archive before changing vault state, and accepts only a destination without vault, key, or grant files. It does not merge or overwrite existing files.
 
 Most commands accept an optional ID. In the Pi UI, omitting the ID opens a picker instead of dumping lists repeatedly. This matches the existing `/router-login` behavior.
 
@@ -125,7 +128,7 @@ vault_grants({ credentialId })
 vault_revoke({ grantId, credentialId, all })
 ```
 
-`vault_request_reveal` reveals one named field only, always prompts, and is denied without UI. There is no silent plaintext read path. `vault_find` returns handles with field names and active grant counts so the agent maps env vars without guessing.
+`vault_request_reveal` reveals one named field only, always prompts, and is denied without UI. There is no silent plaintext read path. `vault_find` returns exact and approximate service matches with field names and active grant counts; an approximate match is only a discovery hint and cannot be auto-selected by `vault_request`.
 
 Example agent sequence:
 
@@ -167,7 +170,7 @@ Every grant binds:
 
 The gateway checks agent, tool, target, operation, approved fields, and lifetime before spending a grant. It validates and increments use count under one cross-process file lock. A second concurrent use of a once grant is denied. These checks bind caller-supplied target and operation strings, not the destination of the child command: the terminal adapter cannot prove where an arbitrary process sends a secret. Approving terminal injection trusts that process with use of the credential.
 
-Default save behavior: do not save unless the user selects save. One time use creates an ephemeral credential row that is deleted automatically after first use, on revoke, or on revoke-all, so it never accumulates as vault trash. The window between request and use is the only time it appears in listings, marked one-time.
+Default save behavior: do not save unless the user selects save. Saved agent-request credentials are created only after the user completes grant approval. One time use creates an ephemeral credential row that is deleted after a spent grant even if the adapter fails, on revoke, or on revoke-all, so it never accumulates as vault trash. The window between request and use is the only time it appears in listings, marked one-time.
 
 ## Client Components
 
@@ -205,9 +208,9 @@ The Pi extension owns:
 
 - process env injection: gateway starts the child process with the secret in env, agent sees output only, env disappears on exit
 - stdin responder: gateway writes the secret to PTY stdin for interactive prompts such as Password, transcript shows `[SECRET INJECTED]`
-- temporary file: gateway writes immediately before execution, tracks the path, and removes it on session shutdown; non-persistent writes only
+- env file: gateway confirms every write through human UI, creates a new file exclusively, and tracks non-persistent files for session-shutdown cleanup. A persistent write also requires a session or target grant.
 
-Permanent `.env` writes require explicit approval showing repo, path, and key names, never values. The UI warns that values land as plaintext on disk.
+Every env-file write requires UI confirmation showing cwd, resolved destination and key names, never values. Without UI the tool refuses the write. Existing files and final symlinks cannot be overwritten. The tool records the confirmed parent's real path and rechecks it immediately before exclusive creation, refusing a changed symlinked parent. This is not an atomic directory handle: another process can still swap the parent between that check and creation. Both temporary and persistent writes put plaintext on disk; temporary cleanup is best-effort at session shutdown and cannot protect against crashes.
 
 Browser form fill, HTTP header injection, SSH, and OTP adapters are v2.
 
@@ -258,9 +261,9 @@ Single SQLite file plus sidecar config. Metadata is plaintext. Secret values are
 }
 ```
 
-`fields` may be absent on pre-existing v1 grants, which allow all fields. `createdBy: agent-once` marks ephemeral rows for auto-delete. Audit lines carry `at, credentialId, agent, event, target, result` and never secret values or free-form labels.
+`fields` may be absent on pre-existing v1 grants, which allow all fields. `createdBy: agent-once` marks ephemeral rows for auto-delete. New audit lines carry a timestamp, fixed event name, validated credential/grant IDs, scope, tool, simple operation identifier, and hostname when available. Readers discard free-form fields from older lines, including `result`, and accept only validated structured metadata. Grant issuance fails and rolls back the grant if its audit write fails. Revocation remains effective when audit is unavailable; revoke and ephemeral-deletion events are best-effort and may be missing from the log. `/vault-audit [id]` shows the latest 50 matching events for a credential; `/vault-status` shows the latest eight events across credentials. Older audit files may still contain previously recorded free-form strings on disk and need separate secure retention handling.
 
-Audit events include requested, approved, denied, used, expired, and revoked. Audit never stores secret values.
+Event names include requested, approved, denied, used, expired, revoked, created, deleted, renamed, and revealed. No new audit event stores values or arbitrary paths or commands.
 
 Example credential shape seen by the agent:
 
@@ -293,18 +296,19 @@ Tier 2, encrypted file fallback when no OS store exists:
 - random data key, wrapped by the OS store when available, otherwise wrapped by a passphrase from `TAKOMI_VAULT_PASSPHRASE`
 - without an OS store or passphrase the key is stored with file permissions only, reported as backend `file-permissions`, and treated as machine-local protection, not real encryption
 - syntactically invalid or structurally malformed vault and grant files fail closed with an error instead of being overwritten with empty state; corrupt key files also fail closed
-- a key file that cannot be unwrapped (different user, wrong passphrase) throws instead of rekeying; a missing key alongside existing vault data also fails closed rather than generating a new one
+- a key file that cannot be unwrapped (different user, wrong passphrase) throws instead of rekeying; a missing key alongside existing vault data also fails closed instead of generating a new key
 
-Moving PCs is explicit export and import with a one time transfer key. No auto sync.
+Moving PCs uses explicit encrypted export/import. The transfer key appears once in UI, but a saved copy remains usable with the archive. No auto sync. The archive uses AES-256-GCM with a new random key and nonce; its encrypted payload contains metadata and plaintext fields before sealing. Import limits the archive to 12 MiB and plaintext to 8 MiB, validates credential IDs, timestamps, names, visibility, uniqueness, and field limits, then re-encrypts each field under the destination key. It keeps credential IDs and safe metadata, resets `createdBy` to `human`, and transfers no grants or audit history. A destination must have no `vault.json`, `key.json`, or `grants.json`, and no existing OS-stored key. A failure after destination key creation may leave a new key file but cannot overwrite an existing vault or key; remove that new empty destination only after checking its contents before retrying.
 
 ## Security Notes
 
 - Secrets stay outside the repo under `~/.pi/agent/takomi-vault`.
 - Command and tool output redacts secret values. Child stdout is scrubbed for verbatim secrets, which stops accidental leaks but not a hostile agent encoding exfiltration. Injection trusts the agent process with use; the guarantee is that secrets never enter transcripts, prompts, or logs.
-- The gateway does not intentionally log decrypted field values, but the current audit `result` can include caller-supplied command, path, reason, or error text. Do not put credentials in those arguments. Replacing free-form audit text with fixed event codes remains v2 work.
+- Extension does not log secrets. Audit logs IDs, targets, decisions, and expiry only.
 - Target binding is enforced in code, not in the prompt.
-- Permanent `.env` writes need a session or target grant plus a fresh UI confirmation of the resolved path and env key names. No UI or declined confirmation denies the write; the prompt warns that values are plaintext on disk.
-- `vault_request` collects values through Pi `ui.input`, which has no masked password mode. Values still bypass the transcript, but shoulder-surfing masking depends on Pi UI support.
+- Every `.env` write requires human UI approval and exclusive creation; permanent writes also need a session or target grant. Both are plaintext on disk.
+- `/vault-add`, `vault_request`, and `/vault-import` collect password, token, and transfer key values through a masked `ctx.ui.custom()` TUI component. RPC and non-TUI modes refuse secret entry; usernames and labels still use ordinary prompts. Cancelled entry does not save a credential or import an archive.
+- Pi's `input` hook checks raw submitted text for PEM private keys, GitHub tokens, and labeled AWS access key IDs. In the TUI it asks before sending the original text; without interactive UI it blocks matching input. The warning never includes the matched value. This is best-effort only: it cannot protect every entry path, attachment, unknown token format, or secret already submitted before this hook runs.
 
 ## Setup / Verification
 
@@ -332,13 +336,13 @@ Expected result is an empty vault with storage backend reported, for example `wi
 ## Known Limitations
 
 - v1 has no browser field injection. CLI and API key flows come first.
-- v1 has no chat interception. The agent must call `vault_request`. Magic detection of pasted secrets is deferred.
-- v1 lookup is exact service plus host match. Fuzzy naming comes later.
+- The narrow chat input check is not universal prevention. Use `/vault-add` or `vault_request` rather than pasting secrets; choosing to send anyway puts the original text in chat.
+- Approximate service lookup is for `/vault-find` and `vault_find` only. Host filtering and `vault_request` matching remain exact. Lookup recognizes normalized names, substrings, and one-character edits for names of at least five characters.
 - Linux without a secret service needs `TAKOMI_VAULT_PASSPHRASE` each session, otherwise the key rests on file permissions only.
-- Export and import are not built yet. Copying the vault directory moves it; the OS key or passphrase must move with it.
-- Browser fill, export/import, masked input, and chat interception are still unimplemented. `ui.input` does not mask secret entry. macOS Keychain storage uses `security -w` with stdin and never retries with the key in argv; this path has not been exercised on a Mac in the scratch-data test suite.
+- Export/import requires human Pi UI. The key never enters tool results, audit entries, or command arguments. Import uses masked TUI input; the confirmed path is shown in UI, so do not choose a shared destination.
+- Export creates the file exclusively with POSIX mode `0600`. On Windows, Node file modes do not enforce an ACL; protection depends on the destination directory's inherited ACL. The archive is reusable by anyone with its key.
+- Browser fill remains unimplemented. Masking hides values on screen, not from the terminal's paste source or a compromised local process. macOS Keychain storage uses `security -w` with stdin and never retries with the key in argv; this path has not been exercised on a Mac in the scratch-data test suite.
 - A field allowlist on a new grant currently supports all fields or one named field. Legacy grants with no allowlist retain all-field access. The terminal target is caller-supplied; do not treat host binding as network destination verification.
-- Audit `result` still contains caller-controlled text, and temporary-file tracking still needs failure-path hardening. Do not treat these as secret-free, tamper-proof audit records.
 
 ## Related Docs
 
