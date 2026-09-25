@@ -89,6 +89,8 @@ Board/direct dispatch additions:
 
 Live detached async launches preserve canonical external working directories through native launch and handoff. Cross-restart result hydration across multiple project roots is not part of the current guarantee. That requires future integrity-bound provenance for canonical roots, run identities, sessions, and result/artifact locations; path confinement and trust checks must not be weakened to approximate it.
 
+The pinned pi-subagents renderer shows a short async run summary when Ctrl+O is collapsed and step details when expanded, whether Takomi or standalone pi-subagents owns the widget. This repository carries a patch for that renderer. Every validated completion wakes the parent agent, including runs with no usable final answer; those notices identify the run for status and artifact inspection.
+
 ## Regressions To Watch
 
 - Do not write user profile files outside the repo.

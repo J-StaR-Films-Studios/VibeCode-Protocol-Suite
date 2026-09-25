@@ -189,6 +189,20 @@ try {
     for (const line of output.split("\n")) assert.ok(visibleWidth(line) <= width, `${label} line fits ${width} columns: ${line}`);
   }
 
+  const nativeWidget = await import(pinnedRenderer.url);
+  const parallelJob = {
+    asyncId: "async-parallel-compact", mode: "parallel", status: "running", agents: ["coder", "reviewer"],
+    stepsTotal: 2, completedSteps: 0, runningSteps: 2, startedAt: Date.now(), updatedAt: Date.now(),
+    steps: [
+      { agent: "coder", index: 0, status: "running" },
+      { agent: "reviewer", index: 1, status: "running" },
+    ],
+  };
+  const compactParallel = plain(nativeWidget.buildWidgetLines([parallelJob, { ...parallelJob, asyncId: "async-parallel-second" }], theme, 100, false).join("\n"));
+  const expandedParallel = plain(nativeWidget.buildWidgetLines([parallelJob, { ...parallelJob, asyncId: "async-parallel-second" }], theme, 100, true).join("\n"));
+  assert.doesNotMatch(compactParallel, /Agent 1\/2/, "native-owned multi-run compact widget hides agent rows");
+  assert.match(expandedParallel, /Agent 1\/2/, "native-owned multi-run expanded widget reveals agent rows");
+
   assert.equal(asyncFixtureSource.package, "pi-subagents@0.31.0", "async fixture is pinned to the installed native schema");
   assert.deepEqual(asyncFixtureSource.sourceSchemas, [
     "src/runs/background/async-execution.ts",
@@ -609,6 +623,21 @@ try {
     await fs.mkdir(launch.details.asyncDir, { recursive: true });
     await detached.rememberDetachedLaunch(targetPi, launch, detachedTasks, detachedContext, workspace);
   }
+
+  const emptyAnswerHarness = eventHarness();
+  await detached.initializeDetachedSession(emptyAnswerHarness.pi, detachedContext);
+  await launchFor(emptyAnswerHarness.pi, "async-no-final-answer");
+  const emptyAnswer = completionFor("async-no-final-answer");
+  emptyAnswer.summary = "";
+  emptyAnswer.results = [{ agent: "reviewer", success: false, output: "", error: "" }];
+  const unregisterEmptyAnswer = detached.registerDetachedCompletionNotifications(emptyAnswerHarness.pi);
+  await emptyAnswerHarness.emit(emptyAnswer);
+  assert.equal(emptyAnswerHarness.sent.length, 1, "completion without final output still wakes the parent exactly once");
+  assert.equal(emptyAnswerHarness.sent[0].options.triggerTurn, true);
+  assert.match(emptyAnswerHarness.sent[0].message.content, /Run async-no-final-answer finished without usable final output/);
+  await emptyAnswerHarness.emit(emptyAnswer);
+  assert.equal(emptyAnswerHarness.sent.length, 1, "empty-answer completion remains deduped");
+  unregisterEmptyAnswer();
 
   delete globalThis.__pi_subagents_notify_seen__;
   const raceHarness = eventHarness();
