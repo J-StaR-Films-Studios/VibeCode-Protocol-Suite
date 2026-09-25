@@ -8,8 +8,8 @@ import type { AcpSessionInfo } from "./acp-session.ts";
  * Model catalog sourced from the live ACP session, not hardcoded.
  *
  * Startup order: persisted catalog (~/.takomi/antigravity-catalog.json) ->
- * bundled fallback -> background refresh after the first session/new, which
- * re-registers the provider (takes effect immediately, no /reload needed).
+ * bundled fallback -> refresh from the first Antigravity model request's
+ * session/new, which re-registers the provider (no /reload needed).
  */
 
 export interface CatalogEntry {

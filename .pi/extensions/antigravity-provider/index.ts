@@ -25,29 +25,18 @@ function loadBinaryLinkConfig(): AntigravityBinaryLinkConfig {
 
 export default function (pi: ExtensionAPI) {
   const linkConfig = loadBinaryLinkConfig();
-  const runtime = new AntigravityProviderRuntime(linkConfig);
+  // The persisted catalog serves the picker without starting ACP. Refresh it
+  // from the first Antigravity session, then update the picker in place.
+  const runtime = new AntigravityProviderRuntime(linkConfig, undefined, () => {
+    try {
+      registerAntigravityProvider(pi, runtime);
+    } catch {
+      // Re-registration is best-effort; the old list keeps working.
+    }
+  });
 
   registerAntigravityProvider(pi, runtime);
   installAntigravityUiBridge(pi, runtime);
-
-  // Lazy catalog refresh. Never spawn the ACP server during boot: Pi awaits
-  // session_start handlers, and initialize + authenticate + session/new on a
-  // ~560MB server is what made startup feel stuck. The persisted/fallback
-  // catalog serves the picker instantly; the live list fills in afterwards
-  // and re-registers the provider (takes effect, no /reload needed).
-  const scheduleBackgroundRefresh = () => {
-    runtime.refreshCatalogInBackground(() => {
-      try {
-        registerAntigravityProvider(pi, runtime);
-      } catch {
-        // Re-registration is best-effort; the old list keeps working.
-      }
-    });
-  };
-  pi.on("session_start", () => {
-    // Fire-and-forget on purpose: do not await, do not block boot.
-    setTimeout(scheduleBackgroundRefresh, 1500).unref?.();
-  });
 
   pi.registerCommand("antigravity-status", {
     description: "Show status of the Google Antigravity Pi model provider",

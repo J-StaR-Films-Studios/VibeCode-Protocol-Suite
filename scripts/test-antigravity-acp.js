@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import registerExtension from "../.pi/extensions/antigravity-provider/index.ts";
 import { AcpClient } from "../.pi/extensions/antigravity-provider/acp-client.ts";
 import {
   AcpSessionManager,
@@ -25,6 +26,30 @@ import {
 } from "../.pi/extensions/antigravity-provider/provider.ts";
 
 console.log("🧪 Running Antigravity ACP Tests...");
+
+// --- Starting a Pi session must not launch ACP, even after the old delay ---
+{
+  const handlers = new Map();
+  let launches = 0;
+  const launch = AcpClient.launch;
+  AcpClient.launch = () => {
+    launches++;
+    throw new Error("ACP started during Pi startup");
+  };
+  try {
+    registerExtension({
+      registerProvider: () => {},
+      registerCommand: () => {},
+      on: (event, handler) => handlers.set(event, handler),
+    });
+    await handlers.get("session_start")({}, { hasUI: false });
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    assert.strictEqual(launches, 0, "Pi startup must not launch ACP");
+  } finally {
+    AcpClient.launch = launch;
+  }
+  console.log("✅ Startup: no ACP server on session_start");
+}
 
 // --- ND-JSON framing: split lines, skip garbage, route responses ---
 {
@@ -348,8 +373,13 @@ console.log("🧪 Running Antigravity ACP Tests...");
 
 // --- Stream protocol: start first or the agent loop swallows deltas ---
 {
-  const runtime = new AntigravityProviderRuntime();
-  runtime.refreshCatalogInBackground = () => {};
+  let catalogUpdates = 0;
+  const runtime = new AntigravityProviderRuntime({}, undefined, () => catalogUpdates++);
+  let refreshedEntries;
+  runtime.refreshCatalog = (entries) => {
+    refreshedEntries = entries;
+    return true;
+  };
   const textHandlers = [];
   const thoughtHandlers = [];
   const activityHandlers = [];
@@ -387,6 +417,8 @@ console.log("🧪 Running Antigravity ACP Tests...");
     types.push(event.type);
     if (event.type === "done") doneMessage = event.message;
   }
+  assert.strictEqual(catalogUpdates, 1, "first Antigravity session updates the picker");
+  assert.strictEqual(refreshedEntries[0].id, "antigravity/fake-model");
   assert.strictEqual(types[0], "start", "start opens the stream or deltas never reach chat");
   assert.ok(types.includes("thinking_start"), "thoughts stream");
   assert.ok(types.includes("thinking_delta"), "thought deltas stream");
