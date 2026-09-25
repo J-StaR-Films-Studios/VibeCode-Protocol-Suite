@@ -59,10 +59,16 @@ export class AntigravityProviderRuntime {
   private entries: CatalogEntry[];
   private turnCounts = new Map<string, number>();
   private lastBridgedCounts = new Map<string, number>();
+  private readonly onCatalogChanged?: () => void;
 
-  constructor(linkConfig: AntigravityBinaryLinkConfig = {}, cwd?: string) {
+  constructor(
+    linkConfig: AntigravityBinaryLinkConfig = {},
+    cwd?: string,
+    onCatalogChanged?: () => void,
+  ) {
     this.manager = new AcpSessionManager(linkConfig, cwd);
     this.entries = startupCatalog();
+    this.onCatalogChanged = onCatalogChanged;
   }
 
   setUiReporter(reporter?: AntigravityUiReporter) {
@@ -95,35 +101,6 @@ export class AntigravityProviderRuntime {
     return true;
   }
 
-  /** Fetch the live catalog (spawns the server on first use). */
-  async fetchLiveCatalog(): Promise<CatalogEntry[]> {
-    const { session, release } = await this.manager.acquireMain();
-    try {
-      return toCatalogEntries(session);
-    } finally {
-      release();
-    }
-  }
-
-  private catalogRefreshRequested = false;
-
-  /**
-   * Fire-and-forget catalog refresh. Never blocks a turn; the picker updates
-   * on the next registration when the list actually changed.
-   */
-  refreshCatalogInBackground(onChanged?: () => void): void {
-    if (this.catalogRefreshRequested) return;
-    this.catalogRefreshRequested = true;
-    void (async () => {
-      try {
-        const entries = await this.fetchLiveCatalog();
-        if (this.refreshCatalog(entries)) onChanged?.();
-      } catch {
-        // Startup stays usable on the persisted/fallback catalog.
-      }
-    })();
-  }
-
   stream(
     model: Model<Api>,
     context: Context,
@@ -133,10 +110,6 @@ export class AntigravityProviderRuntime {
 
     (async () => {
       this.emitUi({ phase: "start", modelId: model.id });
-      // Keep the picker fresh on first use (covers CLI one-shots that never
-      // sit through the deferred session_start refresh). Self-guarded, never
-      // blocks the turn.
-      this.refreshCatalogInBackground();
       // The agent loop only forwards deltas to chat after a "start" event.
       // Without it every delta is swallowed and the whole turn appears as one
       // blob at done. Push first so "Working" streams immediately, even while
@@ -157,6 +130,14 @@ export class AntigravityProviderRuntime {
         } else {
           session = await this.manager.createEphemeral();
           ephemeral = true;
+        }
+
+        // The first session supplies the live catalog without a second ACP
+        // session or any work during Pi startup.
+        try {
+          if (this.refreshCatalog(toCatalogEntries(session))) this.onCatalogChanged?.();
+        } catch {
+          // Catalog persistence and picker updates must not block the turn.
         }
 
         // Pi thinking slider (options.reasoning) picks the ACP effort variant.
