@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { execWithEnv, execWithStdin, writeTempEnvFile } from "./adapters.ts";
 import { logAudit } from "./audit.ts";
 import { peekBackend } from "./crypto-store.ts";
-import { maskedSecret } from "./secret-input.ts";
+import { maskedSecret, supportsSecretEntry } from "./secret-input.ts";
 import { issueGrant, listGrants, revokeExpiredSessionGrants, revokeGrants } from "./grant-store.ts";
 import { createCredential, deleteCredential, deleteIfEphemeral, findByService, findServiceCandidates, getCredential, getFieldValue, isEphemeral, listCredentials, summarize } from "./vault-store.ts";
 import type { GrantScope } from "./types.ts";
@@ -126,7 +126,7 @@ export function registerVaultTools(pi: ExtensionAPI) {
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const toolCtx = ctx as ExtensionContext;
-      if (toolCtx.mode !== "tui") return errorResult("Vault request requires an interactive Pi TUI for masked secret entry and approval.");
+      if (!supportsSecretEntry(toolCtx)) return errorResult("Vault request requires an interactive Pi TUI or a supported RPC secret UI for entry and approval.");
       revokeExpiredSessionGrants();
       const existing = findByService(params.service, params.host);
 

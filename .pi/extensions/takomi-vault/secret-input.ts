@@ -1,9 +1,16 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { decodeKittyPrintable, isKeyRelease, Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 
-/** Only the TUI can collect a secret without rendering its value in an input dialog. */
+export function supportsSecretEntry(ctx: ExtensionContext): boolean {
+  return ctx.hasUI && (ctx.mode === "tui" || (ctx.mode === "rpc" && process.env.T3_TAKOMI_VAULT_SECRET_UI === "1"));
+}
+
 export async function maskedSecret(ctx: ExtensionContext, title: string): Promise<string | null> {
-  if (ctx.mode !== "tui" || !ctx.hasUI) throw new Error("Secret entry requires an interactive Pi TUI. No unmasked input is available in RPC or non-interactive modes.");
+  if (!supportsSecretEntry(ctx)) throw new Error("Secret entry requires an interactive Pi TUI or a supported RPC secret UI.");
+  if (ctx.mode === "rpc") {
+    // Only the advertised T3 host intercepts this input request without persisting its response.
+    return await ctx.ui.input(`[takomi-vault-secret] ${title}`) || null;
+  }
   return ctx.ui.custom<string | null>((tui, theme, keybindings, done) => {
     let value = "";
     return {
