@@ -10,6 +10,7 @@
     ".agents/plugins",
     "bin",
     "src",
+    "patches",
     "assets",
     "plugins/takomi-codex",
     "plugins/takomi-flow/.codex-plugin",
@@ -85,6 +86,9 @@
       "@protobufjs/utf8": "1.1.1",
       "ws": "8.21.0",
       "brace-expansion": "5.0.7"
+    },
+    "patchedDependencies": {
+      "pi-subagents@0.31.0": "patches/pi-subagents@0.31.0.patch"
     }
   },
   "bugs": {

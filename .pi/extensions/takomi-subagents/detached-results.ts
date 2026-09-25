@@ -852,21 +852,24 @@ async function notifyDetachedCompletion(pi: ExtensionAPI, data: unknown, allowQu
     return;
   }
   const details = await normalizeDetachedCompletion(captured.payload, captured.launch);
-  if (!details) return;
-  const rows = (details as any).results as any[];
+  const rows = details ? (details as any).results as any[] : [];
   const answers = rows.map((row) => finalAnswer(row)).filter((answer) => answer.trim().length > 0);
-  if (!answers.length) return;
-  const checklistProvenance = notificationChecklist(details as Record<string, any>);
-  const fallback = notificationFallback(details as Record<string, any>);
-  const acceptance = acceptanceLabel(details as Record<string, any>);
-  const answerParts = notificationAnswerParts(answers);
-  const firstLine = `${checklistProvenance} · ${answerParts.opening}`;
-  const remainingPreview = [
-    ...answerParts.remaining,
-    acceptance,
-    fallback ? `Fallback provenance: ${fallback}` : undefined,
-  ].filter((line): line is string => Boolean(line)).join("\n");
-  const resultPreview = [firstLine, remainingPreview || undefined].filter(Boolean).join("\n");
+  let resultPreview: string;
+  if (answers.length && details) {
+    const checklistProvenance = notificationChecklist(details as Record<string, any>);
+    const fallback = notificationFallback(details as Record<string, any>);
+    const acceptance = acceptanceLabel(details as Record<string, any>);
+    const answerParts = notificationAnswerParts(answers);
+    const firstLine = `${checklistProvenance} · ${answerParts.opening}`;
+    const remainingPreview = [
+      ...answerParts.remaining,
+      acceptance,
+      fallback ? `Fallback provenance: ${fallback}` : undefined,
+    ].filter((line): line is string => Boolean(line)).join("\n");
+    resultPreview = [firstLine, remainingPreview || undefined].filter(Boolean).join("\n");
+  } else {
+    resultPreview = `Run ${captured.launch.id} finished without usable final output. Check takomi_subagent status with id ${captured.launch.id} and inspect the run artifacts before updating the board.`;
+  }
   const status = captured.payload.state === "paused"
     ? "paused"
     : captured.payload.success === false || captured.payload.state === "failed" ? "failed" : "completed";
