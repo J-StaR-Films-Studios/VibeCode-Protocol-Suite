@@ -143,6 +143,10 @@ function loadOsKey(): { key: string; backend: KeyBackend } | undefined {
   return undefined;
 }
 
+export function hasStoredOsKey(): boolean {
+  return loadOsKey() !== undefined;
+}
+
 function storeOsKey(keyB64: string): KeyBackend | undefined {
   if (process.platform === "darwin" && macStore(keyB64)) return "macos-keychain";
   if (process.platform === "linux" && linuxStore(keyB64)) return "linux-secret-tool";

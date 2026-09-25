@@ -75,6 +75,14 @@ export function issueGrant(input: {
     };
     grants.push(grant);
     save(grants);
+    try {
+      logAudit({ at: Date.now(), credentialId: grant.credentialId, event: "requested", grantId: grant.grantId, tool: grant.tool === "file" ? "file" : "terminal", operation: grant.operation, target: grant.target });
+      logAudit({ at: Date.now(), credentialId: grant.credentialId, event: "approved", grantId: grant.grantId, scope: grant.scope, tool: grant.tool === "file" ? "file" : "terminal", operation: grant.operation, target: grant.target });
+    } catch (error) {
+      // Still holding the grant lock: remove the capability before the caller can discard its credential.
+      save(grants.filter((entry) => entry.grantId !== grant.grantId));
+      throw error;
+    }
     return grant;
   });
 }
@@ -126,6 +134,13 @@ export function revokeGrants(filter: { grantId?: string; credentialId?: string; 
       }
     }
     save(grants);
+    for (const grant of revoked) {
+      try {
+        logAudit({ at: Date.now(), credentialId: grant.credentialId, event: "revoked", grantId: grant.grantId, scope: grant.scope, tool: grant.tool === "file" ? "file" : "terminal", operation: grant.operation, target: grant.target });
+      } catch {
+        // Revocation is already durable; audit failure must not block credential cleanup.
+      }
+    }
     return revoked;
   });
 }
@@ -143,7 +158,7 @@ export function revokeExpiredSessionGrants() {
       if (!grant.revoked && grant.expiresAt <= Date.now()) {
         grant.revoked = true;
         changed = true;
-        logAudit({ at: Date.now(), credentialId: grant.credentialId, agent: grant.agent, event: "expired", target: grant.target, result: `grant ${grant.grantId} scope=${grant.scope}` });
+        logAudit({ at: Date.now(), credentialId: grant.credentialId, event: "expired", grantId: grant.grantId, scope: grant.scope, operation: grant.operation, target: grant.target });
       }
     }
     if (changed) save(grants);

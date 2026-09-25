@@ -1,11 +1,13 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { resolve } from "node:path";
 import { Type } from "typebox";
+import { realpathSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { execWithEnv, execWithStdin, writeTempEnvFile } from "./adapters.ts";
 import { logAudit } from "./audit.ts";
 import { peekBackend } from "./crypto-store.ts";
+import { maskedSecret } from "./secret-input.ts";
 import { issueGrant, listGrants, revokeExpiredSessionGrants, revokeGrants } from "./grant-store.ts";
-import { createCredential, deleteCredential, deleteIfEphemeral, findByService, getCredential, getFieldValue, isEphemeral, listCredentials, summarize } from "./vault-store.ts";
+import { createCredential, deleteCredential, deleteIfEphemeral, findByService, findServiceCandidates, getCredential, getFieldValue, isEphemeral, listCredentials, summarize } from "./vault-store.ts";
 import type { GrantScope } from "./types.ts";
 
 const ScopeSchema = Type.Union([Type.Literal("once"), Type.Literal("turn"), Type.Literal("session"), Type.Literal("target")]);
@@ -18,6 +20,17 @@ function errorResult(text: string, details?: unknown) {
   return { content: [{ type: "text" as const, text }], details, isError: true };
 }
 
+function auditDeniedUse(params: { grantId: string; credentialId: string }, tool: "terminal" | "file") {
+  let grant;
+  try {
+    grant = listGrants(params.credentialId).find((entry) => entry.grantId === params.grantId && entry.credentialId === params.credentialId);
+  } catch {
+    // Audit a failed grant lookup without copying untrusted request metadata.
+  }
+  logAudit({ at: Date.now(), credentialId: params.credentialId, grantId: params.grantId, agent: "pi", event: "denied", tool,
+    ...(grant ? { target: grant.target, operation: grant.operation } : {}) });
+}
+
 async function promptScope(ctx: ExtensionContext, target: string, operation: string, tool: string, fields: string[], requested?: GrantScope): Promise<GrantScope> {
   const choice = await ctx.ui.select(`Approve pi ${operation} on ${target} via ${tool}, fields ${fields.join(", ")}${requested ? ` (agent requested ${requested})` : ""}. Allow for`,  ["once — one operation", "turn — this agent turn", "session — until Pi exits", "target — always for this host until revoked"]);
   if (!choice) throw new Error("Cancelled by user");
@@ -27,12 +40,17 @@ async function promptScope(ctx: ExtensionContext, target: string, operation: str
   return "once";
 }
 
-async function approveGrant(ctx: ExtensionContext, credentialId: string, fieldNames: string[], target: string, operation: string, tool: "terminal" | "file", requested?: GrantScope) {
+async function chooseApproval(ctx: ExtensionContext, fieldNames: string[], target: string, operation: string, tool: "terminal" | "file", requested?: GrantScope) {
   const selected = await ctx.ui.select(`Fields for pi ${operation} on ${target}`, ["All fields", ...fieldNames]);
   if (!selected) throw new Error("Cancelled by user");
   const fields = selected === "All fields" ? fieldNames : [selected];
   const scope = await promptScope(ctx, target, operation, tool, fields, requested);
-  return issueGrant({ credentialId, target, operation, tool, scope, fields });
+  return { fields, scope };
+}
+
+async function approveGrant(ctx: ExtensionContext, credentialId: string, fieldNames: string[], target: string, operation: string, tool: "terminal" | "file", requested?: GrantScope) {
+  const approval = await chooseApproval(ctx, fieldNames, target, operation, tool, requested);
+  return issueGrant({ credentialId, target, operation, tool, ...approval });
 }
 
 export function registerVaultTools(pi: ExtensionAPI) {
@@ -64,7 +82,7 @@ export function registerVaultTools(pi: ExtensionAPI) {
     parameters: Type.Object({ id: Type.String({ description: "Credential handle like cred_AB12CD34" }) }),
     async execute(_id, params) {
       const credential = getCredential(params.id);
-      if (!credential) return errorResult(`Unknown credential: ${params.id}`);
+      if (!credential) return errorResult("Unknown credential handle.");
       const summary = summarize(credential);
       return textResult(
         [`${summary.id} | ${summary.label}`, `service=${summary.service} host=${summary.host} type=${summary.type}`, `fields=${summary.fieldNames.join(", ")}`, `lastUsed=${summary.lastUsedAt ? new Date(summary.lastUsedAt).toLocaleString() : "never"}`].join("\n"),
@@ -76,17 +94,17 @@ export function registerVaultTools(pi: ExtensionAPI) {
   pi.registerTool({
     name: "vault_find",
     label: "Vault Find",
-    description: "Find credential handles by service and optional host. Returns handles and metadata only.",
+    description: "Discover exact and approximate service-name matches with optional exact host. Returns handles only; vault_request still requires exact service and host.",
     parameters: Type.Object({
       service: Type.String({ description: "Service name like convex or github" }),
       host: Type.Optional(Type.String({ description: "Host like github.com" })),
     }),
     async execute(_id, params) {
-      const found = findByService(params.service, params.host);
+      const found = findServiceCandidates(params.service, params.host);
       const matches = found.map(summarize);
       const activeById = new Map(found.map((entry) => [entry.id, listGrants(entry.id).filter((grant) => !grant.revoked && grant.expiresAt > Date.now()).length]));
       const text = matches.length
-        ? matches.map((item) => `- ${item.id} | ${item.label} | ${item.host} | fields=${item.fieldNames.join(",")} | activeGrants=${activeById.get(item.id) ?? 0}`).join("\n")
+        ? matches.map((item) => `- ${item.id} | ${item.label} | ${item.service} | ${item.host} | ${item.service.toLowerCase() === params.service.trim().toLowerCase() ? "exact" : "approximate"} | fields=${item.fieldNames.join(",")} | activeGrants=${activeById.get(item.id) ?? 0}`).join("\n")
         : `No credential found for service ${params.service}${params.host ? ` on ${params.host}` : ""}. Call vault_request to ask the user.`;
       return textResult(text, { matches });
     },
@@ -107,8 +125,9 @@ export function registerVaultTools(pi: ExtensionAPI) {
       tool: Type.Optional(Type.Union([Type.Literal("terminal"), Type.Literal("file")])),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      revokeExpiredSessionGrants();
       const toolCtx = ctx as ExtensionContext;
+      if (toolCtx.mode !== "tui") return errorResult("Vault request requires an interactive Pi TUI for masked secret entry and approval.");
+      revokeExpiredSessionGrants();
       const existing = findByService(params.service, params.host);
 
       if (existing.length > 0 && toolCtx.hasUI) {
@@ -122,7 +141,6 @@ export function registerVaultTools(pi: ExtensionAPI) {
           const id = selected.id;
           const grant = await approveGrant(toolCtx, id, selected.fields.map((field) => field.name), params.host, params.operation ?? "use", params.tool ?? "terminal", params.scope);
           const scope = grant.scope;
-          logAudit({ at: Date.now(), credentialId: id, agent: "pi", event: "approved", target: params.host, result: `grant ${grant.grantId} scope=${scope}` });
           return textResult(`Granted ${id} for ${params.host}. Grant ${grant.grantId} scope=${scope} expires ${new Date(grant.expiresAt).toLocaleString()}. Pass the grant to vault_use_env. The secret was not revealed.`, { credentialId: id, grantId: grant.grantId, scope });
         }
       }
@@ -133,7 +151,8 @@ export function registerVaultTools(pi: ExtensionAPI) {
         kind === "login"
           ? await (async () => {
             const username = await toolCtx.ui.input(`Username for ${params.service} on ${params.host}:`);
-            const password = await toolCtx.ui.input(`Password for ${params.service} on ${params.host}${params.purpose ? ` (${params.purpose})` : ""}:`);
+            if (!username) throw new Error("Cancelled by user");
+            const password = await maskedSecret(toolCtx, `Password for ${params.service} on ${params.host}${params.purpose ? ` (${params.purpose})` : ""}:`);
             if (!username || !password) throw new Error("Cancelled by user");
             return [
               { name: "username", value: username, visibility: "agent-readable" as const },
@@ -141,7 +160,7 @@ export function registerVaultTools(pi: ExtensionAPI) {
             ];
           })()
           : await (async () => {
-            const secret = await toolCtx.ui.input(`Secret for ${params.service} on ${params.host}${params.purpose ? ` (${params.purpose})` : ""}:`);
+            const secret = await maskedSecret(toolCtx, `Secret for ${params.service} on ${params.host}${params.purpose ? ` (${params.purpose})` : ""}:`);
             if (!secret) throw new Error("Cancelled by user");
             return [{ name: "token", value: secret, visibility: "inject-only" as const }];
           })();
@@ -163,7 +182,6 @@ export function registerVaultTools(pi: ExtensionAPI) {
             revokeGrants({ grantId: grant.grantId });
             throw new Error("Unsaved credentials require once scope. Save the credential for a wider scope.");
           }
-          logAudit({ at: Date.now(), credentialId: temp.id, agent: "pi", event: "approved", target: params.host, result: `one-time grant ${grant.grantId}` });
           return textResult(`One-time credential ${temp.id} ready. Grant ${grant.grantId} expires ${new Date(grant.expiresAt).toLocaleString()}. It is ephemeral and will be deleted automatically after first use or revoke. Fields: ${fields.map((field) => field.name).join(", ")}.`, { credentialId: temp.id, grantId: grant.grantId, scope: "once", saved: false, fields: fields.map((field) => field.name) });
         } catch (error) {
           deleteIfEphemeral(temp.id);
@@ -172,8 +190,10 @@ export function registerVaultTools(pi: ExtensionAPI) {
       }
 
       const labelInput = await toolCtx.ui.input("Label for this credential:", params.suggestedLabel ?? `${params.service} ${params.host}`);
+      if (labelInput === undefined) throw new Error("Cancelled by user");
+      const approval = await chooseApproval(toolCtx, fields.map((field) => field.name), params.host, params.operation ?? "use", params.tool ?? "terminal", params.scope);
       const created = createCredential({
-        label: (labelInput ?? params.suggestedLabel ?? `${params.service} ${params.host}`).trim(),
+        label: labelInput.trim(),
         service: params.service,
         host: params.host,
         type: kind,
@@ -182,11 +202,10 @@ export function registerVaultTools(pi: ExtensionAPI) {
       });
       let grantId: string | undefined;
       try {
-        const grant = await approveGrant(toolCtx, created.id, fields.map((field) => field.name), params.host, params.operation ?? "use", params.tool ?? "terminal", params.scope);
+        const grant = issueGrant({ credentialId: created.id, target: params.host, operation: params.operation ?? "use", tool: params.tool ?? "terminal", ...approval });
         grantId = grant.grantId;
         const scope = grant.scope;
-        logAudit({ at: Date.now(), credentialId: created.id, agent: "pi", event: "created", target: params.host, result: "created via vault_request" });
-        logAudit({ at: Date.now(), credentialId: created.id, agent: "pi", event: "approved", target: params.host, result: `grant ${grant.grantId} scope=${scope}` });
+        logAudit({ at: Date.now(), credentialId: created.id, event: "created" });
         return textResult(`Saved ${created.id} (${created.label}). Grant ${grant.grantId} scope=${scope} expires ${new Date(grant.expiresAt).toLocaleString()}. The secret was not revealed.`, { credentialId: created.id, grantId: grant.grantId, scope, saved: true });
       } catch (error) {
         try {
@@ -216,10 +235,9 @@ export function registerVaultTools(pi: ExtensionAPI) {
       try {
         const result = execWithEnv({ grantId: params.grantId, credentialId: params.credentialId, target: params.target, command: params.command, args: params.args ?? [], envMap: params.envMap, operation: params.operation, cwd: (ctx as ExtensionContext).cwd });
         return textResult(`exit=${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`, { exitCode: result.exitCode });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logAudit({ at: Date.now(), credentialId: params.credentialId, agent: "pi", event: "denied", target: params.target, result: message });
-        return errorResult(`Denied: ${message}`);
+      } catch {
+        auditDeniedUse(params, "terminal");
+        return errorResult("Vault operation denied or failed. Check the grant and destination.");
       }
     },
   });
@@ -241,10 +259,9 @@ export function registerVaultTools(pi: ExtensionAPI) {
       try {
         const result = execWithStdin({ grantId: params.grantId, credentialId: params.credentialId, target: params.target, command: params.command, args: params.args ?? [], field: params.field, operation: params.operation, cwd: (ctx as ExtensionContext).cwd });
         return textResult(`exit=${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`, { exitCode: result.exitCode });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logAudit({ at: Date.now(), credentialId: params.credentialId, agent: "pi", event: "denied", target: params.target, result: message });
-        return errorResult(`Denied: ${message}`);
+      } catch {
+        auditDeniedUse(params, "terminal");
+        return errorResult("Vault operation denied or failed. Check the grant and destination.");
       }
     },
   });
@@ -252,7 +269,7 @@ export function registerVaultTools(pi: ExtensionAPI) {
   pi.registerTool({
     name: "vault_write_env_file",
     label: "Vault Write Env File",
-    description: "Write secrets to a file. Temporary writes are preferred. Permanent plaintext writes require a session or target grant and separate human confirmation of the exact path and env keys.",
+    description: "Write secrets to a file. Temporary writes are preferred. Permanent writes need a session or target grant.",
     parameters: Type.Object({
       grantId: Type.String(),
       credentialId: Type.String(),
@@ -263,24 +280,31 @@ export function registerVaultTools(pi: ExtensionAPI) {
       operation: Type.Optional(Type.String()),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
+      const toolCtx = ctx as ExtensionContext;
+      if (!toolCtx?.hasUI) {
+        auditDeniedUse(params, "file");
+        return errorResult("File write denied: interactive confirmation is required.");
+      }
       try {
-        const persistent = params.persistent ?? false;
-        const path = persistent ? resolve(params.path) : params.path;
-        if (persistent) {
-          const toolCtx = ctx as ExtensionContext;
-          if (!toolCtx?.hasUI) throw new Error("Permanent file write requires interactive confirmation.");
-          const approved = await toolCtx.ui.confirm("Write permanent plaintext env file?", `Path: ${path}\nEnv keys: ${Object.keys(params.entries).join(", ") || "(none)"}\nSecret values will be stored as plaintext on disk. Confirm this exact destination and these key names.`);
-          if (!approved) throw new Error("Permanent file write declined by user.");
+        const requested = resolve(toolCtx.cwd, params.path);
+        // Show the actual parent directory, including existing symlinked parents.
+        const confirmedParent = realpathSync(dirname(requested));
+        const destination = join(confirmedParent, basename(requested));
+        const keys = Object.keys(params.entries);
+        if (!keys.length || keys.some((key) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))) {
+          auditDeniedUse(params, "file");
+          return errorResult("File write denied: invalid or empty key list.");
         }
-        const result = writeTempEnvFile({ grantId: params.grantId, credentialId: params.credentialId, target: params.target, path, entries: params.entries, persistent, operation: params.operation });
-        const lifetime = result.persistent
-          ? "permanent, plaintext on disk — rotate the secret if this was not intended"
-          : "temporary, tracked for auto-delete when the session ends";
-        return textResult(`Wrote ${Object.keys(params.entries).length} entries to ${result.path} (${lifetime}). Values are not shown.`, result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logAudit({ at: Date.now(), credentialId: params.credentialId, agent: "pi", event: "denied", target: params.target, result: message });
-        return errorResult(`Denied: ${message}`);
+        const approved = await toolCtx.ui.confirm("Write vault secrets to a new file?", `Repo/cwd: ${toolCtx.cwd}\nResolved path: ${destination}\nKeys: ${keys.join(", ")}\n${params.persistent ? "Persistent plaintext file. It will remain on disk until you remove it." : "Plaintext file. Tracked for deletion at session shutdown; it may persist if Pi exits unexpectedly."}\nExisting paths and symlinks will not be overwritten.`);
+        if (!approved) {
+          auditDeniedUse(params, "file");
+          return errorResult("File write declined by user.");
+        }
+        const result = writeTempEnvFile({ grantId: params.grantId, credentialId: params.credentialId, target: params.target, path: requested, expectedParent: confirmedParent, entries: params.entries, persistent: params.persistent ?? false, operation: params.operation });
+        return textResult(`Wrote ${keys.length} entries to a new ${result.persistent ? "persistent" : "temporary"} plaintext file. Values and path are not shown.`);
+      } catch {
+        auditDeniedUse(params, "file");
+        return errorResult("File write denied or failed. Check the grant and destination; existing files cannot be overwritten.");
       }
     },
   });
@@ -297,7 +321,7 @@ export function registerVaultTools(pi: ExtensionAPI) {
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const toolCtx = ctx as ExtensionContext;
       const credential = getCredential(params.id);
-      if (!credential) return errorResult(`Unknown credential: ${params.id}`);
+      if (!credential) return errorResult("Unknown credential handle.");
       if (!toolCtx.hasUI) {
         logAudit({ at: Date.now(), credentialId: params.id, agent: "pi", event: "denied", result: "reveal without UI" });
         return errorResult("Reveal refused: no UI available to confirm.");
@@ -311,9 +335,8 @@ export function registerVaultTools(pi: ExtensionAPI) {
         const value = getFieldValue(credential, params.field);
         logAudit({ at: Date.now(), credentialId: params.id, agent: "pi", event: "revealed", target: credential.host, result: `field ${params.field}: ${params.reason ?? "manual reveal"}` });
         return textResult("Revealed. Rotate this secret if it was shown unnecessarily.", { id: credential.id, field: params.field, value });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return errorResult(`Reveal failed: ${message}`);
+      } catch {
+        return errorResult("Reveal failed. Check the credential and field.");
       }
     },
   });
@@ -349,17 +372,18 @@ export function registerVaultTools(pi: ExtensionAPI) {
       const revoked = revokeGrants({ grantId: params.grantId, credentialId: params.credentialId, all: params.all });
       let removed: string[] = [];
       if (params.credentialId) {
-        logAudit({ at: Date.now(), credentialId: params.credentialId, agent: "pi", event: "revoked", result: `${revoked.length} grants revoked` });
         if (deleteIfEphemeral(params.credentialId)) removed = [params.credentialId];
       } else if (params.all) {
         removed = listCredentials().filter(isEphemeral).map((entry) => entry.id);
         for (const id of removed) {
           deleteCredential(id);
-          logAudit({ at: Date.now(), credentialId: id, event: "deleted", result: "one-time credential auto-removed on revoke-all" });
+          try { logAudit({ at: Date.now(), credentialId: id, event: "deleted", result: "one-time credential auto-removed on revoke-all" }); }
+          catch { /* Keep removing ephemeral credentials even when audit is unavailable. */ }
         }
       } else if (grantCredentialId && deleteIfEphemeral(grantCredentialId)) {
         removed = [grantCredentialId];
-        logAudit({ at: Date.now(), credentialId: grantCredentialId, event: "deleted", result: "one-time credential auto-removed on grant revoke" });
+        try { logAudit({ at: Date.now(), credentialId: grantCredentialId, event: "deleted" }); }
+        catch { /* Grant revoked and ephemeral credential deleted; audit is best-effort. */ }
       }
       const removedNote = removed.length ? ` Ephemeral credential(s) ${removed.join(", ")} were deleted.` : "";
       return textResult(`Revoked ${revoked.length} grant(s).${removedNote} This removes Takomi permission only. It does not invalidate the real API key or password at the provider.`, { revoked: revoked.length, removed });

@@ -59,6 +59,10 @@ export interface AuditEvent {
   credentialId?: string;
   agent?: string;
   event: "requested" | "approved" | "denied" | "used" | "expired" | "revoked" | "created" | "deleted" | "renamed" | "revealed";
+  grantId?: string;
+  scope?: GrantScope;
+  tool?: "terminal" | "file";
+  operation?: string;
   target?: string;
   result?: string;
 }

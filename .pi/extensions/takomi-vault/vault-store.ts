@@ -68,6 +68,28 @@ export function findByService(service: string, host?: string): StoredCredential[
   });
 }
 
+// Discovery only. Grant requests continue to use findByService for exact matching.
+export function findServiceCandidates(service: string, host?: string): StoredCredential[] {
+  const needle = service.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (needle.length < 3) return findByService(service, host);
+  const candidates = load().filter((entry) => {
+    if (host && entry.host.toLowerCase() !== host.trim().toLowerCase()) return false;
+    const name = entry.service.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (name === needle || (Math.min(name.length, needle.length) >= 4 && (name.includes(needle) || needle.includes(name)))) return true;
+    if (needle.length < 5 || Math.abs(name.length - needle.length) > 1) return false;
+    // One insertion, deletion, or substitution; never a grant selection rule.
+    let i = 0, j = 0, edits = 0;
+    while (i < needle.length && j < name.length) {
+      if (needle[i] === name[j]) { i++; j++; continue; }
+      if (++edits > 1) return false;
+      if (needle.length >= name.length) i++;
+      if (name.length >= needle.length) j++;
+    }
+    return edits + (needle.length - i) + (name.length - j) <= 1;
+  });
+  return candidates.sort((a, b) => Number(b.service.toLowerCase() === service.trim().toLowerCase()) - Number(a.service.toLowerCase() === service.trim().toLowerCase()));
+}
+
 export function createCredential(input: {
   label: string;
   service: string;

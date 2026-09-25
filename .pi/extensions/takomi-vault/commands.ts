@@ -1,8 +1,12 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { realpathSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { logAudit, readAudit } from "./audit.ts";
 import { getBackend } from "./crypto-store.ts";
 import { listGrants, revokeGrants } from "./grant-store.ts";
-import { createCredential, deleteCredential, deleteIfEphemeral, findByService, getCredential, isEphemeral, listCredentials, renameCredential, summarize } from "./vault-store.ts";
+import { exportVault, importVault } from "./transfer.ts";
+import { maskedSecret } from "./secret-input.ts";
+import { createCredential, deleteCredential, deleteIfEphemeral, findServiceCandidates, getCredential, isEphemeral, listCredentials, renameCredential, summarize } from "./vault-store.ts";
 
 function parseArgs(args: string): string[] {
   return args.trim().split(/\s+/).map((value) => value.trim()).filter(Boolean);
@@ -29,10 +33,49 @@ async function pickCredential(ctx: ExtensionCommandContext, requestedId?: string
   return selected.id;
 }
 
+function formatAudit(entry: ReturnType<typeof readAudit>[number]): string {
+  return `- ${new Date(entry.at).toLocaleString()} ${entry.event} ${[entry.credentialId, entry.grantId, entry.scope, entry.tool, entry.operation, entry.target].filter(Boolean).join(" | ")}`.trim();
+}
+
 export function registerVaultCommands(pi: ExtensionAPI) {
+  pi.registerCommand("vault-export", {
+    description: "Export an encrypted vault archive for offline transfer (human UI only)",
+    handler: async (args, ctx) => {
+      if (ctx.mode !== "tui" || !ctx.hasUI) throw new Error("Vault transfer requires an interactive Pi TUI.");
+      if (!args?.trim()) throw new Error("Usage: /vault-export <path>");
+      const destination = resolve(ctx.cwd, args.trim());
+      let parent: string;
+      try { parent = realpathSync(dirname(destination)); } catch { throw new Error("Vault export failed. Check the destination directory."); }
+      const approved = await ctx.ui.confirm("Export vault?", `Destination: ${destination}\nThis creates a new encrypted file. The 256-bit transfer key will appear once in this UI. Keep the file and key separately; copies of both can be reused offline. Continue?`);
+      if (!approved) return;
+      let key: string;
+      try { key = exportVault(destination, parent); }
+      catch { throw new Error("Vault export failed. Check the destination and existing file; nothing was overwritten."); }
+      ctx.ui.notify(`Encrypted vault saved to ${destination}. Copy this transfer key now; it will not be shown again:\n${key}`, "info");
+    },
+  });
+
+  pi.registerCommand("vault-import", {
+    description: "Import an encrypted vault archive into a new empty vault (human UI only)",
+    handler: async (args, ctx) => {
+      if (ctx.mode !== "tui") throw new Error("Vault import requires an interactive Pi TUI for masked transfer key entry.");
+      if (!args?.trim()) throw new Error("Usage: /vault-import <path>");
+      const source = resolve(ctx.cwd, args.trim());
+      const approved = await ctx.ui.confirm("Import vault?", `Source: ${source}\nOnly a new vault with no vault.json, key.json, or grants.json can accept an import. Credential fields will be encrypted with a new local key. Continue?`);
+      if (!approved) return;
+      const key = await maskedSecret(ctx, "Transfer key (64 hex characters):");
+      if (!key) return;
+      try {
+        const count = importVault(source, key.trim());
+        notify(ctx, `Imported ${count} credential(s). Grants were not imported.`);
+      } catch { throw new Error("Vault import failed. Check the archive, transfer key, and empty destination vault."); }
+    },
+  });
+
   pi.registerCommand("vault-add", {
     description: "Add a credential to the Takomi vault through secure prompts",
     handler: async (args, ctx) => {
+      if (ctx.mode !== "tui") throw new Error("Vault add requires an interactive Pi TUI for masked secret entry.");
       const [serviceArg, hostArg] = parseArgs(args || "");
       const service = serviceArg ?? (ctx.hasUI ? await ctx.ui.input("Service:", "github") : undefined);
       const host = hostArg ?? (ctx.hasUI ? await ctx.ui.input("Host:", "github.com") : undefined);
@@ -43,7 +86,7 @@ export function registerVaultCommands(pi: ExtensionAPI) {
       const label = (await ctx.ui.input("Label:", `${service} ${host}`))?.trim() || `${service} ${host}`;
       if (kind.startsWith("login")) {
         const username = await ctx.ui.input("Username:");
-        const password = await ctx.ui.input("Password:");
+        const password = await maskedSecret(ctx, "Password:");
         if (!username || !password) throw new Error("Cancelled by user");
         const created = createCredential({
           label, service, host, type: "login",
@@ -56,7 +99,7 @@ export function registerVaultCommands(pi: ExtensionAPI) {
         notify(ctx, `Saved ${created.id} (${created.label}). Values are encrypted with backend ${getBackend()}.`);
         return;
       }
-      const token = await ctx.ui.input("Token:");
+      const token = await maskedSecret(ctx, "Token:");
       if (!token) throw new Error("Cancelled by user");
       const created = createCredential({
         label, service, host, type: "token",
@@ -148,7 +191,7 @@ export function registerVaultCommands(pi: ExtensionAPI) {
         `Credentials: ${items.length} | active grants: ${grants.length}`,
         "",
         "Recent activity (no values):",
-        ...audit.map((entry) => `- ${new Date(entry.at).toLocaleString()} ${entry.event} ${entry.credentialId ?? ""} ${entry.target ?? ""} ${entry.result ?? ""}`.trim()),
+        ...audit.map(formatAudit),
       ].join("\n"));
     },
   });
@@ -162,7 +205,8 @@ export function registerVaultCommands(pi: ExtensionAPI) {
         const removed = listCredentials().filter(isEphemeral).map((entry) => entry.id);
         for (const ephemeralId of removed) {
           deleteCredential(ephemeralId);
-          logAudit({ at: Date.now(), credentialId: ephemeralId, event: "deleted", result: "one-time credential auto-removed on revoke-all" });
+          try { logAudit({ at: Date.now(), credentialId: ephemeralId, event: "deleted", result: "one-time credential auto-removed on revoke-all" }); }
+          catch { /* Keep removing ephemeral credentials even when audit is unavailable. */ }
         }
         notify(ctx, `Revoked ${revoked.length} grant(s).${removed.length ? ` Deleted ephemeral credential(s) ${removed.join(", ")}.` : ""}`);
         return;
@@ -181,9 +225,21 @@ export function registerVaultCommands(pi: ExtensionAPI) {
       }
       const credentialId = await pickCredential(ctx, id, "Choose credential to revoke");
       const revoked = revokeGrants({ credentialId });
-      logAudit({ at: Date.now(), credentialId, event: "revoked", result: `${revoked.length} grants revoked` });
       const removed = deleteIfEphemeral(credentialId);
       notify(ctx, `Revoked ${revoked.length} grant(s) for ${credentialId}.${removed ? " Deleted ephemeral one-time credential." : ""}`);
+    },
+  });
+
+  pi.registerCommand("vault-audit", {
+    description: "Show redacted activity for one credential",
+    handler: async (args, ctx) => {
+      const [id] = parseArgs(args || "");
+      if (id && !/^cred_[A-F0-9]{32}$/.test(id)) throw new Error("Invalid credential handle.");
+      const credentialId = id ?? await pickCredential(ctx, undefined, "Choose credential for audit");
+      const events = readAudit(50, credentialId);
+      notify(ctx, events.length
+        ? events.map(formatAudit).join("\n")
+        : `No recorded activity for ${credentialId}.`);
     },
   });
 
@@ -195,12 +251,12 @@ export function registerVaultCommands(pi: ExtensionAPI) {
         notify(ctx, "Usage: /vault-find <service> [host]", "warning");
         return;
       }
-      const matches = findByService(service, host);
+      const matches = findServiceCandidates(service, host);
       if (!matches.length) {
         notify(ctx, `No credential found for ${service}${host ? ` on ${host}` : ""}.`);
         return;
       }
-      notify(ctx, matches.map((entry) => `- ${entry.id} | ${entry.label} | ${entry.host}`).join("\n"));
+      notify(ctx, matches.map((entry) => `- ${entry.id} | ${entry.label} | ${entry.service} | ${entry.host}${entry.service.toLowerCase() === service.toLowerCase() ? "" : " | approximate"}`).join("\n"));
     },
   });
 }

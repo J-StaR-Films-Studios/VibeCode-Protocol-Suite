@@ -5,6 +5,7 @@ import { clearKeyCache, peekBackend } from "./crypto-store.ts";
 import { revokeExpiredSessionGrants, revokeGrants } from "./grant-store.ts";
 import { registerVaultCommands } from "./commands.ts";
 import { registerVaultTools } from "./tools.ts";
+import { registerVaultInputGuard } from "./input-guard.ts";
 
 function safeStatus(ctx: ExtensionContext) {
   try {
@@ -18,6 +19,7 @@ function safeStatus(ctx: ExtensionContext) {
 export default function (pi: ExtensionAPI) {
   registerVaultTools(pi);
   registerVaultCommands(pi);
+  registerVaultInputGuard(pi);
 
   pi.on("session_start", async (_event, ctx: ExtensionContext) => {
     safeStatus(ctx);
