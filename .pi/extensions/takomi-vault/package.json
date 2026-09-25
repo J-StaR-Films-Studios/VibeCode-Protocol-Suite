@@ -1,0 +1,11 @@
+{
+  "name": "takomi-vault",
+  "private": true,
+  "type": "module",
+  "description": "Pi extension for secure credential handles and short-lived grants with OS-backed key storage",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

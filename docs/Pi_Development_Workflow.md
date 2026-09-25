@@ -45,6 +45,7 @@ The Takomi launcher recognizes its source checkout and starts Pi with one comple
 --extension .pi/extensions/takomi-context-manager/index.ts
 --extension .pi/extensions/notify-sound/index.ts
 --extension .pi/extensions/antigravity-provider/index.ts
+--extension .pi/extensions/takomi-vault/index.ts
 --no-prompt-templates
 --prompt-template .pi/prompts
 --no-themes
@@ -73,6 +74,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\pi-dev.ps1 -p "Say ok"
 Use it only as a local development convenience. It is not the recommended default for package validation because `takomi install pi` is supposed to overwrite/sync the packaged distribution into `~/.pi/agent`.
 
 If you run `takomi install pi`, expect it to replace those development links with packaged copies. Re-run `scripts/sync-pi-global.ps1` only when you want to return to linked local development mode.
+
+## Adding a new extension
+
+There is no central registry. A new extension must be added to three explicit lists, or it will silently fail to load in one of the launch paths:
+
+1. `scripts/pi-dev.ps1` — the local dev loop. Add the `$name = Join-Path $extensionsRoot '<name>\index.ts'` variable, the existence check, and the `--extension $name` line.
+2. `src/pi-harness.js` (`getSourceCheckoutLaunchArgs`) — the same list for the `takomi` wrapper. This only takes effect once published to npm.
+3. `scripts/sync-pi-global.ps1` — the global junction, for testing outside this repo via normal Pi discovery.
+
+Miss one and the symptom is always the same: the extension loads in some directories but not others, with no error. Check the three lists first.
+
+## The launcher-version trap
+
+Inside this repo, the extension *files* Pi loads are local, but the *launcher* that builds the explicit list is whichever `takomi` binary runs. If the global install is older than the checkout and the checkout adds a new extension, the old launcher builds an old list with `--no-extensions`, and the new extension never loads from the repo root — while working fine everywhere else via global discovery.
+
+When a new extension is invisible only in the repo root, check `npm ls -g takomi`. Either run the checkout directly (`node bin/takomi.js` from root), use `scripts/pi-dev.ps1`, or publish and reinstall global. Do not `npm link` as a workaround; it makes every dirty edit instantly live in your global install.
 
 ## Do not edit `~/.pi` as the source of truth
 
