@@ -126,6 +126,59 @@ export function validateSessionState(state: OrchestratorSessionState): TakomiVal
   return finish(issues);
 }
 
+// Check the authored documents at the creation boundary, not during status-only updates.
+// JSON tracking fields and board-generated templates are not substitutes for authored markdown.
+export function validateAuthoredDocuments(
+  masterPlan: string | undefined,
+  tasks: Array<{ id: string; markdown: string | undefined }>,
+): TakomiValidationReport {
+  const issues: TakomiValidationIssue[] = [];
+  const sections = (markdown: string): Array<{ heading: string; body: string }> => {
+    const parts = markdown.split(/^#{2,6}\s+(.+)\s*$/m);
+    const result: Array<{ heading: string; body: string }> = [];
+    for (let index = 1; index < parts.length; index += 2) {
+      result.push({ heading: parts[index].trim(), body: parts[index + 1] ?? "" });
+    }
+    return result;
+  };
+  const meaningful = (body: string): boolean => body.split(/\r?\n/).some((line) => {
+    const text = line.trim().replace(/^(?:[-*+]\s*|\d+\.\s*|\[[ xX]\]\s*)+/, "").trim();
+    return Boolean(text) && !/^(?:none(?: specified)?\.?|n\/a|todo(?::.*)?|tbd(?::.*)?|placeholder|add .* here\.?|not captured in machine state)$/i.test(text)
+      && !/^\|?\s*[-:| ]+\|?$/.test(text) && !/^<!--/.test(text);
+  });
+  const validSection = (items: ReturnType<typeof sections>, pattern: RegExp): boolean =>
+    items.some((section) => pattern.test(section.heading) && meaningful(section.body));
+
+  if (!masterPlan?.trim()) {
+    issues.push(issue("error", "missing-master-plan", "Authored master_plan.md is required."));
+  } else {
+    const items = sections(masterPlan);
+    if (!/^#\s+\S/m.test(masterPlan) || masterPlan.includes("<!-- takomi-generated-master-plan -->")
+      || !validSection(items, /overview|context|goal|background|scope/i)
+      || !validSection(items, /plan|task|approach|phase|architecture|work|deliverable/i)) {
+      issues.push(issue("error", "shallow-master-plan", "master_plan.md needs an authored title, context and actionable plan sections, not a generated template or placeholders."));
+    }
+  }
+
+  for (const task of tasks) {
+    if (!task.markdown?.trim()) {
+      issues.push(issue("error", "missing-task-markdown", `Authored task packet is required for ${task.id}.`, task.id));
+      continue;
+    }
+    const items = sections(task.markdown);
+    const required = [
+      /objective|goal/i,
+      /scope/i,
+      /definition of done|acceptance|completion criteria/i,
+      /expected artifacts|deliverables|outputs/i,
+    ];
+    if (!/^#\s+\S/m.test(task.markdown) || required.some((pattern) => !validSection(items, pattern))) {
+      issues.push(issue("error", "shallow-task-markdown", `Task ${task.id} needs an authored title and meaningful objective, scope, completion criteria and deliverables.`, task.id));
+    }
+  }
+  return finish(issues);
+}
+
 export function renderValidationReport(report: TakomiValidationReport): string {
   if (report.issues.length === 0) return "Takomi session validation: PASS";
   return [

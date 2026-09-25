@@ -75,7 +75,23 @@ try {
   }
 
   assert.doesNotMatch(text(board), /fallback summary:/i, "board catalog stays compact and does not duplicate playbooks");
-  console.log("✓ workflow catalog is canonical, complete, and separately framed by workflow and board APIs");
+
+  const prompts = Object.fromEntries(await Promise.all(["genesis", "design", "build", "prime"].map(async (stage) => [
+    stage, await fs.readFile(path.join(repoRoot, ".pi", "prompts", `${stage}-prompt.md`), "utf8"),
+  ])));
+  for (const [stage, paths] of Object.entries({
+    genesis: ["docs/Project_Requirements.md", "docs/Coding_Guidelines.md", "docs/issues/FR-XXX.md"],
+    design: ["docs/design/sitemap.md", "docs/design/design-system.html", "docs/mockups/<screen>.html", "docs/Builder_Prompt.md"],
+    build: ["docs/Project_Requirements.md", "docs/issues/FR-XXX.md", "docs/Builder_Handoff_Report.md"],
+    prime: ["docs/Project_Requirements.md", "docs/Coding_Guidelines.md", "docs/issues/FR-XXX.md"],
+  })) {
+    for (const artifact of paths) assert.ok(prompts[stage].includes(artifact), `${stage} keeps the standard Takomi artifact ${artifact}`);
+  }
+  assert.match(prompts.genesis, /one .* per MUS requirement/i, "Genesis maps each MUS requirement to an issue");
+  assert.match(prompts.build, /For each MUS FR/, "Build implements MUS FR issues in order");
+  assert.match(prompts.design, /Design is for UI and UX/, "Design keeps the UI-only boundary");
+  assert.doesNotMatch(prompts.build, /pnpm create next-app/, "Build does not force a new stack");
+  console.log("✓ workflow catalog and standard prompt artifact contracts pass");
 } finally {
   await fs.rm(tempRoot, { recursive: true, force: true });
   await fs.rm(outDir, { recursive: true, force: true });

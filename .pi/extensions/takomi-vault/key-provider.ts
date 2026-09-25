@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
-import { KEY_PATH, readJsonFile, writeJsonFile } from "./config.ts";
+import { KEY_PATH, VAULT_PATH, readJsonFile, writeJsonFile } from "./config.ts";
 import type { KeyBackend } from "./types.ts";
 
 const SERVICE = "takomi-vault";
@@ -84,9 +84,9 @@ function tryExec(command: string, args: string[], input?: string): boolean {
 
 function macStore(plainB64: string): boolean {
   if (process.platform !== "darwin") return false;
-  // Prefer stdin so the key never appears in argv. Fall back to -w only if stdin fails.
-  if (tryExec("security", ["add-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-U"], plainB64)) return true;
-  return tryExec("security", ["add-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w", plainB64, "-U"]);
+  // With -w and no argument, security reads the password from stdin.
+  // Never retry with the data key in process arguments.
+  return tryExec("security", ["add-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-U", "-w"], `${plainB64}\n`);
 }
 
 function macLoad(): string | undefined {
@@ -179,6 +179,10 @@ export function resolveDataKey(): { key: Buffer; backend: KeyBackend } {
       return { key: Buffer.from(existing.key, "base64"), backend: "file-permissions" };
     }
     throw new Error("Vault key exists but no usable backend (OS store, DPAPI, or passphrase) could unwrap it.");
+  }
+
+  if (existsSync(VAULT_PATH)) {
+    throw new Error("Vault key is missing while vault data exists. Restore key.json; refusing to create a new key.");
   }
 
   const fresh = randomBytes(32);

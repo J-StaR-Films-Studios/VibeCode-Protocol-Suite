@@ -94,27 +94,84 @@ try {
   };
   const execute = (params) => board.execute("test", params, undefined, undefined, ctx);
   const sessionId = "orch-20260712-114201";
-  await execute({
+  const authoredPlan = "# Human Master Plan\n\n## Context\n\nKeep the original plan while expanding build work.\n\n## Architecture\n\n- Preserve this exact prose during expansion.\n";
+  const taskDoc = (id, title) => `# ${id}: ${title}\n\n## Objective\n\nImplement ${title} for the board.\n\n## Scope\n\n- Change board behavior for ${id}.\n\n## Definition of done\n\n- Run the focused tests for ${id}.\n\n## Expected artifacts\n\n- Updated board source and tests.\n`;
+  const missing = await execute({ action: "init_session", sessionId, title: "Incomplete" });
+  assert.equal(missing.details.error.code, "invalid-authored-docs");
+  assert.match(resultText(missing), /missing-master-plan/);
+  assert.match(resultText(missing), /missing-task-markdown/);
+  const statePath = path.join(workspace, ".pi", "takomi", "orchestrator", `${sessionId}.json`);
+  assert.equal(await fs.stat(statePath).then(() => true).catch(() => false), false, "invalid initialization writes no partial session");
+  const shallow = await execute({
+    action: "init_session", sessionId, title: "Incomplete", masterPlanMarkdown: "# Plan\n\n## Context\n\nTODO\n\n## Plan\n\nTBD",
+    tasks: [{ id: "BLD-002", title: "Guard completion", role: "code", stage: "build", taskMarkdown: "# Task\n\nTODO" }],
+  });
+  assert.match(resultText(shallow), /shallow-master-plan/);
+  assert.match(resultText(shallow), /shallow-task-markdown/);
+  assert.equal(await fs.stat(statePath).then(() => true).catch(() => false), false);
+  const placeholderId = "orch-20260712-114205";
+  const labeledPlaceholders = await execute({
+    action: "init_session", sessionId: placeholderId, title: "Reject labeled placeholders",
+    masterPlanMarkdown: "# Plan\n\n## Context\n\nTODO: define scope\n\n## Plan\n\n- Implement board validation.",
+    tasks: [{ id: "BLD-005", title: "Validate docs", role: "coder", stage: "build",
+      taskMarkdown: "# Task\n\n## Objective\n\nValidate docs.\n\n## Scope\n\nTODO: define scope\n\n## Definition of done\n\n- Board tests pass.\n\n## Expected artifacts\n\nTBD: list deliverables\n" }],
+  });
+  assert.equal(labeledPlaceholders.details.error.code, "invalid-authored-docs");
+  assert.match(resultText(labeledPlaceholders), /shallow-master-plan/);
+  assert.match(resultText(labeledPlaceholders), /shallow-task-markdown/);
+  const placeholderStatePath = path.join(workspace, ".pi", "takomi", "orchestrator", `${placeholderId}.json`);
+  assert.equal(await fs.stat(placeholderStatePath).then(() => true).catch(() => false), false, "labeled placeholders write no partial session");
+  const deliverablesPlaceholder = await execute({
+    action: "init_session", sessionId: placeholderId, title: "Reject pending deliverables",
+    masterPlanMarkdown: authoredPlan,
+    tasks: [{ id: "BLD-005", title: "Validate docs", role: "coder", stage: "build",
+      taskMarkdown: taskDoc("BLD-005", "Validate docs").replace("- Updated board source and tests.", "TBD: list deliverables") }],
+  });
+  assert.equal(deliverablesPlaceholder.details.error.code, "invalid-authored-docs");
+  assert.match(resultText(deliverablesPlaceholder), /shallow-task-markdown/);
+  assert.equal(await fs.stat(placeholderStatePath).then(() => true).catch(() => false), false, "pending deliverables write no partial session");
+  const authoredId = "orch-20260712-114204";
+  const authoredRoot = path.join(workspace, "docs", "tasks", "orchestrator-sessions", authoredId);
+  await fs.mkdir(path.join(authoredRoot, "pending"), { recursive: true });
+  await fs.writeFile(path.join(authoredRoot, "master_plan.md"), authoredPlan);
+  await fs.writeFile(path.join(authoredRoot, "pending", "BLD-004_prepared.task.md"), taskDoc("BLD-004", "Prepared"));
+  const fromDisk = await execute({
+    action: "init_session", sessionId: authoredId, title: "Authored on disk",
+    tasks: [{ id: "BLD-004", title: "Prepared", role: "coder", stage: "build" }],
+  });
+  assert.equal(fromDisk.details.masterPlanDisposition, "preserved", "preauthored files can initialize without inline markdown");
+  assert.equal(await fs.readFile(path.join(authoredRoot, "master_plan.md"), "utf8"), authoredPlan);
+  const created = await execute({
     action: "init_session",
     sessionId,
     title: "Semantic error test",
-    tasks: [{ id: "BLD-002", title: "Guard completion", role: "code", stage: "build", checklist: ["Run tests"] }],
+    masterPlanMarkdown: authoredPlan,
+    tasks: [{ id: "BLD-002", title: "Guard completion", role: "code", stage: "build", checklist: ["Run tests"], taskMarkdown: taskDoc("BLD-002", "Guard completion") }],
   });
+  assert.equal(created.details.masterPlanDisposition, "written");
+  assert.equal(await fs.readFile(path.join(workspace, "docs", "tasks", "orchestrator-sessions", sessionId, "pending", "BLD-002_guard_completion.task.md"), "utf8"), taskDoc("BLD-002", "Guard completion"), "authored packet replaces board fallback");
 
   const paths = {
     masterPlan: path.join(workspace, "docs", "tasks", "orchestrator-sessions", sessionId, "master_plan.md"),
   };
-  const authoredPlan = "# Human Master Plan\n\nThis detailed plan is canonical.\n\n## Architecture\n\n- Preserve this exact prose.\n";
-  await fs.writeFile(paths.masterPlan, authoredPlan, "utf8");
+  const invalidExpansion = await execute({
+    action: "expand_stage", sessionId, stage: "build",
+    tasks: [{ id: "BLD-003", title: "Implement safely", role: "coder", taskMarkdown: "# Task\n\nTODO" }],
+  });
+  assert.equal(invalidExpansion.details.error.code, "invalid-authored-docs");
+  assert.match(resultText(invalidExpansion), /shallow-task-markdown/);
+  assert.equal((JSON.parse(await fs.readFile(statePath, "utf8"))).tasks.length, 1, "invalid expansion does not append tasks");
+  assert.equal(await fs.readFile(paths.masterPlan, "utf8"), authoredPlan);
   const expansion = await execute({
     action: "expand_stage",
     sessionId,
     stage: "build",
     masterPlanMarkdown: "short replacement",
-    tasks: [{ id: "BLD-003", title: "Implement safely", role: "coder", checklist: ["Verify"], expectedArtifacts: ["code"] }],
+    tasks: [{ id: "BLD-003", title: "Implement safely", role: "coder", checklist: ["Verify"], expectedArtifacts: ["code"], taskMarkdown: taskDoc("BLD-003", "Implement safely") }],
   });
   assert.equal(await fs.readFile(paths.masterPlan, "utf8"), authoredPlan, "stage expansion preserves a human-authored master plan byte-for-byte");
   assert.equal(expansion.details.masterPlanDisposition, "preserved", "stage expansion reports preservation disposition");
+  assert.equal(await fs.readFile(path.join(workspace, "docs", "tasks", "orchestrator-sessions", sessionId, "pending", "BLD-003_implement_safely.task.md"), "utf8"), taskDoc("BLD-003", "Implement safely"));
   assert.match(resultText(expansion), /WARNING: Preserved/, "stage expansion visibly warns when incoming content is rejected");
 
   await execute({ action: "update_task", sessionId, taskId: "BLD-003", status: "in-progress" });
@@ -141,6 +198,8 @@ try {
   });
   assert.equal(await fs.readFile(paths.masterPlan, "utf8"), replacement, "confirmed matching-hash replacement succeeds with exact bytes");
   assert.equal(replaced.details.masterPlanDisposition, "written", "explicit replacement reports written disposition");
+  const legacyUpdate = await execute({ action: "update_task", sessionId, taskId: "BLD-003", status: "blocked" });
+  assert.equal(legacyUpdate.details.task.status, "blocked", "status-only updates do not gate older or deliberately replaced documents");
 
   const cases = [
     {

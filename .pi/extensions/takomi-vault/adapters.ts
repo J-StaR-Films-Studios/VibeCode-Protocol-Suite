@@ -3,7 +3,7 @@ import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import { DATA_ROOT, writeJsonFile } from "./config.ts";
 import { deleteIfEphemeral, getCredential, getFieldValue, touchUsed } from "./vault-store.ts";
-import { recordUse, validateGrant } from "./grant-store.ts";
+import { spendGrant } from "./grant-store.ts";
 import { logAudit } from "./audit.ts";
 
 const TEMP_TRACK_PATH = join(DATA_ROOT, "tempfiles.json");
@@ -74,23 +74,23 @@ export function execWithEnv(input: {
   command: string;
   args?: string[];
   envMap: Record<string, string>;
+  operation?: string;
   cwd?: string;
 }): { exitCode: number; stdout: string; stderr: string } {
-  const grant = validateGrant(input.grantId, input.target, "terminal");
-  if (grant.credentialId !== input.credentialId) throw new Error("Grant does not belong to this credential");
   const credential = getCredential(input.credentialId);
   if (!credential) throw new Error(`Unknown credential: ${input.credentialId}`);
 
   const secrets: string[] = [];
   const injected: Record<string, string> = {};
   for (const [envVar, fieldName] of Object.entries(input.envMap)) {
+    checkEnvName(envVar);
     const value = getFieldValue(credential, fieldName);
     secrets.push(value);
     injected[envVar] = value;
   }
 
   // Consume before spawn: a crash must never leave a once-grant replayable.
-  recordUse(input.grantId);
+  const grant = spendGrant({ grantId: input.grantId, credentialId: input.credentialId, target: input.target, tool: "terminal", operation: input.operation ?? "use", agent: "pi", fields: Object.values(input.envMap) });
   try {
     const result = spawnSync(input.command, input.args ?? [], {
       encoding: "utf8",
@@ -122,15 +122,14 @@ export function execWithStdin(input: {
   command: string;
   args?: string[];
   field: string;
+  operation?: string;
   cwd?: string;
 }): { exitCode: number; stdout: string; stderr: string } {
-  const grant = validateGrant(input.grantId, input.target, "terminal");
-  if (grant.credentialId !== input.credentialId) throw new Error("Grant does not belong to this credential");
   const credential = getCredential(input.credentialId);
   if (!credential) throw new Error(`Unknown credential: ${input.credentialId}`);
 
   const secret = getFieldValue(credential, input.field);
-  recordUse(input.grantId);
+  const grant = spendGrant({ grantId: input.grantId, credentialId: input.credentialId, target: input.target, tool: "terminal", operation: input.operation ?? "use", agent: "pi", fields: [input.field] });
   try {
     const result = spawnSync(input.command, input.args ?? [], {
       encoding: "utf8",
@@ -162,12 +161,8 @@ export function writeTempEnvFile(input: {
   path: string;
   entries: Record<string, string>;
   persistent: boolean;
+  operation?: string;
 }): { path: string; persistent: boolean } {
-  const grant = validateGrant(input.grantId, input.target, "file");
-  if (grant.credentialId !== input.credentialId) throw new Error("Grant does not belong to this credential");
-  if (input.persistent && grant.scope !== "target" && grant.scope !== "session") {
-    throw new Error("Permanent file writes need a session or target grant. Request a wider grant first.");
-  }
   const credential = getCredential(input.credentialId);
   if (!credential) throw new Error(`Unknown credential: ${input.credentialId}`);
 
@@ -175,6 +170,7 @@ export function writeTempEnvFile(input: {
     checkEnvName(envVar);
     return `${envVar}=${quoteEnvValue(getFieldValue(credential, fieldName))}`;
   });
+  const grant = spendGrant({ grantId: input.grantId, credentialId: input.credentialId, target: input.target, tool: "file", operation: input.operation ?? "use", agent: "pi", fields: Object.values(input.entries), persistent: input.persistent });
   writeFileSync(input.path, `${lines.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
   try {
     chmodSync(input.path, 0o600);
@@ -182,7 +178,6 @@ export function writeTempEnvFile(input: {
     // Best effort on Windows.
   }
 
-  recordUse(input.grantId);
   try {
     touchUsed(input.credentialId);
     logAudit({

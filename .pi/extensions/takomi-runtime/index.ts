@@ -23,6 +23,7 @@ import {
   serializeSessionState,
   slugifyTaskTitle,
   validateSessionState,
+  validateAuthoredDocuments,
   type OrchestratorTask,
   type OrchestratorSessionState,
   type OrchestratorTaskStatus,
@@ -578,6 +579,14 @@ async function writeTaskMarkdownSafely(filePath: string, incomingMarkdown: strin
   return true;
 }
 
+async function writeAuthoredTaskAfterSync(paths: ReturnType<typeof getSessionPaths>, state: OrchestratorSessionState, task: OrchestratorTask, authored: string): Promise<void> {
+  const filePath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
+  const existing = await readFile(filePath, "utf8");
+  const generated = renderTaskFile(task, `Parent session: ${state.sessionId}\n\nTask title: ${task.title}`);
+  if (existing === generated) await writeFile(filePath, repairTaskMarkdown(authored).trimEnd() + "\n", "utf8");
+  else await writeTaskMarkdownSafely(filePath, authored);
+}
+
 async function writeTaskArtifact(paths: ReturnType<typeof getSessionPaths>, state: OrchestratorSessionState, task: OrchestratorTask) {
   const targetPath = path.join(getTaskFolder(paths, task.status), getTaskFileName(task));
   const existingPath = await findExistingTaskFile(paths, task);
@@ -696,6 +705,40 @@ async function syncTaskArtifacts(cwd: string, session: OrchestratorSessionState,
 
 async function writeOrchestratorSession(cwd: string, session: OrchestratorSessionState, incomingMasterPlan?: string) {
   return syncTaskArtifacts(cwd, session, incomingMasterPlan);
+}
+
+async function validateBoardAuthoredDocs(
+  cwd: string,
+  session: OrchestratorSessionState,
+  incoming: IncomingTask[] | undefined,
+  incomingPlan: string | undefined,
+  newTasks: OrchestratorTask[],
+) {
+  const paths = getSessionPaths(cwd, session.sessionId);
+  const existingPlan = await readFile(paths.masterPlan, "utf8").catch(() => undefined);
+  // syncTaskArtifacts preserves human plans, even when the caller sends a different plan.
+  const plan = existingPlan && !existingPlan.includes("<!-- takomi-generated-master-plan -->")
+    ? existingPlan : incomingPlan ?? existingPlan;
+  const taskDocs = await Promise.all(newTasks.map(async (task, index) => {
+    const existingPath = await findExistingTaskFile(paths, task);
+    const existing = existingPath ? await readFile(existingPath, "utf8") : undefined;
+    const authored = (incoming?.[index]?.id === undefined || incoming?.[index]?.id === task.id)
+      ? incoming?.[index]?.taskMarkdown : incoming?.find((input) => input.id === task.id)?.taskMarkdown;
+    const markdown = existing && authored && shouldPreserveExistingTaskMarkdown(existing, authored)
+      ? existing : authored ?? existing;
+    return { id: task.id, markdown };
+  }));
+  const stateReport = validateSessionState(session);
+  const docReport = validateAuthoredDocuments(plan, taskDocs);
+  if (stateReport.errors.length || docReport.errors.length) {
+    return createBoardErrorResult(
+      `Session ${session.sessionId} was not saved. Repair authored documents in ${paths.root} or supply them to the board.\n${renderValidationReport(stateReport)}\n${renderValidationReport(docReport)}`,
+      "invalid-authored-docs",
+      "error",
+      { sessionId: session.sessionId, issues: [...stateReport.errors, ...docReport.errors] },
+    );
+  }
+  return undefined;
 }
 
 type IncomingTask = {
@@ -1205,9 +1248,9 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       "Use this when you need a concrete orchestrator session directory and task artifacts on disk.",
       "takomi_board never runs subagents. Author the human-facing markdown first, use takomi_subagent for execution, then return here with takomi_board update_task to record the outcome.",
       "Session IDs must use the canonical timestamp format orch-YYYYMMDD-HHMMSS. Use the same sessionId for the authored docs folder and the board JSON state.",
-      "For high-quality orchestration sessions, provide sessionId, masterPlanMarkdown, and taskMarkdown values that match the authored session folder. If you already wrote docs/tasks/orchestrator-sessions/<id>, call this tool with sessionId=<id>; do not create a second session id.",
+      "Author master_plan.md and each new task packet before init_session or expand_stage. Supply masterPlanMarkdown and taskMarkdown or write the files under docs/tasks/orchestrator-sessions/<id> first. Reuse that sessionId; do not create a second session.",
       "JSON fields should carry IDs/status/roles/workflow/dependencies/checklists for tracking, not replace expressive markdown.",
-      "Do not use expand_stage as a placeholder generator. For Design/Build expansions, provide full taskMarkdown or complete objective/scope/definitionOfDone/expectedArtifacts/instructions for every task.",
+      "Do not use expand_stage as a placeholder generator. Supply meaningful authored task markdown with an objective, scope, completion criteria and deliverables for each new task.",
       "If a task packet would render with Scope/Definition Of Done/Expected Artifacts as None specified, repair it before launching subagents.",
       "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
       "If the request is small enough, do not force orchestration just because the tool exists.",
@@ -1425,12 +1468,12 @@ ${stateJson}`
           },
         );
         nextState = markStageExpanded(nextState, params.stage, params.notes);
+        const invalidDocs = await validateBoardAuthoredDocs(ctx.cwd, nextState, params.tasks as IncomingTask[], params.masterPlanMarkdown, tasks.slice(sessionState.tasks.length));
+        if (invalidDocs) return invalidDocs;
         const paths = await writeOrchestratorSession(ctx.cwd, nextState, params.masterPlanMarkdown);
-        for (const task of nextState.tasks) {
-          const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
-          if (authored?.trim()) {
-            await writeTaskMarkdownSafely(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored);
-          }
+        for (const [index, task] of nextState.tasks.slice(sessionState.tasks.length).entries()) {
+          const authored = params.tasks[index]?.taskMarkdown;
+          if (authored?.trim()) await writeAuthoredTaskAfterSync(paths, nextState, task, authored);
         }
         state.activeSessionId = nextState.sessionId;
         state.modeSource = "board";
@@ -1474,12 +1517,12 @@ ${stateJson}`
           lifecycle: baseState.lifecycle,
         },
       );
+      const invalidDocs = await validateBoardAuthoredDocs(ctx.cwd, nextState, params.tasks as IncomingTask[] | undefined, params.masterPlanMarkdown, nextState.tasks);
+      if (invalidDocs) return invalidDocs;
       const paths = await writeOrchestratorSession(ctx.cwd, nextState, params.masterPlanMarkdown);
-      for (const task of nextState.tasks) {
-        const authored = (params.tasks as IncomingTask[] | undefined)?.find((input) => (input.id ?? task.id) === task.id)?.taskMarkdown;
-        if (authored?.trim()) {
-          await writeTaskMarkdownSafely(path.join(getTaskFolder(paths, task.status), getTaskFileName(task)), authored);
-        }
+      for (const [index, task] of nextState.tasks.entries()) {
+        const authored = params.tasks?.[index]?.taskMarkdown;
+        if (authored?.trim()) await writeAuthoredTaskAfterSync(paths, nextState, task, authored);
       }
       state.activeSessionId = nextState.sessionId;
       state.role = "orchestrator";

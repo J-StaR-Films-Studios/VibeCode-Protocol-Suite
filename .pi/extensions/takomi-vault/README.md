@@ -71,10 +71,10 @@ Injection trusts the agent process with use. The guarantee is that secrets never
 ## Security notes
 
 - tool and command output redacts secret values
-- audit log stores IDs, targets, decisions, and expiry only
+- audit log records IDs and decisions, but some results still include caller-supplied commands, paths, reasons, or errors; do not put secrets in tool arguments
 - target binding is enforced in code, so a grant for one host cannot be used on another
 - revoking Takomi permission does not invalidate the real key at the provider; rotate leaked keys there
-- permanent `.env` writes need a session or target grant and are flagged as plaintext on disk
+- permanent `.env` writes need a session or target grant and fresh UI confirmation of the resolved path and env key names; no UI or a declined prompt denies the write, and the prompt warns that values are plaintext on disk
 
 ## Setup
 

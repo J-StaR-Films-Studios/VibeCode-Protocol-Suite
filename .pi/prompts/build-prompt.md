@@ -1,274 +1,40 @@
 ---
-description: Run the full Takomi Vibe Build workflow for the next request
+description: Build Takomi MUS requirements from their FR issues, verify each slice, and write a standard handoff
 ---
-# Workflow: Build VibeCode Project V3 (The Builder)
+# Workflow: Vibe Build
 
-> **Version 3** — verification after every file, FR-based progress, type-safe development, and explicit handoff.
+Implement the approved Genesis plan and, when UI is involved, the approved Design artifacts. Keep the scope to the current MUS requirements or assigned task. Do not depend on an optional external skill to supply the workflow.
 
-**You are the VibeCode Builder Agent.**
-You EXECUTE the Architect's plan. You do NOT strategize — you BUILD.
-Follow the blueprints precisely. Verify constantly.
+## 1. Load the project contract
 
----
+Read repository instructions and, by default, `docs/Project_Requirements.md`, `docs/Coding_Guidelines.md`, `docs/Builder_Prompt.md`, relevant `docs/issues/FR-XXX.md`, and the matching `docs/mockups/` files when they exist. Read the code and tests before editing. If an established project uses different locations, follow its existing files and record the mapping rather than silently creating duplicates.
 
-## Build Orchestration Readiness
+For a full-project Build, use the MUS FR IDs in the PRD as the work list. Future FRs remain outside Build unless the user approves them. For a focused follow-up, use the assigned FR or task instead of restarting the whole MUS sequence.
 
-If Build is being run through an orchestration session, do not start with bare board placeholders.
-Before dispatching Build subagents, each Build task packet must include:
-- exact FR IDs and mockup files covered
-- objective and concrete scope boundaries
-- dependencies and handoff assumptions
-- expected files/artifacts
-- definition of done and verification commands
-- privacy/payment/security constraints that apply
+## 2. Prepare work before delegation
 
-If existing Build task packets say `Scope: None specified`, `Definition Of Done: None specified`, or `Expected Artifacts: None specified`, pause and repair the task packet before launching or continuing subagents.
+Author each orchestration task packet in markdown before launching it. Name the FR IDs and mockups it covers, objective, scope boundaries, dependencies, expected files, definition of done, verification commands, and applicable security or data constraints. Repair placeholder Scope, Definition of Done, or Expected Artifacts sections before dispatch. JSON tracks status, models, and continuity; it does not replace the packet.
 
----
+## 3. Implement MUS requirements in order
 
-## Steps
+For each MUS FR in the approved Build scope, follow this loop. For a focused task without an FR, use its task packet and the same acceptance, implementation, and verification steps.
 
-### 1. Context Loading (MANDATORY)
-Before writing ANY code, read and internalize:
+1. Open the corresponding `docs/issues/FR-XXX.md` or assigned task packet and check its approach and acceptance criteria against the current code. Flag a missing or contradictory requirement before guessing.
+2. Implement the smallest complete slice using the agreed stack and `docs/Coding_Guidelines.md`. Scaffold a new app only if the plan calls for one. Match relevant mockups, while honoring accessibility, responsiveness, and explicit product requirements.
+3. Add focused tests for changed behavior and meaningful failure cases. Run the relevant checks after the FR or task slice, fix regressions, and record which acceptance criteria passed. Mark completed criteria in the issue or task file; leave unfinished ones unchecked with a reason.
+4. After every three completed FRs, or at the end of a smaller batch, report the completed IDs, checks run, blockers, and next IDs. Do not claim a pass for a command that was not run.
 
-```powershell
-cat docs/Project_Requirements.md    # The PRD
-cat docs/Coding_Guidelines.md       # The Law
-ls docs/issues/                     # All FR issues
-ls docs/mockups/                    # UI templates (if exist)
-```
+Preserve unrelated user work. If a requirement needs a major architecture change, expanded scope, production data mutation, or deployment, pause for approval. Review the diff for unnecessary code before handoff.
 
-**Acknowledge aloud:**
-- "I will run `tsc --noEmit` after every TypeScript file edit"
-- "I will reference the issue file for each FR I implement"
-- "I will mark acceptance criteria as I complete them"
+## 4. Verify and hand off
 
----
+Run the project's typecheck, tests, lint, and build as applicable. Use `scripts/vibe-verify.py` when this project provides it; otherwise use its documented verification commands. Record failures honestly, including whether they predate this work. Deploy only with explicit authorization and a confirmed target.
 
-### 2. Project Scaffolding (Next.js)
+For a full-project Build, create or update `docs/Builder_Handoff_Report.md` with:
 
-> [!IMPORTANT]
-> Use pnpm and PowerShell-safe commands.
+- MUS FR IDs completed, partially completed, and pending, linked to their issue files
+- files and behavior changed, including UI mockups used
+- commands run and their results, plus how to run the project
+- remaining Future work, blockers, and the recommended review or next Build step
 
-```powershell
-# Create temp directory for scaffolding
-mkdir temp-scaffold
-
-# Scaffold Next.js (skip install to avoid virtual store issues)
-pnpm create next-app temp-scaffold --ts --tailwind --eslint --app --src-dir --import-alias "@/*" --use-pnpm --no-git --skip-install
-
-# Merge into project root
-Get-ChildItem -Path temp-scaffold -Force | Copy-Item -Destination . -Recurse -Force
-
-# Cleanup
-Remove-Item -Path temp-scaffold -Recurse -Force
-
-# Install in root
-pnpm install
-```
-
----
-
-### 3. Setup Styling (Tailwind v4)
-
-Update `src/app/globals.css`:
-
-```css
-@import "tailwindcss";
-
-@theme {
-  --color-background: #ffffff;
-  --color-foreground: #0b1221;
-  --color-border: #e5e7eb;
-  --color-ring: #3b82f6;
-  
-  --color-primary: #2563eb;
-  --color-secondary: #7c3aed;
-}
-
-@theme .dark {
-  --color-background: #0b1221;
-  --color-foreground: #f3f4f6;
-  --color-border: #374151;
-}
-
-@layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
-}
-```
-
----
-
-### 4. MUS Implementation Loop
-
-For each FR marked as `MUS` in the PRD:
-
-#### 4.1 Announce
-```
-"📋 Implementing FR-XXX: [Title]"
-```
-
-#### 4.2 Read the Issue
-Open `docs/issues/FR-XXX.md` and review:
-- Proposed Solution
-- Technical Approach
-- Acceptance Criteria
-
-#### 4.3 Implement
-Write the code following:
-- The guidelines in `docs/Coding_Guidelines.md`
-- The mockups in `docs/mockups/` (if any)
-- The patterns suggested in the issue (adapt as needed)
-
-#### 4.4 Verify (MANDATORY)
-
-> [!CAUTION]
-> After EVERY TypeScript/TSX file edit:
-
-```bash
-npx tsc --noEmit
-```
-
-**If this fails:**
-1. STOP. Do not touch another file.
-2. Fix the error.
-3. Re-run until it passes.
-4. Only then continue.
-
-#### 4.5 Mark Progress
-Edit `docs/issues/FR-XXX.md` and check off completed acceptance criteria:
-
-```markdown
-## Acceptance Criteria
-
-- [x] Testable outcome 1  ✅ Completed
-- [x] Testable outcome 2  ✅ Completed
-- [ ] Testable outcome 3  ← Still in progress
-```
-
----
-
-### 5. Progress Checkpoints
-
-After every 3 FRs, pause and report:
-
-```
-📊 **Progress Checkpoint**
-
-✅ Completed:
-- FR-001: [Title]
-- FR-002: [Title]
-- FR-003: [Title]
-
-📈 Type-check: PASS
-🎯 Next: FR-004, FR-005, FR-006
-```
-
----
-
-### 6. Final Verification Gate
-
-Before claiming "MUS complete", run full verification:
-
-```bash
-python scripts/vibe-verify.py
-```
-
-**All checks must pass:**
-- ✅ TypeScript: PASS
-- ✅ Lint: PASS
-- ✅ Build: PASS
-
-If any check fails, fix it before proceeding.
-
----
-
-### 7. Generate Handoff Report
-
-Create `docs/Builder_Handoff_Report.md`:
-
-```markdown
-# Builder Handoff Report
-
-**Generated:** [Date]
-**Session:** Build V3
-
-## What Was Built
-
-### MUS Features Implemented
-- [x] FR-001: [Title]
-- [x] FR-002: [Title]
-- [x] FR-003: [Title]
-
-### Files Created
-```
-src/
-├── app/
-│   ├── page.tsx
-│   └── ...
-├── features/
-│   └── ...
-└── components/
-    └── ...
-```
-
-## Verification Status
-
-| Check | Status |
-|-------|--------|
-| TypeScript | ✅ PASS |
-| Lint | ✅ PASS |
-| Build | ✅ PASS |
-
-## How to Run
-
-```bash
-pnpm dev    # Development
-pnpm build  # Production build
-```
-
-## What's Next
-
-### Future Features (from PRD)
-- [ ] FR-XXX: [Title]
-- [ ] FR-XXX: [Title]
-
-To continue development, run `/vibe-continueBuild` in a new session.
-```
-
----
-
-### 8. Final Message
-
-"🏗️ **Build Phase Complete.**
-
-**MUS Implemented:**
-- X features built
-- All type-checks pass
-- All acceptance criteria verified
-
-**Verification:**
-- TypeScript: ✅
-- Lint: ✅
-- Build: ✅
-
-See `docs/Builder_Handoff_Report.md` for details.
-
-**To continue:**
-- `/vibe-continueBuild` — Implement remaining features
-- `/vibe-finalize` — Generate final handoff
-
-*Vibe complete. Code deployed.*"
-
----
-
-## Recovery Protocol
-
-If something breaks badly:
-
-```bash
-# See what changed
-git status
-git diff
-```
+For a focused follow-up, update the existing handoff report if it tracks that feature; otherwise a concise task handoff is enough. Never announce a finished MUS or deployment while its acceptance criteria or verification are still open.

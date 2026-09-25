@@ -1,110 +1,31 @@
 ---
-description: Prime the agent with project coding guidelines, styling rules, and folder structure.
+description: Prime the agent with Takomi's standard project files, current FR work, and verification status
 ---
+# Workflow: Prime agent
 
-# Workflow: Prime Agent
+Prime the current project before complex work, after context loss, or when resuming a session. Load project facts, not every available skill. The shipped Genesis, Design, and Build workflows remain usable without the external `takomi` skill.
 
-> Load the project "brain" — coding guidelines, current work, and verification status.
+## 1. Check the working tree and project health
 
----
+Inspect the working tree and preserve existing changes. Identify the project's verification commands from its configuration and guidelines. Run a relevant quick check when useful; report a check as "not run" rather than assuming it passed. Do not run a stack-specific command in a project that does not use that stack.
 
-## Steps
+## 2. Load the standard documents
 
-### 1. Check Project Health
+Read `AGENTS.md` and any more specific repository instructions. Then check, in order:
 
-Run verification to see current state:
+- `docs/Project_Requirements.md` for MUS and Future FR IDs
+- `docs/Coding_Guidelines.md` for implementation and verification rules
+- `docs/Builder_Prompt.md` for project-specific Build instructions
+- the current `docs/issues/FR-XXX.md` file and relevant `docs/features/` plans
+- `docs/design/sitemap.md`, `docs/design/design-system.html`, and relevant `docs/mockups/` when UI work is involved
+- the active orchestration task packet and session plan when a task was delegated
 
-```bash
-# TypeScript check
-npx tsc --noEmit
+Use established alternate paths only when the user or existing project has chosen them. Note the mapping so later agents can find the same files. Missing standard files in a new Genesis project are work to create, not a reason to invent a different layout.
 
-# Quick verification (if script exists)
-python scripts/vibe-verify.py --quick 2>/dev/null
-```
+## 3. Find the next work item
 
-**If type-check fails:** There are existing errors. Note them for fixing.
+Find unfinished acceptance criteria in the current MUS FR issues or task packet. Identify dependencies, blockers, and the next FR or task. Load an optional specialized skill only if it helps that work.
 
----
+## 4. Report the prime result
 
-### 2. Load Core Documentation
-
-```bash
-# Coding Guidelines (The Law)
-cat docs/Coding_Guidelines.md 2>/dev/null || cat docs/coding_guidelines.md 2>/dev/null
-
-# Project Requirements (PRD)
-cat docs/Project_Requirements.md 2>/dev/null
-
-# List mockups
-ls docs/mockups/ 2>/dev/null
-```
-
----
-
-### 3. Identify Current Work
-
-```bash
-# List all issues
-ls docs/issues/ 2>/dev/null
-
-# Find incomplete FRs
-grep -l "\- \[ \]" docs/issues/*.md 2>/dev/null
-```
-
----
-
-### 4. Load nextjs-standards Skill (If Next.js Project)
-
-If `next.config.*` or `package.json` contains `"next"`:
-
-```bash
-# Read the skill
-cat .agent/skills/nextjs-standards/SKILL.md 2>/dev/null
-```
-
----
-
-### 5. State Context Aloud
-
-After loading, acknowledge:
-
-"✅ **Agent Primed.**
-
-**Project Health:**
-- TypeScript: [PASS/FAIL - X errors]
-- Lint: [PASS/FAIL]
-
-**Context Loaded:**
-- Coding Guidelines: [Found/Not Found]
-- Mockups: [X files found / None]
-
-**Current Work:**
-- Incomplete FRs: FR-XXX, FR-YYY
-- Next up: FR-XXX: [Title]
-
-**Rules I will follow:**
-- `tsc --noEmit` after every file edit
-- Reference issue file for each FR
-- Mark acceptance criteria as I complete them
-
-What would you like me to work on?"
-
----
-
-## Quick Reference
-
-| Command | Purpose |
-|---------|---------|
-| `npx tsc --noEmit` | Check for type errors |
-| `python scripts/vibe-verify.py --quick` | Quick verification |
-| `cat docs/Coding_Guidelines.md` | Load the law |
-| `ls docs/issues/` | See all FRs |
-
----
-
-## When to Use
-
-- **Start of session** — Before any work
-- **After `/agent_reset`** — Reload context after reset
-- **Context lost** — Agent seems confused
-- **Before complex work** — Ensure full context
+State which standard documents were found or missing, the active FR or task, incomplete criteria, checks actually run and their results, and the next action. Keep the report short enough to use as a handoff; do not present an unrun typecheck or lint as passing.

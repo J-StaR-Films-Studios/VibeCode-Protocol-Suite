@@ -6,8 +6,32 @@ import type { CredentialSummary, CredentialType, FieldVisibility, StoredCredenti
 const EMPTY = { version: 1 as const, credentials: [] as StoredCredential[] };
 
 function load(): StoredCredential[] {
-  const file = readJsonFile(VAULT_PATH, EMPTY);
-  return Array.isArray(file.credentials) ? file.credentials : [];
+  const file = readJsonFile<unknown>(VAULT_PATH, EMPTY);
+  if (typeof file !== "object" || file === null || !("version" in file) || file.version !== 1
+    || !("credentials" in file) || !Array.isArray(file.credentials) || !file.credentials.every(isCredential)) {
+    throw new Error("Vault file has invalid structure; refusing to use it.");
+  }
+  return file.credentials;
+}
+
+function isCredential(value: unknown): value is StoredCredential {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.id === "string" && typeof entry.label === "string"
+    && typeof entry.service === "string" && typeof entry.host === "string"
+    && (entry.type === "login" || entry.type === "token")
+    && typeof entry.createdBy === "string"
+    && typeof entry.createdAt === "number" && Number.isFinite(entry.createdAt)
+    && typeof entry.updatedAt === "number" && Number.isFinite(entry.updatedAt)
+    && (entry.lastUsedAt === undefined || (typeof entry.lastUsedAt === "number" && Number.isFinite(entry.lastUsedAt)))
+    && Array.isArray(entry.fields) && entry.fields.every((item: unknown) => {
+      if (typeof item !== "object" || item === null) return false;
+      const field = item as Record<string, unknown>;
+      if (typeof field.valueEnc !== "object" || field.valueEnc === null) return false;
+      const enc = field.valueEnc as Record<string, unknown>;
+      return typeof field.name === "string" && (field.visibility === "inject-only" || field.visibility === "agent-readable")
+        && typeof enc.iv === "string" && typeof enc.tag === "string" && typeof enc.data === "string";
+    });
 }
 
 function save(credentials: StoredCredential[]) {

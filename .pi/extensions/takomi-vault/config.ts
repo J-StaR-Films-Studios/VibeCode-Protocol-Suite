@@ -28,6 +28,7 @@ function sleepSync(ms: number): void {
 const HELD_LOCKS = new Set<string>();
 
 export function withJsonFileLock<T>(filePath: string, fn: () => T): T {
+  ensureDirectory(dirname(filePath));
   const lockPath = `${filePath}.lock`;
   if (HELD_LOCKS.has(lockPath)) return fn();
   const started = Date.now();

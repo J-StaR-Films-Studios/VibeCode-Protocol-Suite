@@ -1,97 +1,29 @@
 ---
-description: Run the full Takomi Vibe Design workflow for the next request
+description: Define the UI and UX for a Takomi project, with standard design artifacts and a clear Build handoff
 ---
-# Workflow: Initialize VibeCode Design (The Designer)
+# Workflow: Vibe Design
 
-**System Instruction: VibeCode Persona Activation**
-You are the **VibeCode Design Architect**. You are a Senior UI/UX Designer and Design Systems Engineer.
-Your goal is to define the visual identity of the project before any code is written.
+Design is for UI and UX. Genesis owns product requirements, application architecture, data models, API contracts, and implementation strategy. If the work has no UI, recommend Build without inventing mockups. If a design is already approved, update only what the requested change affects.
 
-**Boundary:** This workflow is strictly for UI and UX. Do not design application architecture, database schemas, API contracts, backend boundaries, deployment strategy, or implementation task plans here. Those belong in Genesis or Architect planning artifacts.
+## 1. Read the foundation
 
-**Your Core Responsibilities:**
-1.  **Brand Discovery:** Understand the visual "vibe" (colors, typography, aesthetics).
-2.  **Visual Sitemap:** Generate the complete user-facing sitemap/screen inventory.
-3.  **Design System Foundation:** Create a portable `design-system.html` file.
-4.  **Page Mockups:** Generate HTML mockups for every page in the sitemap.
-5.  **Builder Prompt Update:** Enforce mockup usage in the Builder Prompt.
+Read `docs/Project_Requirements.md`, the relevant `docs/issues/FR-XXX.md` files, and `docs/Builder_Prompt.md` when present. Inspect existing screens, design assets, and mockups before proposing a new direction. Resolve any decision that changes the user journey with the user; make routine visual decisions from the brief.
 
----
+## 2. Define the experience
 
-## Steps
+Map the user journey, screen inventory, interaction states, responsive behavior, and accessibility needs. Establish the visual direction: branding, color, type, imagery, and motion where relevant. Reuse an established design system unless the user requests a change.
 
-### 1. Brand Discovery (Interview)
-Read `docs/Project_Requirements.md` for context. Then interview the user:
+## 3. Author the standard design artifacts
 
-**Gather:**
-- **Design Vibe:** (Keywords: "Minimal, trustworthy, calm" or "Bold, playful, vibrant")
-- **Logo:** (SVG code or description)
-- **Color Palette:** (Hex codes, or "generate based on vibe")
-- **Typography:** (Font pairing, or "suggest one")
-- **Photography/Illustration Style:** (Stock photos, illustrations, 3D?)
-- **Animation Style:** (Subtle, playful, sharp?)
+Use these paths by default. An explicit user instruction or an established, incompatible project layout can override them; preserve existing work and state the mapping.
 
-### 2. Sitemap Generation
-Generate `docs/design/sitemap.md` based on the PRD. Include ALL pages.
+- `docs/design/sitemap.md`: pages or screens, their purpose, and key components. For a full project, cover every planned user-facing page; for a feature, cover the affected screens.
+- `docs/design/design-system.html`: a portable visual reference for shared tokens, typography, components, states, layout, and responsive behavior. Update the existing file if one is already present.
+- `docs/mockups/<screen>.html`: a mockup for each screen in the approved sitemap or feature scope, including important interaction states. Keep mockups responsive and consistent with the design system.
+- `docs/Builder_Prompt.md`: add the mockup paths, interaction rules, and accessibility constraints Build must follow.
 
-**Format:**
-```markdown
-# Visual Sitemap
+Choose prototype tools and styling to fit the project. Tailwind CDN, a specific icon library, and a fixed color palette are not universal requirements. Mockups are the UI reference, but explicit requirements and accessibility take priority over copying a mistake.
 
-| Page | Purpose | Key Components |
-| :--- | :--- | :--- |
-| Home | Landing page | Hero, Features, CTA |
-| About | Brand story | Bio, Timeline |
-| Dashboard | User hub | Stats, Cards, Charts |
-```
+## 4. Handoff
 
-### 3. Design System Foundation
-Create `docs/design/design-system.html`.
-
-**Requirements:**
-- Single, portable HTML file.
-- Use **Tailwind CSS CDN** for styling.
-- Use **Heroicons CDN** for icons.
-- Must be fully responsive.
-
-**Sections:**
-1.  **Branding:** Logo display.
-2.  **Color Palette:** Primary, Accent, Neutral, Semantic (Success/Error/Warning).
-3.  **Typography:** H1-H6, Body text, all weights.
-4.  **Core Components:** Buttons (all states), Cards, Form Elements.
-5.  **Layout & Spacing:** Spacing scale, border-radius values.
-6.  **Navigation:** Desktop navbar, Mobile sidebar.
-
-### 4. Page Mockups
-For **each page in the sitemap**, create an HTML mockup in `docs/mockups/`.
-
-**Example:**
-- `docs/mockups/home.html`
-- `docs/mockups/about.html`
-- `docs/mockups/dashboard.html`
-
-**Requirements:**
-- Must use styles from `design-system.html`.
-- Tailwind CDN, responsive, placeholder content.
-
-### 5. Update Builder Prompt
-**CRITICAL:** After generating mockups, update `docs/Builder_Prompt.md`.
-
-**Add this instruction:**
-```markdown
-## Mandatory Mockup-Driven Implementation
-The `/docs/mockups` folder is the **UNQUESTIONABLE source of truth** for all front-end UI/UX.
-You must NOT deviate from the layout, color palette, typography, or component structure defined in the mockups.
-Before implementing any page, open the corresponding mockup file and replicate it exactly.
-```
-
-### 6. The Handoff
-Your work as Designer is complete.
-
-**Final Message:**
-"🎨 **Design System Complete.**
-- `docs/design/design-system.html` created.
-- `docs/mockups/` populated with page mockups.
-- `docs/Builder_Prompt.md` updated to enforce mockup usage.
-
-*Design with intention. Code with precision.*"
+List the files created or updated, the FRs and screens covered, unresolved decisions, and the next Build task. Leave application architecture and backend implementation to Genesis and Build.

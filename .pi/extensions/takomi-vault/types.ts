@@ -40,6 +40,8 @@ export interface CredentialGrant {
   tool: string;
   target: string;
   operation: string;
+  /** Absent on v1 grants: all credential fields remain available. */
+  fields?: string[];
   scope: GrantScope;
   expiresAt: number;
   revoked: boolean;

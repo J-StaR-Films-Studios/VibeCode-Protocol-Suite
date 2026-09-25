@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed feature / implementation blueprint. Pi first.
+Vault v1 is shipped in the Pi extension. BLD-001 closes grant and structured-storage bypasses; the remaining v2 features are not shipped.
 
 ## Working Name
 
@@ -116,10 +116,10 @@ Most commands accept an optional ID. In the Pi UI, omitting the ID opens a picke
 vault_list()
 vault_describe(id)
 vault_find({ service, host })
-vault_request({ service, host, operation, purpose, suggestedLabel, scope, kind })
-vault_use_env({ grantId, credentialId, target, command, args, envMap })
-vault_use_stdin({ grantId, credentialId, target, command, args, field })
-vault_write_env_file({ grantId, credentialId, target, path, entries, persistent })
+vault_request({ service, host, operation, purpose, suggestedLabel, scope, kind, tool })
+vault_use_env({ grantId, credentialId, target, operation, command, args, envMap })
+vault_use_stdin({ grantId, credentialId, target, operation, command, args, field })
+vault_write_env_file({ grantId, credentialId, target, operation, path, entries, persistent })
 vault_request_reveal({ id, field, reason })
 vault_grants({ credentialId })
 vault_revoke({ grantId, credentialId, all })
@@ -149,7 +149,7 @@ Scopes in v1, with time-to-live enforced by expiry timestamps:
 - session: 12 hour window, revoked early on session shutdown
 - target: 30 day window for one service host, for example `github.com`, until revoked
 
-No persistent global grant in v1. Enforcement binds target plus tool plus scope plus expiry. Operation and agent are recorded on every grant and audit event but matching on them is v2, so the prompt-injection defense in v1 is target binding: a grant for one host is denied on any other host.
+New grants bind target, tool, operation, agent (`pi`), expiry, and a human-selected field allowlist. The request tool always asks the human to select the effective scope, even when the model proposes one. It also asks for all fields or one named field. Unsaved credentials require once scope. Existing v1 grants without a field allowlist still allow all fields; operation and agent matching apply to those grants too. The use tools accept an optional `operation` parameter, defaulting to `use` for legacy callers. A request for `deploy` must pass `operation: "deploy"` at use time. Request `tool: "file"` for env-file writes; the default is `terminal`. Pi does not authenticate external agent processes through this extension: tool calls use the fixed `pi` identity.
 
 Every grant binds:
 
@@ -165,7 +165,7 @@ Every grant binds:
 }
 ```
 
-The gateway enforces agent plus target plus operation plus lifetime outside the model. A grant for `github.com` used against another host is denied automatically. This is the main prompt injection defense.
+The gateway checks agent, tool, target, operation, approved fields, and lifetime before spending a grant. It validates and increments use count under one cross-process file lock. A second concurrent use of a once grant is denied. These checks bind caller-supplied target and operation strings, not the destination of the child command: the terminal adapter cannot prove where an arbitrary process sends a secret. Approving terminal injection trusts that process with use of the credential.
 
 Default save behavior: do not save unless the user selects save. One time use creates an ephemeral credential row that is deleted automatically after first use, on revoke, or on revoke-all, so it never accumulates as vault trash. The window between request and use is the only time it appears in listings, marked one-time.
 
@@ -250,6 +250,7 @@ Single SQLite file plus sidecar config. Metadata is plaintext. Secret values are
   "tool": "terminal | file",
   "target": "convex.dev",
   "operation": "deploy",
+  "fields": ["token"],
   "scope": "once | turn | session | target",
   "expiresAt": 1777580854310,
   "revoked": false,
@@ -257,7 +258,7 @@ Single SQLite file plus sidecar config. Metadata is plaintext. Secret values are
 }
 ```
 
-`createdBy: agent-once` marks ephemeral rows for auto-delete. Audit lines carry `at, credentialId, agent, event, target, result` and never secret values or free-form labels.
+`fields` may be absent on pre-existing v1 grants, which allow all fields. `createdBy: agent-once` marks ephemeral rows for auto-delete. Audit lines carry `at, credentialId, agent, event, target, result` and never secret values or free-form labels.
 
 Audit events include requested, approved, denied, used, expired, and revoked. Audit never stores secret values.
 
@@ -291,8 +292,8 @@ Tier 2, encrypted file fallback when no OS store exists:
 - AES-256-GCM through Node built in crypto, scrypt with N=131072, r=8, p=1 for passphrase wrapping
 - random data key, wrapped by the OS store when available, otherwise wrapped by a passphrase from `TAKOMI_VAULT_PASSPHRASE`
 - without an OS store or passphrase the key is stored with file permissions only, reported as backend `file-permissions`, and treated as machine-local protection, not real encryption
-- corrupt vault, grant, or key files fail closed with an error instead of being overwritten with empty state
-- a key file that cannot be unwrapped (different user, wrong passphrase) throws instead of rekeying, so a bad unlock never destroys the vault
+- syntactically invalid or structurally malformed vault and grant files fail closed with an error instead of being overwritten with empty state; corrupt key files also fail closed
+- a key file that cannot be unwrapped (different user, wrong passphrase) throws instead of rekeying; a missing key alongside existing vault data also fails closed rather than generating a new one
 
 Moving PCs is explicit export and import with a one time transfer key. No auto sync.
 
@@ -300,9 +301,9 @@ Moving PCs is explicit export and import with a one time transfer key. No auto s
 
 - Secrets stay outside the repo under `~/.pi/agent/takomi-vault`.
 - Command and tool output redacts secret values. Child stdout is scrubbed for verbatim secrets, which stops accidental leaks but not a hostile agent encoding exfiltration. Injection trusts the agent process with use; the guarantee is that secrets never enter transcripts, prompts, or logs.
-- Extension does not log secrets. Audit logs IDs, targets, decisions, and expiry only.
+- The gateway does not intentionally log decrypted field values, but the current audit `result` can include caller-supplied command, path, reason, or error text. Do not put credentials in those arguments. Replacing free-form audit text with fixed event codes remains v2 work.
 - Target binding is enforced in code, not in the prompt.
-- Permanent `.env` writes need a session or target grant and are flagged as plaintext on disk.
+- Permanent `.env` writes need a session or target grant plus a fresh UI confirmation of the resolved path and env key names. No UI or declined confirmation denies the write; the prompt warns that values are plaintext on disk.
 - `vault_request` collects values through Pi `ui.input`, which has no masked password mode. Values still bypass the transcript, but shoulder-surfing masking depends on Pi UI support.
 
 ## Setup / Verification
@@ -335,7 +336,9 @@ Expected result is an empty vault with storage backend reported, for example `wi
 - v1 lookup is exact service plus host match. Fuzzy naming comes later.
 - Linux without a secret service needs `TAKOMI_VAULT_PASSPHRASE` each session, otherwise the key rests on file permissions only.
 - Export and import are not built yet. Copying the vault directory moves it; the OS key or passphrase must move with it.
-- Operation and agent matching on grants, per-field allowlists, and atomic multi-process grant spending are v2. v1 binds target plus tool plus scope.
+- Browser fill, export/import, masked input, and chat interception are still unimplemented. `ui.input` does not mask secret entry. macOS Keychain storage uses `security -w` with stdin and never retries with the key in argv; this path has not been exercised on a Mac in the scratch-data test suite.
+- A field allowlist on a new grant currently supports all fields or one named field. Legacy grants with no allowlist retain all-field access. The terminal target is caller-supplied; do not treat host binding as network destination verification.
+- Audit `result` still contains caller-controlled text, and temporary-file tracking still needs failure-path hardening. Do not treat these as secret-free, tamper-proof audit records.
 
 ## Related Docs
 

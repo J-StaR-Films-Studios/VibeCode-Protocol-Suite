@@ -34,10 +34,12 @@ The target behavior is:
   - project foundation and artifact generation rules
 - `.pi/prompts/orch-prompt.md`
   - orchestration-session behavior and decomposition rules
+- `.pi/prompts/design-prompt.md`
+  - UI/UX only, with standard sitemap, design-system, and mockup paths for UI work
 - `.pi/prompts/build-prompt.md`
-  - implementation-phase execution rules
+  - MUS FR issue loop, verification checkpoints, and standard Build handoff without forcing a stack
 - `.pi/prompts/prime-prompt.md`
-  - context priming and skill-loading guidance
+  - context priming from standard Takomi project files and unfinished FR issues
 
 ### Runtime Layer
 
@@ -61,8 +63,14 @@ The target behavior is:
 
 ### Persistent Artifacts
 
-- `docs/project_requirements.md`
-  - product-level requirements source of truth
+- `docs/Project_Requirements.md`
+  - standard PRD with MUS and Future FR IDs
+- `docs/Coding_Guidelines.md` and `docs/issues/FR-XXX.md`
+  - standard implementation rules and one issue per MUS FR in a full-project Genesis
+- `docs/Builder_Prompt.md` and `docs/Builder_Handoff_Report.md`
+  - project-specific Build instructions and full-project Build handoff
+- `docs/design/` and `docs/mockups/` when UI/UX Design is needed
+  - sitemap, visual reference, and screen mockups
 - `docs/features/`
   - feature-level design and planning docs
 - `docs/tasks/orchestrator-sessions/<sessionId>/`
@@ -115,7 +123,7 @@ The target behavior is:
 7. The runtime stores:
    - human-readable docs in `docs/tasks/orchestrator-sessions/<sessionId>/`
    - machine-readable state in `.pi/takomi/orchestrator/<sessionId>.json`
-8. A validator or repair pass checks for completeness, missing artifacts, shallow decomposition, and doc-structure problems.
+8. Before `init_session` or `expand_stage` writes state, the board validates the authored master plan and each new task packet. It reads existing markdown from the session folder or accepts markdown supplied in the call. Missing documents, generated plan templates, placeholder sections and packets without a meaningful objective, scope, completion criteria or deliverables return a visible error without saving a partial session. Existing human plans remain authoritative if incoming text differs. Status-only task updates do not revalidate old documents; they remain compatible with earlier sessions. The shipped Genesis, Design, Build, and Prime prompts use the standard Takomi paths by default, preserve an established incompatible layout when necessary, and do not assume every task starts a new Next.js website.
 
 ## Database Schema
 
