@@ -1,19 +1,19 @@
 # Lean Unified Skills Architecture
 
 ## Status
-Implemented: Multi-skill ecosystems consolidated into 12 atomic umbrella suites with router `SKILL.md` files; Core Essentials slimmed to 8 always-active skills; 10 standalone developer tools; canonical non-overlapping categories defined; test suite verified across all harnesses.
+Implemented: Multi-skill ecosystems consolidated into 12 atomic umbrella suites with router `SKILL.md` files; Core Essentials include 11 default skills; 10 standalone developer tools; canonical non-overlapping categories defined; test suite verified across all harnesses.
 
 ## Overview
 AI agent harnesses (Google Antigravity, Claude Code, OpenAI Codex, Pi, Cursor, Windsurf) scan top-level directories for `SKILL.md` frontmatter and inject all discovered descriptions into the system prompt. With 99+ flat skills installed, this created severe token bloat (10k–25k tokens per turn) and led harnesses like Antigravity to silently drop skills due to context limits.
 
 The Lean Unified Skills Architecture solves context saturation without sacrificing deep domain capabilities by combining:
 1. **Atomic Umbrella Suites**: Multi-skill frameworks live in self-contained directories where a single top-level `SKILL.md` acts as the router, while individual sub-skills are read on demand via relative paths (`view_file`).
-2. **8 Core Essentials**: A minimal, always-active core set for general development.
+2. **11 Core Essentials**: The default set for development, PR follow-up, writing, and private reports.
 3. **Canonical Non-Overlapping Categories**: Clean pack-based installation and browsing.
 
 ---
 
-## The 8 Core Essentials
+## The 11 Core Essentials
 
 Always active by default, providing universal baseline development intelligence:
 
@@ -27,6 +27,9 @@ Always active by default, providing universal baseline development intelligence:
 | `agent-recovery` | Use when an agent is stuck in loops, repeating errors, losing context, or needs session migration, state reset, or subagent escalation. | J StaR Films |
 | `avoid-feature-creep` | Use when planning features, reviewing scope, or building MVPs to prevent over-engineering, unnecessary abstractions, and unrequested scope expansion. | J StaR Films |
 | `git-commit-generation` | Use when generating clear, conventional git commit messages based on staged changes or recent repository diffs. | Kilo Code / J StaR Films |
+| `unslop` | Use when writing text to remove filler and AI tells. | poteto / J StaR Films |
+| `babysit-pr` | Use when the user wants to babysit a PR, monitor feedback and checks, or track readiness. | J StaR Films |
+| `html-private-pages` | Use when creating a private HTML page for viewing over Tailscale. | J StaR Films / Takomi |
 
 ---
 

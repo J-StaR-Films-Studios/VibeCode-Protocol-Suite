@@ -48,10 +48,14 @@ try {
     'avoid-feature-creep',
     'git-commit-generation',
     'unslop',
+    'babysit-pr',
+    'html-private-pages',
   ]);
   assert.equal(core.includes('context7'), false, 'context7 must not be core');
   assert.equal(core.includes('spawn-task'), false, 'spawn-task must not be core');
   assert.equal(catalog.getSkillCategory('unslop'), 'core', 'unslop must use the core category');
+  assert.equal(catalog.getSkillCategory('babysit-pr'), 'core', 'Babysit PR must use the core category');
+  assert.equal(catalog.getSkillCategory('html-private-pages'), 'core', 'HTML Private Pages must use the core category');
   assert.equal(catalog.getSkillCategory('frontend-ui'), 'frontend', 'catalog taxonomy must expose the installer category');
   assert.equal(catalog.getSkillCategory('web-dev-standards'), 'dev-workflows', 'standards must use the dev-workflows category');
   assert.equal(catalog.getSkillCategory('hyperframes'), 'video-motion', 'hyperframes must use the video-motion category');
@@ -63,6 +67,7 @@ try {
   assert.equal(catalog.getSkillCategory('not-a-bundled-skill'), undefined, 'unknown skill names must not receive guessed categories');
 
   const allSkills = await catalog.listBundledSkillNames();
+  assert.equal(allSkills.includes('pr-babysitter'), false, 'old skill name must not remain bundled');
 
   // Manual folder with the same name as a bundled skill must not be overwritten
   // or claimed in the ownership manifest, even on repeated installs.

@@ -120,7 +120,7 @@ async function init() {
       name: 'skillMode',
       message: 'How should we install Skills?',
       choices: [
-        { title: 'Install Core Skills (Recommended)', value: 'core', description: `8 essentials (${formatCoreSkillsSummary()})` },
+        { title: 'Install Core Skills (Recommended)', value: 'core', description: `${CORE_SKILLS.length} essentials (${formatCoreSkillsSummary()})` },
         { title: 'Install All Skills', value: 'all', description: 'Install every bundled skill' },
         { title: 'Select Specific Skills', value: 'custom', description: 'Interactive category tree selection' }
       ]
@@ -836,7 +836,7 @@ async function install(target) {
       choices: [
         ...(hasExistingStoreSkills ? [{ title: 'Leave As Is (Recommended)', value: 'leave-as-is', description: `Keep ${existingStoreOwnedSkills.length} Takomi-managed store skill${existingStoreOwnedSkills.length === 1 ? '' : 's'} unchanged.` }] : []),
         ...(hasExistingStoreSkills ? [{ title: 'Present Custom', value: 'present-custom', description: 'Review current Takomi-managed store skills and adjust selections.' }] : []),
-        { title: 'Core (Recommended defaults)', value: 'core', description: `8 essentials (${formatCoreSkillsSummary()})` },
+        { title: 'Core (Recommended defaults)', value: 'core', description: `${CORE_SKILLS.length} essentials (${formatCoreSkillsSummary()})` },
         { title: `All (${(await getSkills()).length} skills)`, value: 'all' },
         { title: 'Custom selection', value: 'custom' },
       ],

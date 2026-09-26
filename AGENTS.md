@@ -12,7 +12,7 @@ To prevent context saturation (prompt bloat) across AI agent harnesses, skills f
 2. **Update Router Context Pointers**: When adding a sub-skill, update the parent suite's top-level `SKILL.md` frontmatter `description` to include keyword triggers for the new sub-skill. This enables natural keyword discovery without requiring the user to type the suite name.
 3. **When to Create a New Suite**: Create a new umbrella suite only when a cluster of 3+ related sub-skills introduces a distinct engineering or creative domain not covered by the existing 12 suites.
 4. **When to Keep a Skill Standalone**: Keep a skill standalone at the top level only if it is a single-purpose CLI binary wrapper (e.g., `audit-website`, `context7`, `jules`), a global communication mode (e.g., `wait-what`, `bro`, `poteto-mode`), or an isolated cross-domain utility.
-5. **Core Essentials Policy**: Never unilaterally add or promote a skill to Core Essentials. The 8 Core Essentials (`takomi`, `grill-me`, `code-review`, `sync-docs`, `security-audit`, `agent-recovery`, `avoid-feature-creep`, `git-commit-generation`) are always active; promotions to Core are decided by the user.
+5. **Core Essentials Policy**: Never unilaterally add or promote a skill to Core Essentials. The Core Essentials (`takomi`, `grill-me`, `code-review`, `sync-docs`, `security-audit`, `agent-recovery`, `avoid-feature-creep`, `git-commit-generation`, `unslop`, `babysit-pr`, `html-private-pages`) are installed by default; promotions to Core are decided by the user.
 6. **Check for Merges & Duplicates**: Before importing any new skill, search existing suites for overlaps. Present candidates to the user to merge, upgrade, or deprecate redundant skills.
 
 ---
