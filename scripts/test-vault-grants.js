@@ -61,7 +61,7 @@ try {
   let scopePrompts = 0;
   const ui = { select: async (title, choices) => {
     if (title.startsWith('Use an existing')) return choices[0];
-    if (title.startsWith('Fields')) return 'username';
+    if (title.startsWith('Pi will ')) return 'username';
     scopePrompts++;
     return 'once — one operation';
   } };
@@ -166,7 +166,7 @@ try {
     return result;
   }, select: async (title) => {
     if (title === 'Save this credential?') return 'Save to vault';
-    if (title.startsWith('Fields')) return 'All fields';
+    if (title.startsWith('Pi will ')) return 'All fields';
     return undefined;
   } };
   await assert.rejects(handlers.get('vault_request')('id', { service: 'brandnew', host: 'brandnew.test' }, undefined, undefined, { mode: 'tui', hasUI: true, ui: cancelledUi }), /Cancelled/);
@@ -219,7 +219,7 @@ try {
       ui: {
         input: async () => 'scratch saved',
         custom: async () => 'scratch-secret',
-        select: async (title) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Fields') ? 'All fields' : 'once — one operation',
+        select: async (title) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Pi will ') ? 'All fields' : 'once — one operation',
       },
     }), /invalid structure/);
     assert.equal(listCredentials().length, beforeFailure, 'failed grant issuance must remove newly saved credential');
@@ -237,7 +237,7 @@ try {
     ui: {
       input: async () => 'scratch saved',
       custom: async () => 'scratch-secret',
-      select: async (title) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Fields') ? 'All fields' : 'once — one operation',
+      select: async (title) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Pi will ') ? 'All fields' : 'once — one operation',
     },
   }), (error) => ['EISDIR', 'EPERM', 'EACCES'].includes(error.code), 'approval must fail at the audit write');
   assert.equal(listCredentials().length, credentialsBeforeAuditFailure, 'audit failure must remove the saved credential');

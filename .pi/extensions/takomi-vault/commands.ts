@@ -117,29 +117,37 @@ export function registerVaultCommands(pi: ExtensionAPI) {
       const host = hostArg ?? (ctx.hasUI ? await ctx.ui.input("Host:", "github.com") : undefined);
       if (!service || !host) throw new Error("Service and host are required.");
       if (!ctx.hasUI) throw new Error("Interactive add needs UI. Use the vault_request tool instead.");
-      const kind = await ctx.ui.select("Credential type", ["token — single API key or token", "login — username plus password"]);
+      const kind = await ctx.ui.select("Credential fields", ["token — single API key or token", "login — actual username and password", "custom — name each field"]);
       if (!kind) throw new Error("Cancelled by user");
       const label = (await ctx.ui.input("Label:", `${service} ${host}`))?.trim() || `${service} ${host}`;
-      if (kind.startsWith("login")) {
-        const username = await ctx.ui.input("Username:");
-        const password = await maskedSecret(ctx, "Password:");
-        if (!username || !password) throw new Error("Cancelled by user");
-        const created = createCredential({
-          label, service, host, type: "login",
-          fields: [
-            { name: "username", value: username, visibility: "agent-readable" },
-            { name: "password", value: password, visibility: "inject-only" },
-          ],
-        });
-        logAudit({ at: Date.now(), credentialId: created.id, event: "created", result: "manual add" });
-        notify(ctx, `Saved ${created.id} (${created.label}). Values are encrypted with backend ${getBackend()}.`);
-        return;
+      const fields: Array<{ name: string; value: string; visibility: "agent-readable" | "inject-only" }> = [];
+      if (kind.startsWith("custom")) {
+        const countInput = await ctx.ui.input("Number of fields (1–8):");
+        if (countInput === undefined) throw new Error("Cancelled by user");
+        if (!/^[1-8]$/.test(countInput.trim())) throw new Error("Choose 1–8 fields.");
+        const count = Number(countInput.trim());
+        for (let index = 0; index < count; index++) {
+          const name = (await ctx.ui.input(`Field ${index + 1} name (e.g. GOOGLE_CLIENT_ID):`))?.trim();
+          if (!name) throw new Error("Cancelled by user");
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name) || fields.some((field) => field.name.toLowerCase() === name.toLowerCase())) {
+            throw new Error("Field names must be distinct letters, digits, or underscores, starting with a letter or underscore.");
+          }
+          const access = await ctx.ui.select(`Who may read ${name}?`, ["Keep private (inject only)", "Agent-readable"]);
+          if (!access) throw new Error("Cancelled by user");
+          const value = await maskedSecret(ctx, `${name}:`);
+          if (!value) throw new Error("Cancelled by user");
+          fields.push({ name, value, visibility: access.startsWith("Agent") ? "agent-readable" : "inject-only" });
+        }
+      } else {
+        const names = kind.startsWith("login") ? ["username", "password"] : ["token"];
+        for (const name of names) {
+          const value = await maskedSecret(ctx, `${name}:`);
+          if (!value) throw new Error("Cancelled by user");
+          fields.push({ name, value, visibility: name === "username" ? "agent-readable" : "inject-only" });
+        }
       }
-      const token = await maskedSecret(ctx, "Token:");
-      if (!token) throw new Error("Cancelled by user");
       const created = createCredential({
-        label, service, host, type: "token",
-        fields: [{ name: "token", value: token, visibility: "inject-only" }],
+        label, service, host, type: kind.startsWith("login") ? "login" : "token", fields,
       });
       logAudit({ at: Date.now(), credentialId: created.id, event: "created", result: "manual add" });
       notify(ctx, `Saved ${created.id} (${created.label}). Values are encrypted with backend ${getBackend()}.`);

@@ -11,6 +11,11 @@ import { createCredential, deleteCredential, deleteIfEphemeral, findByService, f
 import type { GrantScope } from "./types.ts";
 
 const ScopeSchema = Type.Union([Type.Literal("once"), Type.Literal("turn"), Type.Literal("session"), Type.Literal("target")]);
+const FieldSpec = Type.Object({
+  name: Type.String({ description: "Stored field name, such as GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET. No value here." }),
+  visibility: Type.Optional(Type.Union([Type.Literal("inject-only"), Type.Literal("agent-readable")], { description: "Defaults to inject-only. Use agent-readable only if the agent must see the value." })),
+});
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 
 function textResult(text: string, details?: unknown) {
   return { content: [{ type: "text" as const, text }], details };
@@ -31,8 +36,10 @@ function auditDeniedUse(params: { grantId: string; credentialId: string }, tool:
     ...(grant ? { target: grant.target, operation: grant.operation } : {}) });
 }
 
-async function promptScope(ctx: ExtensionContext, target: string, operation: string, tool: string, fields: string[], requested?: GrantScope): Promise<GrantScope> {
-  const choice = await ctx.ui.select(`Approve pi ${operation} on ${target} via ${tool}, fields ${fields.join(", ")}${requested ? ` (agent requested ${requested})` : ""}. Allow for`,  ["once — one operation", "turn — this agent turn", "session — until Pi exits", "target — always for this host until revoked"]);
+async function promptScope(ctx: ExtensionContext, target: string, tool: string, fields: string[], requested?: GrantScope): Promise<GrantScope> {
+  const durations = ["once — one operation", "turn — this agent turn", "session — until Pi exits", "target — always for this host until revoked"];
+  const choice = await ctx.ui.select(`Allow Pi ${tool} access to ${fields.join(", ")} on ${target} for:`, durations.map((option) =>
+    requested && option.startsWith(requested) ? `${option} (requested by agent)` : option));
   if (!choice) throw new Error("Cancelled by user");
   if (choice.startsWith("turn")) return "turn";
   if (choice.startsWith("session")) return "session";
@@ -41,10 +48,11 @@ async function promptScope(ctx: ExtensionContext, target: string, operation: str
 }
 
 async function chooseApproval(ctx: ExtensionContext, fieldNames: string[], target: string, operation: string, tool: "terminal" | "file", requested?: GrantScope) {
-  const selected = await ctx.ui.select(`Fields for pi ${operation} on ${target}`, ["All fields", ...fieldNames]);
+  const action = operation === "use" ? "use credentials" : operation;
+  const selected = await ctx.ui.select(`Pi will ${action} on ${target}. Choose fields:`, ["All fields", ...fieldNames]);
   if (!selected) throw new Error("Cancelled by user");
   const fields = selected === "All fields" ? fieldNames : [selected];
-  const scope = await promptScope(ctx, target, operation, tool, fields, requested);
+  const scope = await promptScope(ctx, target, tool, fields, requested);
   return { fields, scope };
 }
 
@@ -113,7 +121,7 @@ export function registerVaultTools(pi: ExtensionAPI) {
   pi.registerTool({
     name: "vault_request",
     label: "Vault Request",
-    description: "Human-facing credential request. Shows secure UI outside the transcript and returns a grant ID, never the secret. Call this when no handle or grant exists.",
+    description: "Ask the user to enter credential values privately. For OAuth or other non-login credentials, set fields to their real names (for example GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET). Never include values in this call or chat. Fields default to inject-only. Returns a grant ID.",
     parameters: Type.Object({
       service: Type.String(),
       host: Type.String({ description: "Target host the credential is for, like github.com" }),
@@ -121,14 +129,24 @@ export function registerVaultTools(pi: ExtensionAPI) {
       purpose: Type.Optional(Type.String({ description: "Why the agent needs it" })),
       suggestedLabel: Type.Optional(Type.String()),
       scope: Type.Optional(ScopeSchema),
-      kind: Type.Optional(Type.Union([Type.Literal("token"), Type.Literal("login")])),
+      kind: Type.Optional(Type.Union([Type.Literal("token"), Type.Literal("login")], { description: "Legacy shortcut: token asks for one token; login asks for actual username and password. Use fields for other credentials." })),
+      fields: Type.Optional(Type.Array(FieldSpec, { minItems: 1, maxItems: 8, description: "Field names to request privately from the human. Never pass field values." })),
       tool: Type.Optional(Type.Union([Type.Literal("terminal"), Type.Literal("file")])),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const toolCtx = ctx as ExtensionContext;
       if (!supportsSecretEntry(toolCtx)) return errorResult("Vault request requires an interactive Pi TUI or a supported RPC secret UI for entry and approval.");
       revokeExpiredSessionGrants();
-      const existing = findByService(params.service, params.host);
+      const requestedNames = params.fields?.map((field) => field.name);
+      if (requestedNames && (requestedNames.length < 1 || requestedNames.length > 8 ||
+        requestedNames.some((name) => !FIELD_NAME.test(name)) ||
+        new Set(requestedNames.map((name) => name.toLowerCase())).size !== requestedNames.length)) {
+        return errorResult("Use 1–8 distinct field names made of letters, digits, and underscores. Names must start with a letter or underscore.");
+      }
+      const existing = findByService(params.service, params.host).filter((entry) =>
+        !params.fields || (entry.fields.length === params.fields.length &&
+          params.fields.every(({ name, visibility }) => entry.fields.some((field) =>
+            field.name === name && (visibility === undefined || field.visibility === visibility)))));
 
       if (existing.length > 0 && toolCtx.hasUI) {
         const choices = [...existing.map((entry, index) => `${index + 1}. ${entry.id} — ${entry.label}`), "Enter a new value instead"];
@@ -147,23 +165,15 @@ export function registerVaultTools(pi: ExtensionAPI) {
 
       if (!toolCtx.hasUI) return errorResult("Grant approval requires interactive UI. Ask the user to run vault_request in Pi.");
       const kind = params.kind ?? "token";
-      const fields: Array<{ name: string; value: string; visibility: "agent-readable" | "inject-only" }> =
-        kind === "login"
-          ? await (async () => {
-            const username = await toolCtx.ui.input(`Username for ${params.service} on ${params.host}:`);
-            if (!username) throw new Error("Cancelled by user");
-            const password = await maskedSecret(toolCtx, `Password for ${params.service} on ${params.host}${params.purpose ? ` (${params.purpose})` : ""}:`);
-            if (!username || !password) throw new Error("Cancelled by user");
-            return [
-              { name: "username", value: username, visibility: "agent-readable" as const },
-              { name: "password", value: password, visibility: "inject-only" as const },
-            ];
-          })()
-          : await (async () => {
-            const secret = await maskedSecret(toolCtx, `Secret for ${params.service} on ${params.host}${params.purpose ? ` (${params.purpose})` : ""}:`);
-            if (!secret) throw new Error("Cancelled by user");
-            return [{ name: "token", value: secret, visibility: "inject-only" as const }];
-          })();
+      const requestedFields = params.fields ?? (kind === "login"
+        ? [{ name: "username", visibility: "agent-readable" as const }, { name: "password", visibility: "inject-only" as const }]
+        : [{ name: "token", visibility: "inject-only" as const }]);
+      const fields: Array<{ name: string; value: string; visibility: "agent-readable" | "inject-only" }> = [];
+      for (const field of requestedFields) {
+        const value = await maskedSecret(toolCtx, `${field.name} for ${params.service} on ${params.host}:`);
+        if (!value) throw new Error("Cancelled by user");
+        fields.push({ name: field.name, value, visibility: field.visibility ?? "inject-only" });
+      }
       const saveChoice = await toolCtx.ui.select("Save this credential?", ["Do not save — use once", "Save to vault"]);
       if (!saveChoice) throw new Error("Cancelled by user");
 
