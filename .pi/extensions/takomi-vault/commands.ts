@@ -1,10 +1,11 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { matchesKey, Text } from "@earendil-works/pi-tui";
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { logAudit, readAudit } from "./audit.ts";
 import { getBackend } from "./crypto-store.ts";
 import { listGrants, revokeGrants } from "./grant-store.ts";
-import { exportVault, importVault } from "./transfer.ts";
+import { exportVault, importVault, importVaultArchive, MAX_ARCHIVE } from "./transfer.ts";
 import { maskedSecret, supportsSecretEntry } from "./secret-input.ts";
 import { createCredential, deleteCredential, deleteIfEphemeral, findServiceCandidates, getCredential, isEphemeral, listCredentials, renameCredential, summarize } from "./vault-store.ts";
 
@@ -41,9 +42,11 @@ export function registerVaultCommands(pi: ExtensionAPI) {
   pi.registerCommand("vault-export", {
     description: "Export an encrypted vault archive for offline transfer (human UI only)",
     handler: async (args, ctx) => {
-      if (ctx.mode !== "tui" || !ctx.hasUI) throw new Error("Vault transfer requires an interactive Pi TUI.");
-      if (!args?.trim()) throw new Error("Usage: /vault-export <path>");
-      const destination = resolve(ctx.cwd, args.trim());
+      const rpcTransfer = ctx.mode === "rpc" && process.env.T3_TAKOMI_VAULT_TRANSFER_UI === "1";
+      if ((!rpcTransfer && ctx.mode !== "tui") || !ctx.hasUI) throw new Error("Vault transfer requires an interactive Pi TUI or a supported RPC transfer UI.");
+      const target = args?.trim() || (rpcTransfer ? await ctx.ui.input("Vault export path on this environment:") : undefined);
+      if (!target) throw new Error("Usage: /vault-export <path>");
+      const destination = resolve(ctx.cwd, target);
       let parent: string;
       try { parent = realpathSync(dirname(destination)); } catch { throw new Error("Vault export failed. Check the destination directory."); }
       const approved = await ctx.ui.confirm("Export vault?", `Destination: ${destination}\nThis creates a new encrypted file. The 256-bit transfer key will appear once in this UI. Keep the file and key separately; copies of both can be reused offline. Continue?`);
@@ -51,22 +54,53 @@ export function registerVaultCommands(pi: ExtensionAPI) {
       let key: string;
       try { key = exportVault(destination, parent); }
       catch { throw new Error("Vault export failed. Check the destination and existing file; nothing was overwritten."); }
-      ctx.ui.notify(`Encrypted vault saved to ${destination}. Copy this transfer key now; it will not be shown again:\n${key}`, "info");
+      if (rpcTransfer) {
+        // T3 intercepts this private RPC record before native logging or thread projection.
+        process.stdout.write(`${JSON.stringify({ type: "takomi_vault_export", key, path: destination })}\n`);
+      } else {
+        await ctx.ui.custom((_tui, theme, _kb, done) => {
+          const content = new Text(
+            `${theme.fg("accent", "Vault transfer key")}\n${destination}\n${key}\nSave the key separately before closing. Press Enter or Esc to close.`,
+            1, 0,
+          );
+          return {
+            render: (width) => content.render(width),
+            invalidate: () => content.invalidate(),
+            handleInput: (data) => {
+              if (matchesKey(data, "enter") || matchesKey(data, "escape")) done(undefined);
+            },
+          };
+        });
+      }
     },
   });
 
   pi.registerCommand("vault-import", {
     description: "Import an encrypted vault archive into a new empty vault (human UI only)",
     handler: async (args, ctx) => {
-      if (ctx.mode !== "tui") throw new Error("Vault import requires an interactive Pi TUI for masked transfer key entry.");
-      if (!args?.trim()) throw new Error("Usage: /vault-import <path>");
-      const source = resolve(ctx.cwd, args.trim());
-      const approved = await ctx.ui.confirm("Import vault?", `Source: ${source}\nOnly a new vault with no vault.json, key.json, or grants.json can accept an import. Credential fields will be encrypted with a new local key. Continue?`);
+      const rpcTransfer = ctx.mode === "rpc" && process.env.T3_TAKOMI_VAULT_TRANSFER_UI === "1";
+      if (!rpcTransfer && ctx.mode !== "tui") throw new Error("Vault import requires an interactive Pi TUI or a supported RPC transfer UI.");
+      if (!rpcTransfer && !args?.trim()) throw new Error("Usage: /vault-import <path>");
+      if (rpcTransfer && args?.trim()) throw new Error("Usage: /vault-import. Select the archive in the private file prompt, not slash arguments.");
+      const source = rpcTransfer ? undefined : resolve(ctx.cwd, args?.trim() ?? "");
+      const approved = await ctx.ui.confirm("Import vault?", `${source ? `Source: ${source}\n` : "Select an encrypted archive on this device.\n"}Only a new vault with no vault.json, key.json, or grants.json can accept an import. Credential fields will be encrypted with a new local key. Continue?`);
       if (!approved) return;
+      const encoded = rpcTransfer ? await ctx.ui.input("[takomi-vault-archive] Select encrypted vault archive:") : undefined;
+      if (rpcTransfer && !encoded) return;
       const key = await maskedSecret(ctx, "Transfer key (64 hex characters):");
       if (!key) return;
       try {
-        const count = importVault(source, key.trim());
+        let count: number;
+        if (rpcTransfer) {
+          if (!encoded || encoded.length > Math.ceil(MAX_ARCHIVE / 3) * 4) throw new Error("Invalid archive");
+          const bytes = Buffer.from(encoded, "base64");
+          if (bytes.toString("base64") !== encoded) throw new Error("Invalid archive");
+          count = importVaultArchive(bytes, key.trim());
+        } else if (source) {
+          count = importVault(source, key.trim());
+        } else {
+          throw new Error("Missing archive");
+        }
         notify(ctx, `Imported ${count} credential(s). Grants were not imported.`);
       } catch { throw new Error("Vault import failed. Check the archive, transfer key, and empty destination vault."); }
     },

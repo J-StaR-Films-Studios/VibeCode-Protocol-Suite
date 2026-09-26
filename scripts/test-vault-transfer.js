@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 const home = mkdtempSync(join(tmpdir(), 'takomi-transfer-'));
 const original = homedir();
+const originalTransferUi = process.env.T3_TAKOMI_VAULT_TRANSFER_UI;
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 const root = join(home, '.pi', 'agent', 'takomi-vault');
@@ -25,9 +26,13 @@ try {
   registerVaultCommands({ registerCommand: (name, def) => commands.set(name, def.handler) });
   let confirmation = '';
   let notice = '';
+  let transferScreen = '';
   const ctx = { hasUI: true, cwd: home, ui: {
     confirm: async (_title, body) => { confirmation = body; return true; },
     notify: (text) => { notice = text; },
+    custom: async (factory) => {
+      transferScreen = factory(undefined, { fg: (_color, text) => text }, undefined, () => {}).render(80).join('\n');
+    },
   } };
   await assert.rejects(commands.get('vault-export')(archive, { ...ctx, mode: 'tui', hasUI: false }), /interactive Pi TUI/);
   let rpcPrompted = false;
@@ -39,13 +44,26 @@ try {
   assert.equal(existsSync(archive), false);
   await commands.get('vault-export')(archive, { ...ctx, mode: 'tui' });
   assert.ok(confirmation.includes(archive));
-  const key = notice.match(/[a-f0-9]{64}/)?.[0];
-  assert.ok(key, 'transfer key appears in UI notification');
+  const key = transferScreen.match(/[a-f0-9]{64}/)?.[0];
+  assert.ok(key, 'transfer key appears in the private TUI screen');
+  assert.equal(notice.includes(key), false, 'ordinary notifications never contain a key');
   if (process.platform !== 'win32') assert.equal(statSync(archive).mode & 0o777, 0o600);
   const bytes = readFileSync(archive, 'utf8');
   for (const raw of ['transfer-user', 'transfer-secret-987', credential.id, 'grants']) assert.equal(bytes.includes(raw), false);
   await assert.rejects(commands.get('vault-export')(archive, { ...ctx, mode: 'tui' }), /export failed/);
   assert.equal(readFileSync(archive, 'utf8'), bytes);
+  const rpcArchive = join(home, 'vault-rpc.transfer');
+  process.env.T3_TAKOMI_VAULT_TRANSFER_UI = '1';
+  const originalWrite = process.stdout.write;
+  let rpcResult;
+  process.stdout.write = (chunk) => { rpcResult = JSON.parse(String(chunk)); return true; };
+  try { await commands.get('vault-export')(rpcArchive, { ...ctx, mode: 'rpc' }); }
+  finally { process.stdout.write = originalWrite; }
+  assert.equal(rpcResult.type, 'takomi_vault_export');
+  assert.equal(rpcResult.path, rpcArchive);
+  assert.match(rpcResult.key, /^[a-f0-9]{64}$/);
+  assert.equal(readFileSync(rpcArchive, 'utf8').includes('transfer-secret-987'), false);
+  delete process.env.T3_TAKOMI_VAULT_TRANSFER_UI;
   const dest = mkdtempSync(join(tmpdir(), 'takomi-import-'));
   const child = `
     import assert from 'node:assert/strict';
@@ -148,6 +166,43 @@ try {
     assert.equal(run.status, 0, run.stderr);
     assert.match(run.stdout, /roundtrip passed/);
   } finally { rmSync(dest, { recursive: true, force: true }); }
+  const rpcDest = mkdtempSync(join(tmpdir(), 'takomi-rpc-import-'));
+  const rpcChild = `
+    import assert from 'node:assert/strict';
+    import { readFileSync, existsSync } from 'node:fs';
+    import { join } from 'node:path';
+    const { archive, key, id } = JSON.parse(readFileSync(0, 'utf8'));
+    const { registerVaultCommands } = await import('./.pi/extensions/takomi-vault/commands.ts');
+    const { listCredentials } = await import('./.pi/extensions/takomi-vault/vault-store.ts');
+    const { VAULT_PATH } = await import('./.pi/extensions/takomi-vault/config.ts');
+    assert.equal(VAULT_PATH, join(process.env.HOME, '.pi', 'agent', 'takomi-vault', 'vault.json'));
+    const handlers = new Map();
+    registerVaultCommands({ registerCommand: (name, definition) => handlers.set(name, definition.handler) });
+    const prompts = [];
+    let result = '';
+    await handlers.get('vault-import')('', { mode: 'rpc', hasUI: true, cwd: process.env.HOME, ui: {
+      confirm: async () => true,
+      input: async (title) => {
+        prompts.push(title);
+        return title.startsWith('[takomi-vault-archive]') ? readFileSync(archive).toString('base64') : key;
+      },
+      notify: (message) => { result = message; },
+    } });
+    assert.equal(prompts.length, 2);
+    assert.ok(prompts[0].startsWith('[takomi-vault-archive]'));
+    assert.ok(prompts[1].startsWith('[takomi-vault-secret]'));
+    assert.equal(listCredentials()[0]?.id, id);
+    assert.equal(existsSync(VAULT_PATH), true);
+    assert.match(result, /Imported 1 credential/);
+    assert.equal(result.includes(key), false);
+  `;
+  try {
+    const run = spawnSync(process.execPath, ['--input-type=module', '-e', rpcChild], {
+      cwd: process.cwd(), input: JSON.stringify({ archive: rpcArchive, key: rpcResult.key, id: credential.id }),
+      encoding: 'utf8', env: { ...process.env, HOME: rpcDest, USERPROFILE: rpcDest, T3_TAKOMI_VAULT_TRANSFER_UI: '1', T3_TAKOMI_VAULT_SECRET_UI: '1' },
+    });
+    assert.equal(run.status, 0, run.stderr);
+  } finally { rmSync(rpcDest, { recursive: true, force: true }); }
   const originalKey = readFileSync(KEY_PATH, 'utf8');
   const originalGrants = readFileSync(GRANTS_PATH, 'utf8');
   await assert.rejects(commands.get('vault-import')(archive, { ...ctx, mode: 'rpc' }), /interactive Pi TUI/);
@@ -157,5 +212,7 @@ try {
 } finally {
   process.env.HOME = original;
   process.env.USERPROFILE = original;
+  if (originalTransferUi === undefined) delete process.env.T3_TAKOMI_VAULT_TRANSFER_UI;
+  else process.env.T3_TAKOMI_VAULT_TRANSFER_UI = originalTransferUi;
   rmSync(home, { recursive: true, force: true });
 }

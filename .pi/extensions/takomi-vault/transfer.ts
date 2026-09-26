@@ -7,7 +7,7 @@ import { listCredentials } from "./vault-store.ts";
 import { hasStoredOsKey } from "./key-provider.ts";
 import type { CredentialType, FieldVisibility, StoredCredential } from "./types.ts";
 
-const MAX_ARCHIVE = 12 * 1024 * 1024;
+export const MAX_ARCHIVE = 12 * 1024 * 1024;
 const MAX_PLAIN = 8 * 1024 * 1024;
 const FAILURE = "Vault transfer failed. Check the file, transfer key, and empty destination vault.";
 
@@ -106,9 +106,15 @@ export function exportVault(path: string, expectedParent: string): string {
 }
 
 export function importVault(path: string, transferKey: string): number {
+  try { return importVaultArchive(readBounded(path), transferKey); }
+  catch { throw new Error(FAILURE); }
+}
+
+export function importVaultArchive(bytes: Buffer, transferKey: string): number {
   try {
+    if (bytes.length > MAX_ARCHIVE) throw new Error(FAILURE);
     // Validate and authenticate the entire archive before creating a destination key or vault.
-    const archive: unknown = JSON.parse(readBounded(path).toString("utf8"));
+    const archive: unknown = JSON.parse(bytes.toString("utf8"));
     if (typeof archive !== "object" || archive === null) throw new Error(FAILURE);
     const record = archive as Record<string, unknown>;
     if (record.version !== 1 || record.algorithm !== "aes-256-gcm" || !/^[a-fA-F0-9]{64}$/.test(transferKey)) throw new Error(FAILURE);
