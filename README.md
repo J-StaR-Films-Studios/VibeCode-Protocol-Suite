@@ -154,7 +154,8 @@ Think of skills as specialized team members you can summon on demand. Takomi shi
 ```
 takomi                 grill-me               sync-docs
 code-review            security-audit         avoid-feature-creep
-agent-recovery         git-commit-generation
+agent-recovery         git-commit-generation  unslop
+babysit-pr             html-private-pages
 ```
 
 ### Install More Skills

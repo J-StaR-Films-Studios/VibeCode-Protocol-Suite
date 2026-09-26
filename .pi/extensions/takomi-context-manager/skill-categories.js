@@ -8,6 +8,8 @@ export const CORE_SKILLS = [
   'avoid-feature-creep',
   'git-commit-generation',
   'unslop',
+  'babysit-pr',
+  'html-private-pages',
 ];
 
 export const SKILL_CATEGORIES = [
@@ -46,7 +48,6 @@ export const SKILL_CATEGORIES = [
       'web-dev-standards',
       'ai-sdk',
       'git-github-tools',
-      'pr-babysitter',
       'context7',
       'jules',
       'anti-gravity',

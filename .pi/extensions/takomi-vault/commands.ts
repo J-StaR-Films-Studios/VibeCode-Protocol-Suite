@@ -5,7 +5,7 @@ import { logAudit, readAudit } from "./audit.ts";
 import { getBackend } from "./crypto-store.ts";
 import { listGrants, revokeGrants } from "./grant-store.ts";
 import { exportVault, importVault } from "./transfer.ts";
-import { maskedSecret } from "./secret-input.ts";
+import { maskedSecret, supportsSecretEntry } from "./secret-input.ts";
 import { createCredential, deleteCredential, deleteIfEphemeral, findServiceCandidates, getCredential, isEphemeral, listCredentials, renameCredential, summarize } from "./vault-store.ts";
 
 function parseArgs(args: string): string[] {
@@ -75,8 +75,10 @@ export function registerVaultCommands(pi: ExtensionAPI) {
   pi.registerCommand("vault-add", {
     description: "Add a credential to the Takomi vault through secure prompts",
     handler: async (args, ctx) => {
-      if (ctx.mode !== "tui") throw new Error("Vault add requires an interactive Pi TUI for masked secret entry.");
-      const [serviceArg, hostArg] = parseArgs(args || "");
+      if (!supportsSecretEntry(ctx)) throw new Error("Vault add requires an interactive Pi TUI or a supported RPC secret UI.");
+      const parts = parseArgs(args || "");
+      if (ctx.mode === "rpc" && parts.length > 2) throw new Error("Usage: /vault-add [service] [host]. Enter secrets only in the secure prompt, not slash arguments.");
+      const [serviceArg, hostArg] = parts;
       const service = serviceArg ?? (ctx.hasUI ? await ctx.ui.input("Service:", "github") : undefined);
       const host = hostArg ?? (ctx.hasUI ? await ctx.ui.input("Host:", "github.com") : undefined);
       if (!service || !host) throw new Error("Service and host are required.");

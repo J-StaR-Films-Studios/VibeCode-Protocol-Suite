@@ -11,7 +11,7 @@ Developers and AI agents using modern agentic harnesses (Google Antigravity, Cla
 
 A unified, token-efficient skills architecture and management suite consisting of:
 
-1. **Lean Unified Skills Architecture**: High-cohesion domain capabilities consolidated into **12 Atomic Umbrella Suites** (each exposing a single router `SKILL.md` with dense keyword context pointers), **8 Core Essentials** (always active for universal software engineering baseline intelligence), and standalone developer utilities.
+1. **Lean Unified Skills Architecture**: High-cohesion domain capabilities consolidated into **12 Atomic Umbrella Suites** (each exposing a single router `SKILL.md` with dense keyword context pointers), **11 Core Essentials** (installed by default for development and PR workflows), and standalone developer utilities.
 2. **Unified Interactive Category Tree Installer**: A shared terminal user interface (TUI) and catalog engine powering all installation entry points (`init`, `install`, `install skills`, `sync`). It provides collapsible category trees, batch toggle capabilities, dynamic core resolution, and SHA-256 ownership tracking to protect custom/modified skills during updates or pruning.
 3. **Safe Multi-Harness Global Cleanup Utility**: A non-destructive reset tool supporting dry-run previews, selective IDE targeting, and protected asset preservation (e.g. Codex directories, `.system` folders, `copywriting.zip`).
 4. **Cross-Platform UTF-8 Console Resilience**: Native stream reconfiguration embedded into CLI-driven Python skills to guarantee flawless execution of ASCII/Unicode design systems and status indicators on Windows systems.
@@ -41,7 +41,7 @@ A unified, token-efficient skills architecture and management suite consisting o
 ## Implementation Decisions
 
 ### 1. Taxonomy & Core Skill Governance
-- **8 Core Essentials**: Fixed baseline consisting of `takomi`, `grill-me`, `code-review`, `sync-docs`, `security-audit`, `agent-recovery`, `avoid-feature-creep`, and `git-commit-generation`. Any promotion to core is explicitly locked to user discretion.
+- **11 Core Essentials**: Default set consisting of `takomi`, `grill-me`, `code-review`, `sync-docs`, `security-audit`, `agent-recovery`, `avoid-feature-creep`, `git-commit-generation`, `unslop`, `babysit-pr`, and `html-private-pages`. Promotions to core require user approval.
 - **12 Atomic Umbrella Suites**: Group related sub-skills into cohesive directories (`code-intelligence`, `engineering-principles`, `agent-engineering`, `frontend-ui`, `convex`, `video-motion`, `ai-media`, `marketing-growth`, `office-docs`, `web-dev-standards`, `git-github-tools`, `zack-production-suite`).
 - **Standalone Exceptions**: Standalone top-level registration is limited to single-purpose binary wrappers (`audit-website`, `context7`, `jules`) and global communication modes (`wait-what`, `bro`, `poteto-mode`).
 - **Standardized Frontmatter**: Every `SKILL.md` strictly adheres to YAML frontmatter with `name`, `description` (starting with `"Use when [user wants to do X]..."`), `author`, `coauthored`, and `version`.
@@ -78,7 +78,7 @@ A unified, token-efficient skills architecture and management suite consisting o
 ### Tested Areas
 1. **Skill Taxonomy & Catalog Integrity**:
    - `scripts/verify_skills_integrity.cjs`: Scans all 163+ `SKILL.md` files for valid YAML frontmatter and validates that all relative markdown links resolve to existing files on disk (ignoring fenced code blocks).
-   - `scripts/test-skill-selection.js`: Validates 8/8 Core Essentials, non-core exclusions, category mappings (`code-intelligence`, `principles`), manifest ownership tracking, manual collision protection, and store pruning.
+   - `scripts/test-skill-selection.js`: Validates all 11 Core Essentials, non-core exclusions, category mappings (`code-intelligence`, `principles`), manifest ownership tracking, manual collision protection, and store pruning.
 2. **Subagent Production Lifecycle & Visual Rendering**:
    - `scripts/test-subagent-production-lifecycle.js`: 5 consecutive stress cycles validating Takomi-only lifecycle, native-first ordering, Takomi-first ordering, ownership reloads, and race handling.
    - `scripts/test-subagent-renderers.js`: Verifies compact, control-safe visual cards at 40 and 60 columns.
