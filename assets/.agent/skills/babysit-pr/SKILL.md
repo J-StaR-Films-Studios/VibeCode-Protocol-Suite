@@ -9,7 +9,7 @@ metadata:
 
 # Babysit PR
 
-This skill works on its own. When available, use the [GitHub operations](../git-github-tools/github-ops/SKILL.md), [PR-comment-fix](../git-github-tools/pr-comment-fix/SKILL.md), or [worktree](../git-github-tools/git-worktree/SKILL.md) skills for their respective operations; follow this skill's narrower triage rules if they disagree. Use the user's "leaving PR comment" skill for comments posted on their behalf when available. Otherwise, write a brief, specific reply stating the finding and its disposition, then post it to the matching thread. For a requested private HTML PR report or plan, use [html-private-pages](../html-private-pages/SKILL.md) when available; otherwise ask whether a Markdown report is acceptable.
+This skill works on its own. When available, use the [GitHub operations](../git-github-tools/github-ops/SKILL.md), [PR-comment-fix](../git-github-tools/pr-comment-fix/SKILL.md), or [worktree](../git-github-tools/git-worktree/SKILL.md) skills for their respective operations; follow this skill's narrower triage rules if they disagree. Use the user's "leaving PR comment" skill for comments posted on their behalf when available. Otherwise, write a brief, specific reply stating the finding and its disposition, then post it to the matching thread. For a requested private HTML PR report or plan, use [html-private-pages](../tailscale/html-private-pages/SKILL.md) when available; otherwise ask whether a Markdown report is acceptable.
 
 Do not merge, deploy, migrate, rebase, or mutate production without explicit authorization.
 

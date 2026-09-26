@@ -9,7 +9,6 @@ export const CORE_SKILLS = [
   'git-commit-generation',
   'unslop',
   'babysit-pr',
-  'html-private-pages',
 ];
 
 export const SKILL_CATEGORIES = [
@@ -46,6 +45,7 @@ export const SKILL_CATEGORIES = [
     description: 'Framework standards, git tools, developer modes, and helper clients.',
     skills: [
       'web-dev-standards',
+      'tailscale',
       'ai-sdk',
       'git-github-tools',
       'context7',

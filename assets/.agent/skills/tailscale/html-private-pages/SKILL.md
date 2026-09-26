@@ -15,7 +15,7 @@ Use a short, descriptive project folder and HTML filename with lowercase ASCII l
 
 ## URL and verification
 
-Use the configured Tailscale HTTPS hostname and port from the local workflow documentation. Construct the URL as `https://<tailscale-hostname>:<port>/<project-folder>/<file-name>.html`, URL-encoding path segments if needed. Never use localhost, a local filesystem path, Funnel, or a public hosting URL.
+Read `tailscale status --json` for this machine's `Self.DNSName` and `tailscale serve status --json` for the HTTPS port that proxies to the AgentPages server. Check the local server is responding. Use local workflow documentation to locate the server, but confirm the live route before linking. Construct the URL as `https://<tailscale-hostname>:<port>/<project-folder>/<file-name>.html`, URL-encoding path segments if needed. Never use localhost, a local filesystem path, Funnel, or a public hosting URL.
 
 After saving, request the URL over HTTPS and check for a successful response with `Content-Type: text/html`, then confirm the response contains the expected page content. A local request confirms the service can return the page; it does not confirm access from another device. Do not claim cross-device verification unless a connected device actually opens the link.
 
