@@ -7,7 +7,7 @@ version: 1.0.0
 
 # Private HTML pages
 
-Save generated pages in the shared `AgentPages` directory under the user's home folder. Create a project subfolder for each project, for example `AgentPages/project-name/`. Keep pages self-contained with embedded CSS and JavaScript where practical, and make the layout work on phones.
+Save generated pages in the shared `AgentPages` directory under the user's home folder. Create a project subfolder for each project, for example `AgentPages/project-name/`. Keep pages self-contained with embedded CSS and JavaScript where practical, and make the layout work on phones. If this machine has no working HTML route, follow the [setup guide](references/setup.md); it includes a bundled static server for machines where direct directory serving is unavailable.
 
 ## File names
 
