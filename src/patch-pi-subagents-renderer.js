@@ -6,7 +6,8 @@ const originalHash = '65f4cad71bb0b5d9320ddac1de42745e08bf59177cd2b22e7f2301af6a
 const patchedHash = '8daed7c661fb66c71bf5e2841c8ce29c960ac0198ebf090925421b6c5657d4cc';
 export function patchPiSubagentsRenderer(rendererPath = resolve(import.meta.dirname, '..', 'node_modules', 'pi-subagents', 'src', 'tui', 'render.ts')) {
   const source = readFileSync(rendererPath, 'utf8');
-  const hash = (text) => createHash('sha256').update(text).digest('hex');
+  // pnpm's Windows patch application may introduce CRLF on patched lines.
+  const hash = (text) => createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex');
   if (hash(source) === patchedHash) return;
   if (hash(source) !== originalHash) throw new Error(`Unknown pi-subagents renderer at ${rendererPath}. Cannot apply the Takomi compact-widget patch.`);
 

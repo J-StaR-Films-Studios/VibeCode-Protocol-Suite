@@ -22,7 +22,6 @@ const workspace = path.join(runtimeRoot, "workspace");
 const sessionFile = path.join(runtimeRoot, "session.jsonl");
 const runToken = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const runIdPrefix = `takomi-production-run-${runToken}`;
-const completionDelayMs = 850;
 const lateStartDelayMs = 400;
 const stressCycles = 5;
 const originalChildEnv = process.env.PI_SUBAGENT_CHILD;
@@ -181,7 +180,8 @@ const internalsUrl = dataModule(`
               setTimeout(() => pi.events.emit("subagent:async-started", started), ${lateStartDelayMs});
             } else {
               pi.events.emit("subagent:async-started", started);
-              setTimeout(writeCompletion, ${completionDelayMs});
+              // Release only after the test has observed running and heartbeat frames.
+              globalThis.__productionPendingCompletions.set(id, writeCompletion);
             }
             return {
               content: [{ type: "text", text: "Background subagent started: " + id }],
@@ -525,6 +525,11 @@ async function executeAndAssert(harness, expectedMessageCount, previousSnapshot,
     return text.includes("Ctrl+O for live detail") && !text.includes("Step 1/4");
   }, 1000, "collapsed widget did not hide expanded step detail");
 
+  const finishRun = globalThis.__productionPendingCompletions.get(result.details.asyncId);
+  assert.ok(finishRun, "production completion remains pending until running-state checks finish");
+  assert.equal(harness.messages.length, expectedMessageCount - 1, "running job has not emitted a completion card");
+  globalThis.__productionPendingCompletions.delete(result.details.asyncId);
+  finishRun();
   await harness.waitForMessages(expectedMessageCount);
   assert.equal(harness.messages.length, expectedMessageCount, "each async execution emits exactly one completion card");
   const completion = harness.messages.at(-1);
@@ -633,6 +638,7 @@ async function runRegistrationOrder(order, cycle) {
 try {
   globalThis.__productionExecutorBindings = [];
   globalThis.__productionRunSequence = 0;
+  globalThis.__productionPendingCompletions = new Map();
   for (let cycle = 1; cycle <= stressCycles; cycle += 1) {
     await runTakomiOnlyLifecycle(cycle);
     await runRegistrationOrder("native-before-takomi", cycle);
@@ -660,6 +666,7 @@ try {
   delete globalThis.__takomi_detached_trusted_launches__;
   delete globalThis.__productionExecutorBindings;
   delete globalThis.__productionRunSequence;
+  delete globalThis.__productionPendingCompletions;
   if (originalChildEnv === undefined) delete process.env.PI_SUBAGENT_CHILD;
   else process.env.PI_SUBAGENT_CHILD = originalChildEnv;
   if (originalParentSessionEnv === undefined) delete process.env.PI_SUBAGENT_PARENT_SESSION;

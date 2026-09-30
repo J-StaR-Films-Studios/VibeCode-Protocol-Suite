@@ -12,8 +12,9 @@ $contextManager = Join-Path $extensionsRoot 'takomi-context-manager\index.ts'
 $notifySound = Join-Path $extensionsRoot 'notify-sound\index.ts'
 $antigravityProvider = Join-Path $extensionsRoot 'antigravity-provider\index.ts'
 $vault = Join-Path $extensionsRoot 'takomi-vault\index.ts'
+$localCli = Join-Path $RepoRoot 'node_modules\@earendil-works\pi-coding-agent\dist\bundle\cli.js'
 
-foreach ($required in @($runtime, $subagents, $oauthRouter, $contextManager, $notifySound, $antigravityProvider, $vault, $promptsRoot, $theme)) {
+foreach ($required in @($runtime, $subagents, $oauthRouter, $contextManager, $notifySound, $antigravityProvider, $vault, $promptsRoot, $theme, $localCli)) {
     if (-not (Test-Path $required)) {
         throw "Missing required local Pi asset: $required"
     }
@@ -21,7 +22,7 @@ foreach ($required in @($runtime, $subagents, $oauthRouter, $contextManager, $no
 
 Push-Location $RepoRoot
 try {
-    & pi `
+    & node $localCli `
         --no-extensions `
         --extension $oauthRouter `
         --extension $runtime `

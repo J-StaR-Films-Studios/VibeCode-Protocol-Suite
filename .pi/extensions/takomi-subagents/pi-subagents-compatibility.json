@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "piVersion": "0.84.4",
+  "piVersion": "0.99.1",
   "piSubagentsVersion": "0.31.0",
   "privateModules": [
     {
