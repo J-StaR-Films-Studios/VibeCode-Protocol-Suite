@@ -2,7 +2,7 @@
 name: token-usage-ledger-dashboard-spec
 description: Formal technical specification for the multi-model token usage scanner, rate schedule and discount engine, Takomi stats CLI, interactive TUI, local cache, and modern web dashboard.
 status: ready-for-agent
-version: 2.1.0
+version: 2.2.0
 ---
 
 # Token usage ledger, Takomi stats CLI, interactive TUI, and dashboard specification
@@ -13,7 +13,7 @@ Developers tracking LLM token consumption across multiple tools, IDEs, and local
 
 Furthermore, discrepancies existed between terminal reporting in the Takomi CLI (`takomi stats`) and the web dashboard. The CLI lacked monthly rollup views and configurable discount ingestion. An early experimental interactive terminal interface hijacked standard command output into a rigid ASCII box frame (`│ ... │`) with fractured borders in Windows Terminal and colliding column text, replacing the clean, spacious terminal dashboard users relied on. Repeating cold scans across more than 1,400 session files took over 20 seconds, creating noticeable lag.
 
-Meanwhile, the global web dashboard was sluggish and cluttered. Loading hundreds of megabytes of raw JSON events caused page freezes. Navigation elements scrolled off screen instead of staying pinned. Session lists suffered from artificial truncation that hid dozens of active runs, while drilldowns stripped away project context. Crucial inspection tools were split across disconnected modals with empty visual real estate and clumsy native scrollbars. Crucially, the developer required a strict conceptual separation between the global token dashboard (which tracks all harnesses across the entire system) and the Takomi stats CLI, TUI, and web bridge (which strictly track Takomi-owned session and subagent usage).
+Meanwhile, the global web dashboard was sluggish and cluttered. Loading hundreds of megabytes of raw JSON events caused page freezes. Navigation elements scrolled off screen instead of staying pinned. Session lists suffered from artificial truncation that hid dozens of active runs, while drilldowns stripped away project context. Crucial inspection tools were split across disconnected modals with empty visual real estate and clumsy native scrollbars. Crucially, the developer required a strict conceptual separation between the global token dashboard (which tracks all harnesses across the entire system) and the Takomi stats CLI, TUI, and web bridge (which aggregate broad Pi session usage, including ordinary Pi sessions, without complete task-cost attribution).
 
 ## Solution
 
@@ -23,7 +23,7 @@ A unified token tracking architecture spanning two decoupled systems:
    - **Default CLI dashboard**: Running `takomi stats` prints a clean, spacious, non-interactive terminal dashboard directly to stdout. It displays a rounded profile card, real 26-week activity heatmap, highlights, signals, ranked model bars, ranked project bars, and recent sessions in under 3 seconds.
    - **Incremental session cache**: An mtime-indexed disk cache stored at `~/.pi/takomi/cache/stats-cache.json` eliminates repeated JSONL parsing. It preserves cached session metrics across consecutive runs, dropping scan duration across 1,470+ sessions from 23 seconds to under 3 seconds.
    - **Interactive TUI**: An opt-in interactive terminal user interface launched strictly via `-i`, `--interactive`, `--tui`, or `-w` (`--watch`). It uses the same borderless, open design system as the static dashboard. It provides five keyboard-navigable tabs: Overview (with 26-week heatmap or 30-day sparkline volume bars), Projects catalog (with two-column live project dossier), Sessions ledger (with turn-by-turn step inspector), Models and rate schedules (with monthly audit summaries), and a live active session watcher.
-   - **Standalone Takomi web bridge**: An optional lightweight local web server (`takomi stats --web`, port 8766) that renders Takomi-specific session analytics without mixing external global system logs.
+   - **Standalone Takomi web bridge**: An optional lightweight local web server (`takomi stats --web`, port 8766) that renders the same broad Pi aggregate as the CLI, without adding other harness scanners.
 
 2. **The global token usage web dashboard** (in `token-usage-dashboard`):
    - A multi-tool browser dashboard that scans Pi sessions, Antigravity workspaces, and Codex runs across the developer's entire workstation.
@@ -32,7 +32,7 @@ A unified token tracking architecture spanning two decoupled systems:
    - Full retention of all sessions across all projects with progressive infinite scrolling, project-grouped navigation with sticky context, and a unified full-screen inspection modal with interactive timeline scrubbing.
    - Standalone preservation of the legacy dashboard at `/legacy`.
 
-Across both systems, a shared pricing and rate-schedule model handles time-delimited pricing cutoffs, canonical model name resolution, and monthly or date-ranged discount calculations.
+The Takomi core and runtime share the recorded pricing contract described below. The separate global dashboard's current implementation is outside this repository and was not verified in this pass. Its sections below describe the earlier proposal, not acceptance evidence. The pricing and rate-schedule model handles time-delimited pricing cutoffs, canonical model name resolution, and monthly or date-ranged discount calculations.
 
 ## User stories
 
@@ -63,7 +63,7 @@ Across both systems, a shared pricing and rate-schedule model handles time-delim
 22. As a CLI user, I want a Models & Months tab displaying current model rate schedules and monthly audit summaries, so that I can verify input, cache, and output pricing alongside monthly token totals.
 23. As a CLI user, I want a live watcher mode via `takomi stats -w` (or Tab 5 in the TUI), so that I can monitor active agent turns, duration, token burn, and tool invocations in real time.
 24. As a CLI user, I want pressing `s` in the TUI to exit cleanly and print the static dashboard to my terminal scrollback, so that I can capture a snapshot in my command history.
-25. As a CLI user, I want an optional standalone Takomi web bridge via `takomi stats --web`, so that I can view Takomi-specific metrics in a browser without mixing external global system logs.
+25. As a CLI user, I want an optional standalone Takomi web bridge via `takomi stats --web`, so that I can view the CLI's broad Pi aggregate in a browser, with price completeness visible.
 
 ### Global dashboard data pipeline and performance
 26. As a developer, I want token consumption scanned across Pi sessions, Antigravity workspaces, and Codex runs across my workstation, so that all my local AI spend is tracked in one central global ledger.
@@ -89,6 +89,18 @@ Across both systems, a shared pricing and rate-schedule model handles time-delim
 44. As a developer, I want full support for both Dark Mode and Light Mode with saved preferences, so that I can use the tool comfortably in any lighting condition.
 45. As a developer, I want the original dashboard preserved on an isolated `/legacy` route, so that I can verify legacy calculations without risking breaking changes.
 
+## Approved accounting flow for BLD-003
+
+This repository's stats views aggregate broad Pi usage from global, project, linked and configured roots. They do not establish Takomi ownership or complete task costs. The separate global dashboard is outside this implementation and has not been verified here.
+
+Persisted usage passes through component rate lookup, session rows and usage events, then daily, monthly, model, source, project and usage-kind rollups. Numeric `cost` remains the known estimated subtotal for compatibility, not an invoice. Additive `pricing` coverage records fully priced API and incomplete event counts, with subscription events counted separately, priced and unpriced component token counts, subscription event/token counts, estimated-token event/token counts, and sorted `missingModels`. An incomplete event can contribute both priced and unpriced tokens and a valid partial subtotal. Only nonzero components require a rate. Coverage token counts sum components, while native `totalTokens` retains its existing precedence in numeric usage totals.
+
+Each usage event also records `priceBasis`, `rateSource`, `tokenProvenance` and `unpricedComponents`. Existing recorded catalogs and dated schedules supply input, cache-read, output and cache-write rates. The runtime's recorded four-component fallback catalog becomes the core fallback too. Missing component rates stay missing, including omitted fields in custom OAuth-router catalogs. No rate is inferred from another component. Historical tiers, aliases, long-context factors and discounts remain intact. Core and runtime use the same catalog lookup and include the effective catalog in the cache key.
+
+Antigravity has a modeled zero marginal subscription basis, not a missing price. Its token counts remain labeled estimated. This basis is neither subscription invoice spend nor an API-equivalent estimate or provider quota measurement. Router reports describe observed completed routed responses in local rolling windows; conditional, time-stamped provider quota remains separate and can be unavailable.
+
+Generated cache version 5 stores coverage on session rows and events, plus event pricing provenance. Plain objects and arrays serialize unchanged alongside the existing Map conversions. Older versions are recomputed on ordinary future scans. Development uses synthetic fixtures only, without touching live history or caches. Static, TUI, runtime and local-web summaries label the numeric amount as a known estimate, mark incomplete rows, and show coverage and subscription limits without changing the layout. The bounded user-turn inspector applies the same coverage to assistant and unknown-model tool-result usage; standalone auxiliary entries remain session-level.
+
 ## Implementation decisions
 
 ### Shared pricing and rate schedule architecture
@@ -100,7 +112,7 @@ Across both systems, a shared pricing and rate-schedule model handles time-delim
 // Shared model rate schedule structure
 interface RateScheduleTier {
   until?: number; // epoch ms cutoff
-  price: [number, number, number]; // [input, cacheRead, output] per 1M tokens
+  price: [number, number, number, number?]; // input, cacheRead, output, optional cacheWrite per 1M tokens
 }
 
 const RATE_SCHEDULES: Record<string, RateScheduleTier[]> = {
@@ -121,9 +133,10 @@ const RATE_SCHEDULES: Record<string, RateScheduleTier[]> = {
 
 ### Takomi stats CLI and caching engine
 - **Default static output**: `printTakomiStats` invokes `renderTakomiStats` directly to `console.log`. Only explicit flags (`--interactive`, `-i`, `--tui`, or `--watch`, `-w`) invoke `launchTakomiTUI`.
-- **Incremental disk cache**: Session scanning records file path, modification time (`mtimeMs`), size, and active discount configuration. On subsequent runs, if `mtimeMs` and discount parameters match, the pre-computed session row is returned immediately. Cache updates write out atomically.
+- **Incremental disk cache**: Session scanning records a canonical file path, modification time (`mtimeMs`), and active discount configuration. Each canonical file belongs to the first scanned source that reaches it, so overlapping roots do not duplicate it. Cache version 5 recomputes rows that predate pricing coverage, catalog-aware keys, persisted auxiliary usage and additive cache-write fallback totals. On subsequent runs, if `mtimeMs` and discount parameters match, the pre-computed session row is returned immediately.
+- **Persisted usage**: The scanner records `message.usage` across message roles, plus persisted `usage`, `compaction`, and `branch_summary` entries. `usage` entries retain their recorded provider, model, and kind. Tool-result, compaction, and branch-summary usage has no recorded provider/model attribution, so it remains `unknown` instead of borrowing the selected assistant model or its price. Pi totals keep input, cache reads, cache writes, and output additive.
 - **Shared presentation exports**: Layout and formatting helpers (`renderProfileCard`, `heatmapGrid`, `renderHighlights`, `renderSignals`, `sectionTitle`, `cleanProjectName`, `sessionDuration`, `fmtTokens`, `fmtMoney`, `ms`) are exported directly from `src/takomi-stats.js` so both the CLI and TUI share a single canonical visual output engine.
-- **Turn-by-turn inspector extractor**: `getSessionTurns` parses JSONL session streams to reconstruct individual conversational turns, calculating turn duration, input, cache, output, estimated cost, and tool call arrays.
+- **Turn-by-turn inspector extractor**: `getSessionTurns` parses JSONL session streams into user-message windows. It includes assistant and associated tool-result usage within those windows. Compaction, branch summaries, and standalone usage entries remain session-level because the transcript does not establish a safe user-turn boundary for them.
 
 ### Takomi interactive TUI architecture
 - **Borderless open design**: Outer enclosing boxes (`┌─`, `│ ... │`, `└─`) are removed entirely. Lines begin with a consistent two-space margin. Section dividers use open horizontal rules (`─`) without closing vertical borders on the right.
@@ -151,6 +164,8 @@ Tests evaluate external observable behavior rather than private implementation d
 
 ### Modules under test
 - **Takomi stats CLI and runtime (`src/takomi-stats.js`, `.pi/extensions/takomi-runtime/takomi-stats.js`)**: Tested via `scripts/test-regressions.js`. Asserts correct canonical model resolution, rate schedule transitions, monthly grouping rollups (`byMonth`), promotional discounts (20% discount test), cache persistence at `~/.pi/takomi/cache/stats-cache.json`, cache hits on reload, runtime parity, turn-by-turn inspector extraction via `getSessionTurns`, and CLI flags (`stats`, `stats --static`, `stats --json`).
+- **Pricing coverage (`scripts/test-stats-pricing.js`)**: Synthetic known, missing, mixed, partial-component and subscription fixtures run uncached, cold and warm in core and runtime. Checks cover recorded auxiliary cache-write parity, aliases, historical cache-write schedules, date cutoffs, discounts, long-context factors, v4 invalidation and catalog-aware v5 serialization. Coverage and provenance must match without fabricated component rates.
+- **Affected summaries (`scripts/test-stats-pricing-renderers.js`)**: Tests static/core/runtime summaries, interactive tab and bounded inspector labels, plus the synthetic local-web HTML and JSON payload. Router label checks remain in `scripts/test-oauth-router-report-ui.js`; quota refresh is stubbed, without authentication or provider probes.
 - **Takomi interactive TUI (`src/takomi-tui.js`)**: Syntax validated via Node module import checks. Tested via mock non-interactive launches verifying safe fallback to static output.
 - **Usage aggregator (`scripts/refresh_usage.py` in dashboard)**: Tested via `scripts/test_refresh_usage.py`. Verifies multi-directory scanning, discount application across boundary timestamps, pricing lookups for newly added models, project path extraction, and session retention without array truncation.
 - **Client controller (`assets/app.js` in dashboard)**: Tested via Node syntax checks (`node -c assets/app.js`) and DOM mock runners. Verifies syntax validity, safe initialization in the absence of optional modal markup, and deterministic handling of empty or missing datasets.
@@ -161,7 +176,7 @@ Tests evaluate external observable behavior rather than private implementation d
 
 ## Out of scope
 
-- Merging the Takomi usage CLI/TUI and the global token usage dashboard into a single monolithic server. The Takomi stats tools strictly report Takomi and project-local Pi usage, while the global dashboard aggregates all harnesses across the entire workstation.
+- Merging the Takomi usage CLI/TUI and the global token usage dashboard into a single monolithic server. The Takomi stats tools retain broad global/project Pi aggregation. The separate dashboard's multi-harness implementation remains unverified here.
 - Live streaming websocket connections to active running LLM sessions (scans run via periodic background sweeps, local 1-second polling in the watcher tab, or on-demand HTTP POST to `/refresh`).
 - Remote multi-user authorization, role-based access control, or hosted SaaS user authentication (both tools are designed as local single-user developer utilities).
 - Direct mutation or deletion of raw provider session log files from the dashboard UI or TUI.

@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+import os from 'node:os';
 import pc from 'picocolors';
 import {
   renderTakomiStats,
@@ -12,6 +13,8 @@ import {
   sessionDuration,
   fmtTokens,
   fmtMoney,
+  fmtEstimatedCost,
+  pricingSummary,
   fmtPercent,
   ms,
   getSessionTurns,
@@ -156,7 +159,7 @@ export function launchTakomiTUI(stats, options = {}) {
     selectedTurnIdx = 0;
     render();
     try {
-      inspectingTurns = await getSessionTurns(session.file, options.discounts || []);
+      inspectingTurns = await getSessionTurns(session.file, options.discounts || [], options.home || os.homedir());
     } catch {
       inspectingTurns = [];
     } finally {
@@ -205,6 +208,10 @@ export function launchTakomiTUI(stats, options = {}) {
     } else if (activeTab === 4) {
       renderWatcherTab(lines, W);
     }
+
+    lines.push('  ' + pc.dim(truncate(pricingSummary(stats.totals), W - 4)));
+    lines.push('  ' + pc.dim('Broad Pi usage · Known estimates, not invoices or quota'));
+    lines.push('  ' + pc.dim('* incomplete; ~ subscription zero, tokens estimated'));
 
     // Command Footer
     lines.push('');
@@ -271,7 +278,7 @@ export function launchTakomiTUI(stats, options = {}) {
         const prefix = isSel ? pc.cyan('> ') : '  ';
         const num = padStart(String(i + 1), 2) + '. ';
         const name = cleanProjectName(p.key, 20);
-        const costStr = fmtMoney(p.cost);
+        const costStr = fmtEstimatedCost(p);
         leftCell = `${prefix}${pc.dim(num)}${isSel ? pc.bold(pc.white(padEnd(name, 20))) : pc.white(padEnd(name, 20))} ${pc.yellow(padStart(costStr, 7))}`;
       } else {
         leftCell = ' '.repeat(leftW);
@@ -282,7 +289,7 @@ export function launchTakomiTUI(stats, options = {}) {
         if (i === 0) {
           rightCell = pc.bold(pc.white('Dossier: ' + cleanProjectName(selectedProj.key, rightW - 10)));
         } else if (i === 1) {
-          rightCell = `${pc.dim('Spend:')} ${pc.yellow(fmtMoney(selectedProj.cost))}   ${pc.dim('Tokens:')} ${pc.cyan(fmtTokens(selectedProj.total))}`;
+          rightCell = `${pc.dim('Known est.:')} ${pc.yellow(fmtEstimatedCost(selectedProj))}   ${pc.dim('Tokens:')} ${pc.cyan(fmtTokens(selectedProj.total))}`;
         } else if (i === 2) {
           rightCell = `${pc.dim('Sessions:')} ${pc.white(String(selectedProj.sessions_count || 1))}   ${pc.dim('Events:')} ${pc.white(String(selectedProj.events || 0))}`;
         } else if (i === 3) {
@@ -292,7 +299,7 @@ export function launchTakomiTUI(stats, options = {}) {
           const sIdx = i - 4;
           if (sIdx < pSessions.length) {
             const s = pSessions[sIdx];
-            rightCell = `  ${pc.dim(String(sIdx + 1) + '.')} ${truncate(s.session, 16)}  ${pc.cyan(ms(s.activeMs || 0))}  ${pc.yellow(fmtMoney(s.cost || 0))}`;
+            rightCell = `  ${pc.dim(String(sIdx + 1) + '.')} ${truncate(s.session, 16)}  ${pc.cyan(ms(s.activeMs || 0))}  ${pc.yellow(fmtEstimatedCost(s))}`;
           }
         } else if (i === 9) {
           rightCell = pc.dim('Press Enter to inspect top session');
@@ -313,7 +320,7 @@ export function launchTakomiTUI(stats, options = {}) {
     const sessions = stats.sessionRows || [];
     lines.push('');
     lines.push(sectionTitle(`Sessions ledger (${sessions.length} recorded runs)`, W));
-    lines.push(`    #   ${padEnd('Date', 7)} ${padEnd('Session ID', 20)} ${padEnd('Project', 22)} ${padStart('Duration', 9)} ${padStart('Turns', 6)} ${padStart('Tokens', 8)} ${padStart('Cost', 7)}`);
+    lines.push(`    #   ${padEnd('Date', 7)} ${padEnd('Session ID', 20)} ${padEnd('Project', 22)} ${padStart('Duration', 9)} ${padStart('Turns', 6)} ${padStart('Tokens', 8)} ${padStart('Est.', 7)}`);
     lines.push('  ' + pc.dim('─'.repeat(W - 4)));
 
     const maxRows = 10;
@@ -333,7 +340,7 @@ export function launchTakomiTUI(stats, options = {}) {
       const dur = padStart(ms(sessionDuration(s)), 9);
       const turns = padStart(String(s.turns || 0), 6);
       const tokens = padStart(fmtTokens(s.total || 0), 8);
-      const cost = padStart(fmtMoney(s.cost || 0), 7);
+      const cost = padStart(fmtEstimatedCost(s), 7);
 
       const prefix = isSel ? pc.cyan('> ') : '  ';
       const rowContent = `${numStr}  ${pc.dim(padEnd(day, 6))} ${padEnd(sid, 20)} ${pc.white(padEnd(proj, 22))} ${pc.cyan(dur)} ${pc.dim(turns)} ${pc.cyan(tokens)} ${pc.yellow(cost)}`;
@@ -349,7 +356,7 @@ export function launchTakomiTUI(stats, options = {}) {
     const s = inspectingSession;
     lines.push('');
     lines.push(sectionTitle(`Session inspector: ${truncate(s.session, 30)}`, W));
-    lines.push(`    ${pc.dim('Project:')} ${pc.bold(pc.white(cleanProjectName(s.project, 28)))}   ${pc.dim('Spend:')} ${pc.yellow(fmtMoney(s.cost || 0))}   ${pc.dim('Tokens:')} ${pc.cyan(fmtTokens(s.total || 0))}`);
+    lines.push(`    ${pc.dim('Project:')} ${pc.bold(pc.white(cleanProjectName(s.project, 28)))}   ${pc.dim('Known est.:')} ${pc.yellow(fmtEstimatedCost(s))}   ${pc.dim('Tokens:')} ${pc.cyan(fmtTokens(s.total || 0))}`);
     lines.push('');
 
     if (inspectingLoading) {
@@ -364,7 +371,7 @@ export function launchTakomiTUI(stats, options = {}) {
       return;
     }
 
-    lines.push(`    Turn  ${padEnd('Time', 9)} ${padEnd('Model', 18)} ${padStart('Input', 8)} ${padStart('Cache', 8)} ${padStart('Cost', 7)}  Tools`);
+    lines.push(`    Turn  ${padEnd('Time', 9)} ${padEnd('Model', 18)} ${padStart('Input', 8)} ${padStart('Cache', 8)} ${padStart('Est.', 7)}  Tools`);
     lines.push('  ' + pc.dim('─'.repeat(W - 4)));
 
     const maxTurns = 6;
@@ -382,7 +389,7 @@ export function launchTakomiTUI(stats, options = {}) {
       const modStr = truncate(t.model || 'unknown', 18);
       const inStr = padStart(fmtTokens(t.input || 0), 8);
       const cacheStr = padStart(fmtTokens(t.cache || 0), 8);
-      const costStr = padStart(fmtMoney(t.cost || 0), 7);
+      const costStr = padStart(fmtEstimatedCost(t), 7);
       const toolsStr = truncate((t.tools || []).join(', ') || 'none', W - 66);
 
       const prefix = isSel ? pc.cyan('> ') : '  ';
@@ -398,7 +405,10 @@ export function launchTakomiTUI(stats, options = {}) {
     lines.push(sectionTitle('Turn detail', W));
     const selTurn = inspectingTurns[selectedTurnIdx] || null;
     if (selTurn) {
-      lines.push(`    Turn #${selTurn.turnIndex} · ${pc.cyan(selTurn.model)} · Cost: ${pc.yellow(fmtMoney(selTurn.cost))} · Tools: ${(selTurn.tools || []).join(', ') || 'none'}`);
+      lines.push(`    Turn #${selTurn.turnIndex} · ${pc.cyan(selTurn.model)} · Known est.: ${pc.yellow(fmtEstimatedCost(selTurn))} · Tools: ${(selTurn.tools || []).join(', ') || 'none'}`);
+      lines.push('    ' + pc.dim(truncate(pricingSummary(selTurn), W - 6)));
+      if (selTurn.pricing.missingModels.length) lines.push('    ' + pc.dim(truncate('Missing rates: ' + selTurn.pricing.missingModels.join(', '), W - 6)));
+      lines.push(`    ${pc.dim('Output:')} ${fmtTokens(selTurn.output)} · ${pc.dim('Cache writes:')} ${fmtTokens(selTurn.cacheWrite)}${selTurn.pricing.missingModels.includes('unknown') ? ' · Model/provider unknown for some usage' : ''}`);
       lines.push(`    ${pc.dim('Prompt:')} ${pc.white(truncate(selTurn.title || 'User prompt', W - 16))}`);
     } else {
       lines.push('');
@@ -428,12 +438,12 @@ export function launchTakomiTUI(stats, options = {}) {
 
     lines.push('');
     lines.push(sectionTitle('Monthly audit summary', W));
-    lines.push(`    ${padEnd('Month', 12)} ${padStart('Tokens', 10)} ${padStart('Est. Cost', 12)} ${padStart('Discount', 12)} ${padStart('Calls', 10)}`);
+    lines.push(`    ${padEnd('Month', 12)} ${padStart('Tokens', 10)} ${padStart('Known est.', 12)} ${padStart('Discount', 12)} ${padStart('Calls', 10)}`);
     lines.push('  ' + pc.dim('─'.repeat(W - 4)));
 
     const months = stats.byMonth || [];
     for (const m of months.slice(-5).reverse()) {
-      const row = `    ${padEnd(m.key, 12)} ${pc.cyan(padStart(fmtTokens(m.total), 10))} ${pc.yellow(padStart(fmtMoney(m.cost), 12))} ${pc.dim(padStart('-', 12))} ${pc.white(padStart(String(m.events), 10))}`;
+      const row = `    ${padEnd(m.key, 12)} ${pc.cyan(padStart(fmtTokens(m.total), 10))} ${pc.yellow(padStart(fmtEstimatedCost(m), 12))} ${pc.dim(padStart('-', 12))} ${pc.white(padStart(String(m.events), 10))}`;
       lines.push(row);
     }
   }
@@ -448,7 +458,7 @@ export function launchTakomiTUI(stats, options = {}) {
     lines.push(`    ${pc.dim('Active project:')}  ${pc.bold(pc.white(cleanProjectName(recentSession?.project || 'General', 40)))}`);
     lines.push(`    ${pc.dim('Session ID:')}      ${recentSession?.session || 'No active run detected'}`);
     lines.push(`    ${pc.dim('Duration:')}        ${ms(recentSession?.activeMs || 0)} · ${recentSession?.turns || 0} turns · ${recentSession?.toolCalls || 0} tool calls`);
-    lines.push(`    ${pc.dim('Token burn:')}      ${pc.cyan(fmtTokens(recentSession?.total || 0))} tokens · ${pc.yellow(fmtMoney(recentSession?.cost || 0))} est. spend`);
+    lines.push(`    ${pc.dim('Token burn:')}      ${pc.cyan(fmtTokens(recentSession?.total || 0))} tokens · ${pc.yellow(recentSession ? fmtEstimatedCost(recentSession) : '-')} known est.`);
     lines.push('');
     lines.push(sectionTitle('Recent tool activity', W));
     const recentTasks = (stats.topTasks || []).slice(0, 4);

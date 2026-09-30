@@ -7,7 +7,7 @@ import path from 'path';
 // because global Pi installs do not sync src/ (see scripts/sync-pi-global.ps1),
 // so this extension must stay self-contained. Keep both copies identical;
 // scripts/test-stats-cache-parity.js fails the suite when they drift.
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 5;
 function getStatsCachePath(home = os.homedir()) {
   return path.join(home, '.pi', 'takomi', 'cache', 'stats-cache.json');
 }
@@ -183,7 +183,24 @@ const RATE_SCHEDULES = {
   ],
 };
 
-function add(map, key, patch) { const row = map.get(key) || { key, input: 0, cache: 0, cacheWrite: 0, output: 0, total: 0, cost: 0, events: 0 }; for (const [k,v] of Object.entries(patch)) row[k] = (row[k] || 0) + (Number(v) || 0); if (!Object.prototype.hasOwnProperty.call(patch, 'events')) row.events += 1; map.set(key, row); }
+/** @returns {import('./takomi-stats.js').PricingCoverage} */
+function emptyPricing() {
+  return { pricedEvents: 0, unpricedEvents: 0, pricedTokens: 0, unpricedTokens: 0, subscriptionEvents: 0, subscriptionTokens: 0, estimatedTokenEvents: 0, estimatedTokens: 0, missingModels: [] };
+}
+
+function addPricing(target, patch) {
+  if (!patch) return;
+  for (const key of ['pricedEvents', 'unpricedEvents', 'pricedTokens', 'unpricedTokens', 'subscriptionEvents', 'subscriptionTokens', 'estimatedTokenEvents', 'estimatedTokens']) target[key] += patch[key];
+  target.missingModels = [...new Set([...target.missingModels, ...patch.missingModels])].sort();
+}
+
+function add(map, key, patch) {
+  const row = map.get(key) || { key, input: 0, cache: 0, cacheWrite: 0, output: 0, total: 0, cost: 0, events: 0, pricing: emptyPricing() };
+  for (const field of ['input', 'cache', 'cacheWrite', 'output', 'total', 'cost', 'events']) row[field] += patch[field] || 0;
+  if (!Object.hasOwn(patch, 'events')) row.events += 1;
+  addPricing(row.pricing, patch.pricing);
+  map.set(key, row);
+}
 
 function findDiscount(discounts, model, timestamp) {
   if (!Array.isArray(discounts) || !discounts.length) return 0;
@@ -203,35 +220,52 @@ function findDiscount(discounts, model, timestamp) {
 }
 
 function priceForUsage(model, timestamp, prices = PRICES) {
-  // Antigravity rides the Google subscription ($0 marginal API cost), and its
-  // reported token counts are chars/4 estimates, not metered usage. Pricing
-  // them at API rates would fabricate spend, so they price at zero on every
-  // path, including transcript scans where the model arrives as a bare string.
-  const rawId = typeof model === 'string' ? model : model?.id;
-  if (typeof rawId === 'string' && rawId.startsWith('antigravity/')) return [0, 0, 0];
+  if (typeof model === 'string' && model.startsWith('antigravity/')) return { rates: [0, 0, 0, 0], rateSource: 'subscription' };
   const canon = canonicalModel(model);
   const usageAt = timestampMs(timestamp);
   const schedule = RATE_SCHEDULES[canon];
   if (schedule && usageAt !== null) {
     for (const tier of schedule) {
-      if (!tier.until || usageAt < tier.until) return tier.price;
+      if (!tier.until || usageAt < tier.until) return { rates: tier.price, rateSource: 'recorded-schedule' };
     }
   }
-  if (usageAt !== null && usageAt < GPT_5_6_PRICE_CHANGE_AT && LEGACY_GPT_5_6_PRICES[canon]) return LEGACY_GPT_5_6_PRICES[canon];
-  return Object.hasOwn(LEGACY_GPT_5_6_PRICES, canon) ? PRICES[canon] : (prices[canon] || prices[model]);
+  if (usageAt !== null && usageAt < GPT_5_6_PRICE_CHANGE_AT && LEGACY_GPT_5_6_PRICES[canon]) {
+    return { rates: LEGACY_GPT_5_6_PRICES[canon], rateSource: 'recorded-schedule' };
+  }
+  const rates = Object.hasOwn(LEGACY_GPT_5_6_PRICES, canon) ? PRICES[canon] : (prices[canon] || prices[model]);
+  return { rates, rateSource: !rates ? 'missing' : rates === PRICES[canon] ? 'recorded-catalog' : 'oauth-router-catalog' };
 }
 
-function cost(model, input, cache, output, cacheWrite = 0, prices = PRICES, timestamp, discounts = []) {
-  const p = priceForUsage(model, timestamp, prices);
-  if (!p) return 0;
+/** @returns {import('./takomi-stats.js').UsagePricing} */
+function priceUsage(model, usage, timestamp, discounts = [], prices = PRICES) {
+  const { rates, rateSource } = priceForUsage(model, timestamp, prices);
+  const subscription = rateSource === 'subscription';
+  const pricing = emptyPricing();
+  const components = ['input', 'cache', 'output', 'cacheWrite'];
+  const unpricedComponents = components.filter((key, index) => usage[key] > 0 && !Number.isFinite(rates?.[index]));
+  const missing = !rates || unpricedComponents.length > 0;
+  const componentTokens = components.reduce((sum, key) => sum + usage[key], 0);
+  pricing.unpricedTokens = unpricedComponents.reduce((sum, key) => sum + usage[key], 0);
+  if (subscription) {
+    pricing.subscriptionEvents = 1;
+    pricing.subscriptionTokens = componentTokens;
+    pricing.estimatedTokenEvents = 1;
+    pricing.estimatedTokens = componentTokens;
+  } else {
+    pricing.pricedEvents = missing ? 0 : 1;
+    pricing.unpricedEvents = missing ? 1 : 0;
+    pricing.pricedTokens = componentTokens - pricing.unpricedTokens;
+    if (missing) pricing.missingModels = [model];
+  }
   const isNewGpt6 = ['gpt-6-sol', 'gpt-6-luna'].includes(canonicalModel(model));
-  const longContext = isNewGpt6 && input + cache + cacheWrite > 272_000;
-  const base = (input*p[0]*(longContext ? 2 : 1) + cache*p[1]*(longContext ? 2 : 1)
-    + output*p[2]*(longContext ? 1.5 : 1)
-    + cacheWrite*(p[3] ?? p[0])*(longContext ? 2 : 1)) / 1_000_000;
-  const disc = findDiscount(discounts, model, timestamp);
-  return disc > 0 ? base * (1 - disc) : base;
+  const longContext = isNewGpt6 && componentTokens - usage.output > 272_000;
+  // Omitted rates stay unknown. Sum only recorded component rates.
+  const factors = [longContext ? 2 : 1, longContext ? 2 : 1, longContext ? 1.5 : 1, longContext ? 2 : 1];
+  const base = components.reduce((sum, key, index) => sum + (Number.isFinite(rates?.[index]) ? usage[key] * rates[index] * factors[index] : 0), 0) / 1_000_000;
+  const cost = base * (1 - findDiscount(discounts, model, timestamp));
+  return { cost, pricing, priceBasis: subscription ? 'subscription' : missing ? 'missing-rate' : 'local-rate', rateSource, tokenProvenance: subscription ? 'estimated' : 'persisted', unpricedComponents };
 }
+
 async function loadPrices(home) {
   const prices = { ...PRICES };
   const configPath = path.join(home, '.pi', 'agent', 'oauth-router', 'config.json');
@@ -239,13 +273,38 @@ async function loadPrices(home) {
     const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
     for (const model of config.models || []) {
       if (!model?.id || !model?.cost) continue;
-      prices[model.id] = [model.cost.input || 0, model.cost.cacheRead || 0, model.cost.output || 0, model.cost.cacheWrite ?? model.cost.input ?? 0];
+      prices[model.id] = [model.cost.input, model.cost.cacheRead, model.cost.output, model.cost.cacheWrite];
     }
   } catch {}
   return prices;
 }
+function usageFields(usage) {
+  const input = +usage?.input || +usage?.inputTokens || 0;
+  const cache = +usage?.cacheRead || +usage?.cachedInput || +usage?.cache_read || 0;
+  const cacheWrite = +usage?.cacheWrite || 0;
+  const output = +usage?.output || +usage?.outputTokens || 0;
+  const total = +usage?.totalTokens || +usage?.total || (input + cache + cacheWrite + output);
+  return { input, cache, cacheWrite, output, total };
+}
 function fmtTokens(n) { if (n >= 1e9) return `${(n/1e9).toFixed(2)}B`; if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`; if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`; return String(Math.round(n || 0)); }
 function fmtMoney(n) { return `$${(n || 0).toFixed(n > 100 ? 0 : 2)}`; }
+function fmtMoneyShort(n) { if (n >= 1000) return `$${(n/1000).toFixed(n >= 10_000 ? 0 : 1)}K`; return fmtMoney(n); }
+export function fmtEstimatedCost(row, short = false) {
+  const coverage = row.pricing;
+  if (coverage?.unpricedEvents && !coverage.pricedTokens && !coverage.subscriptionEvents) return 'unpriced';
+  const amount = short ? fmtMoneyShort(row.cost) : fmtMoney(row.cost);
+  return `${amount}${coverage?.unpricedEvents ? '*' : ''}${coverage?.subscriptionEvents ? '~' : ''}`;
+}
+
+export function pricingSummary(row) {
+  const p = row.pricing;
+  if (!p) return 'Pricing coverage unavailable';
+  const counts = `${p.pricedEvents} priced / ${p.unpricedEvents} unpriced / ${p.subscriptionEvents} subscription events`;
+  const missing = p.missingModels.length ? ` · Missing rates: ${p.missingModels.slice(0, 3).join(', ')}${p.missingModels.length > 3 ? ', ...' : ''}` : '';
+  const estimated = p.estimatedTokenEvents ? ` · ${fmtTokens(p.estimatedTokens)} estimated subscription tokens` : '';
+  return `${counts}${missing}${estimated}`;
+}
+
 function ms(n) { if (!n) return '-'; const s = Math.round(n/1000); if (s < 60) return `${s}s`; const m = Math.floor(s/60); if (m < 60) return `${m}m ${s%60}s`; const h = Math.floor(m/60); return `${h}h ${m%60}m`; }
 const ACTIVE_GAP_THRESHOLD_MS = 15 * 60 * 1000;
 function timestampMs(value) {
@@ -323,25 +382,29 @@ function pushTask(taskRows, task) {
   taskRows.push(task);
 }
 
-async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], prices = PRICES, discounts = [], statsCache = null, onCacheUpdate = null) {
+async function scanPiSessions(root, source, events, sessionRows = [], taskRows = [], prices = PRICES, discounts = [], statsCache = null, onCacheUpdate = null, seenFiles = new Set()) {
   const discountsKey = JSON.stringify(discounts || []);
+  const pricesKey = JSON.stringify(prices);
   for (const file of await files(root)) {
-    const resolvedPath = path.resolve(file);
+    const resolvedPath = await fs.realpath(file).catch(() => path.resolve(file));
+    if (seenFiles.has(resolvedPath)) continue;
+    seenFiles.add(resolvedPath);
     let st = null;
     if (statsCache) {
       try {
         st = await fs.stat(file);
         const cached = statsCache[resolvedPath];
-        if (cached && cached.mtimeMs === st.mtimeMs && (cached.discountsKey || '[]') === discountsKey) {
+        if (cached && cached.mtimeMs === st.mtimeMs && (cached.discountsKey || '[]') === discountsKey && cached.pricesKey === pricesKey) {
           const row = deserializeRow(cached.row);
-          if (row && (row.messages || row.toolCalls || row.turns)) {
+          if (row && (row.messages || row.toolCalls || row.turns || row.usageEvents)) {
+            row.source = source;
             sessionRows.push(row);
           }
           if (cached.events?.length) {
-            for (let i = 0; i < cached.events.length; i++) events.push(cached.events[i]);
+            for (let i = 0; i < cached.events.length; i++) events.push({ ...cached.events[i], source });
           }
           if (cached.tasks?.length) {
-            for (let i = 0; i < cached.tasks.length; i++) taskRows.push(cached.tasks[i]);
+            for (let i = 0; i < cached.tasks.length; i++) taskRows.push({ ...cached.tasks[i], source });
           }
           continue;
         }
@@ -351,9 +414,26 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
     }
 
     let provider = 'unknown', model = 'unknown', session = path.basename(file, '.jsonl'), cwd = '', currentTask = null;
-    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityTimestamps: [], total: 0, input: 0, cache: 0, output: 0, cost: 0, models: new Map() };
+    const row = { key: session, session, source, file, project: projectKey(file), cwd, start: '', end: '', turns: 0, messages: 0, toolCalls: 0, subagentCalls: 0, roles: new Map(), stages: new Map(), workflows: new Map(), activeMs: 0, activityTimestamps: [], total: 0, input: 0, cache: 0, cacheWrite: 0, output: 0, cost: 0, usageEvents: 0, pricing: emptyPricing(), models: new Map() };
     const fileEvents = [];
     const fileTasks = [];
+
+    function recordUsage(usage, { timestamp, usageProvider = 'unknown', usageModel = 'unknown', usageKind }) {
+      const { input, cache, cacheWrite, output, total } = usageFields(usage);
+      const priced = priceUsage(usageModel, { input, cache, cacheWrite, output }, timestamp, discounts, prices);
+      row.total += total;
+      row.input += input;
+      row.cache += cache;
+      row.cacheWrite += cacheWrite;
+      row.output += output;
+      row.cost += priced.cost;
+      addPricing(row.pricing, priced.pricing);
+      row.usageEvents += 1;
+      row.models.set(usageModel, (row.models.get(usageModel) || 0) + total);
+      const evt = { source, file, timestamp, day: dayOf(timestamp), session, provider: usageProvider, model: usageModel, project: projectKey(file), kind: 'usage', usageKind, input, cache, cacheWrite, output, total, ...priced };
+      events.push(evt);
+      if (statsCache) fileEvents.push(evt);
+    }
 
     function pushFileTask(task) {
       if (!task?.end || task.end === task.start) return;
@@ -416,23 +496,26 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
           if (statsCache) fileEvents.push(evt);
         }
       }
-      const u = msg && msg.usage;
-      if (u) {
-        const inp = +u.input || 0;
-        const cr = +u.cacheRead || 0;
-        const cw = +u.cacheWrite || 0;
-        const out = +u.output || 0;
-        const tot = +u.totalTokens || (inp + cr + out);
-        const c = cost(model, inp, cr, out, cw, prices, ts, discounts);
-        row.total += tot;
-        row.input += inp;
-        row.cache += cr;
-        row.output += out;
-        row.cost += c;
-        row.models.set(model, (row.models.get(model) || 0) + tot);
-        const evt = { source, file, timestamp: obj.timestamp, day: dayOf(obj.timestamp), session, provider, model, project: projectKey(file), kind: 'usage', input: inp, cache: cr, cacheWrite: cw, output: out, total: tot, cost: c };
-        events.push(evt);
-        if (statsCache) fileEvents.push(evt);
+      if (msg?.usage) {
+        recordUsage(msg.usage, {
+          timestamp: ts,
+          usageProvider: msg.role === 'toolResult' ? 'unknown' : provider,
+          usageModel: msg.role === 'toolResult' ? 'unknown' : model,
+          usageKind: msg.role === 'toolResult' ? 'tool_result' : 'message',
+        });
+      }
+      const auxiliaryUsage = obj.type === 'usage'
+        ? { usage: obj.usage, usageProvider: obj.provider || 'unknown', usageModel: qualifyAntigravityModel(obj.model || 'unknown', obj.provider), usageKind: obj.kind || 'usage' }
+        : (obj.type === 'compaction' || obj.type === 'branch_summary') && obj.usage
+          ? { usage: obj.usage, usageKind: obj.type }
+          : null;
+      if (auxiliaryUsage?.usage) {
+        recordUsage(auxiliaryUsage.usage, {
+          timestamp: obj.timestamp || '',
+          usageProvider: auxiliaryUsage.usageProvider,
+          usageModel: auxiliaryUsage.usageModel,
+          usageKind: auxiliaryUsage.usageKind,
+        });
       }
       }
     } catch {
@@ -440,7 +523,7 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
     }
     pushFileTask(currentTask);
     row.activeMs = activeDuration(row.activityTimestamps);
-    if (row.messages || row.toolCalls || row.turns) sessionRows.push(row);
+    if (row.messages || row.toolCalls || row.turns || row.usageEvents) sessionRows.push(row);
 
     if (statsCache) {
       try {
@@ -450,7 +533,7 @@ async function scanPiSessions(root, source, events, sessionRows = [], taskRows =
           row: serializeRow(row),
           events: fileEvents,
           tasks: fileTasks,
-          discountsKey,
+          discountsKey, pricesKey,
         };
         if (onCacheUpdate) onCacheUpdate();
       } catch {}
@@ -475,12 +558,13 @@ export async function collectTakomiStats(opts = {}) {
   let cacheDirty = false;
   const onCacheUpdate = () => { cacheDirty = true; };
   const rawEvents = [], rawSessions = [], rawTasks = [];
+  const scannedFiles = new Set();
   const prices = await loadPrices(home);
   const globalSessions = path.resolve(path.join(home, '.pi', 'agent', 'sessions'));
   const projectSessions = path.resolve(path.join(cwd, '.pi', 'agent', 'sessions'));
-  await scanPiSessions(globalSessions, 'pi-global', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate);
-  if (projectSessions !== globalSessions) await scanPiSessions(projectSessions, 'pi-project', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate);
-  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate);
+  await scanPiSessions(globalSessions, 'pi-global', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate, scannedFiles);
+  if (projectSessions !== globalSessions) await scanPiSessions(projectSessions, 'pi-project', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate, scannedFiles);
+  await scanPiSessions(path.join(cwd, '.pi', 'takomi'), 'takomi-project', rawEvents, rawSessions, rawTasks, prices, discounts, cache, onCacheUpdate, scannedFiles);
   if (cacheDirty && cache && !opts.noCache) {
     await saveStatsCache(cache, cacheFile);
   }
@@ -489,8 +573,8 @@ export async function collectTakomiStats(opts = {}) {
   const sessionRows = rawSessions.filter(s => !sinceDay || dayOf(s.end || s.start) >= sinceDay);
   const taskRows = rawTasks.filter(t => !sinceDay || dayOf(t.end || t.start) >= sinceDay);
   const runs = await scanRunHistory(path.join(home, '.pi', 'agent', 'run-history.jsonl'));
-  const byDay = new Map(), byMonth = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
-  let totals = { input: 0, cache: 0, cacheWrite: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0 };
+  const byDay = new Map(), byMonth = new Map(), byModel = new Map(), bySource = new Map(), byProject = new Map(), byUsageKind = new Map(), byTool = new Map(), byRole = new Map(), byStage = new Map(), byWorkflow = new Map();
+  let totals = { input: 0, cache: 0, cacheWrite: 0, output: 0, total: 0, cost: 0, events: events.filter(e => e.kind === 'usage').length, toolCalls: 0, turns: 0, pricing: emptyPricing() };
   for (const s of sessionRows) { totals.toolCalls += s.toolCalls; totals.turns += s.turns; }
   for (const e of events) {
     if (e.kind === 'tool') { add(byTool, e.tool || 'unknown', { total: 0, events: 1 }); continue; }
@@ -501,17 +585,18 @@ export async function collectTakomiStats(opts = {}) {
       continue;
     }
     totals.input += e.input; totals.cache += e.cache; totals.cacheWrite += e.cacheWrite || 0; totals.output += e.output; totals.total += e.total; totals.cost += e.cost;
+    addPricing(totals.pricing, e.pricing);
     add(byDay, e.day, e);
     const month = e.day && e.day.length >= 7 ? e.day.slice(0, 7) : 'unknown';
     add(byMonth, month, e);
-    add(byModel, e.model, e); add(bySource, e.source, e); add(byProject, e.project, e);
+    add(byModel, e.model, e); add(bySource, e.source, e); add(byProject, e.project, e); add(byUsageKind, e.usageKind || 'message', e);
   }
   const byAgent = new Map(); let longestRun = null;
   for (const r of runs) { add(byAgent, r.agent || 'unknown', { total: 0, events: 1 }); if (!longestRun || (+r.duration||0) > (+longestRun.duration||0)) longestRun = r; }
   const topSessions = [...sessionRows].sort((a,b)=>(b.activeMs||0)-(a.activeMs||0) || b.turns-a.turns || b.toolCalls-a.toolCalls).slice(0, 20);
   const topTasks = [...taskRows].sort((a,b)=>taskDuration(b)-taskDuration(a) || b.toolCalls-a.toolCalls).slice(0, 20);
   const mostSubagentsSession = [...sessionRows].sort((a,b)=>b.subagentCalls-a.subagentCalls)[0] || null;
-  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byMonth: [...byMonth.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
+  return { generatedAt: new Date().toISOString(), cwd, since: sinceDay, totals, sessions: new Set([...events.map(e => e.session), ...sessionRows.map(s => s.session)]).size, byDay: [...byDay.values()].sort((a,b)=>a.key.localeCompare(b.key)), byMonth: [...byMonth.values()].sort((a,b)=>a.key.localeCompare(b.key)), byModel: [...byModel.values()].sort((a,b)=>b.total-a.total), bySource: [...bySource.values()].sort((a,b)=>b.total-a.total), byUsageKind: [...byUsageKind.values()].sort((a,b)=>b.total-a.total), byProject: [...byProject.values()].sort((a,b)=>b.total-a.total), byTool: [...byTool.values()].sort((a,b)=>b.events-a.events), byRole: [...byRole.values()].sort((a,b)=>b.events-a.events), byStage: [...byStage.values()].sort((a,b)=>b.events-a.events), byWorkflow: [...byWorkflow.values()].sort((a,b)=>b.events-a.events), byAgent: [...byAgent.values()].sort((a,b)=>b.events-a.events), sessionRows, taskRows, topSessions, topTasks, mostSubagentsSession, runs, longestRun, recent: events.sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10) };
 }
 
 // ── Streak Calculation ──────────────────────────────────────────────────────
@@ -699,8 +784,8 @@ function renderFocusedView(stats, opts = {}) {
   if (!view || view === 'overview') return null;
   if (view === 'projects-full' || view === 'project-full') return renderFullList('Top Projects — Full Names', stats.byProject, (r, i) => [
     `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.key)}`,
-    `      ${pc.cyan(fmtTokens(r.total))}  ${pc.dim(fmtMoney(r.cost))}  ${pc.dim(r.events + ' calls')}`,
-  ].join('\n'), limit);
+    `      ${pc.cyan(fmtTokens(r.total))}  ${pc.dim(fmtEstimatedCost(r))}  ${pc.dim(r.events + ' calls')}`,
+  ].join('\n'), limit) + '\n  ' + pricingSummary(stats.totals) + '\n  Known estimates, not invoices or quota. * incomplete; ~ subscription zero.';
   if (view === 'sessions-full' || view === 'session-full') return renderFullList('Longest Active Sessions — Full Names', stats.topSessions, (r, i) => [
     `  ${pc.dim(String(i + 1).padStart(2, '0') + '.')} ${pc.white(r.project || r.cwd || r.key || 'unknown')}`,
     `      ${pc.cyan(ms(sessionDuration(r)))}  ${pc.dim(r.turns + ' turns')}  ${pc.dim(r.toolCalls + ' tools')}`,
@@ -715,7 +800,7 @@ function renderFocusedView(stats, opts = {}) {
     models: ['Top Models', stats.byModel, [
       { width: 26, align: 'left', get: r => pc.white(r.key) },
       { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
-      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtEstimatedCost(r)) },
       { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
     ]],
     sources: ['Sources', stats.bySource, [
@@ -726,7 +811,7 @@ function renderFocusedView(stats, opts = {}) {
     projects: ['Top Projects', stats.byProject, [
       { width: 42, align: 'left', get: r => pc.white(r.key.length > 42 ? '…' + r.key.slice(-41) : r.key) },
       { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
-      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtEstimatedCost(r)) },
       { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
     ]],
     agents: ['Main Agent Roles', stats.byRole, [
@@ -762,7 +847,7 @@ function renderFocusedView(stats, opts = {}) {
     daily: ['Daily Usage', [...stats.byDay].reverse(), [
       { width: 12, align: 'left', get: r => pc.white(r.key) },
       { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
-      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtEstimatedCost(r)) },
       { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
     ]],
   };
@@ -770,7 +855,7 @@ function renderFocusedView(stats, opts = {}) {
   if (!spec) return null;
   const [title, rows, cols] = spec;
   const suffix = stats.since ? pc.dim(`\n  Since: ${stats.since}`) : '';
-  return ['\n' + pc.bold(pc.magenta('Takomi Stats')), suffix, renderTable(title, rows.slice(0, limit), cols), '\n' + pc.dim('Privacy: metadata only · no raw prompts or transcripts')].filter(Boolean).join('\n');
+  return ['\n' + pc.bold(pc.magenta('Takomi Stats')), suffix, renderTable(title, rows.slice(0, limit), cols), '  ' + pc.dim('Broad Pi usage; not complete task costs.'), '  ' + pc.dim(pricingSummary(stats.totals)), '  ' + pc.dim('Known estimates, not invoices or quota. * incomplete; ~ subscription zero.'), '\n' + pc.dim('Privacy: metadata only · no raw prompts or transcripts')].filter(Boolean).join('\n');
 }
 
 // ── Main Render ─────────────────────────────────────────────────────────────
@@ -800,7 +885,7 @@ export function renderTakomiStats(stats, opts = {}) {
     statCard(fmtTokens(stats.totals.total), 'Lifetime Tokens'),
     statCard(fmtTokens(stats.totals.cache), 'Cache Reads'),
     statCard(fmtTokens(stats.totals.cacheWrite), 'Cache Writes'),
-    statCard(fmtMoney(stats.totals.cost), 'Est. Cost'),
+    statCard(fmtEstimatedCost(stats.totals), 'Known est.'),
     statCard(String(stats.sessions), 'Sessions'),
     statCard(String(stats.totals.turns), 'Main Turns'),
   ];
@@ -858,6 +943,7 @@ export function renderTakomiStats(stats, opts = {}) {
 
   // ── Info line ─────────────────────────────────────────────────────────
   lines.push('');
+  lines.push('  ' + pc.dim(pricingSummary(stats.totals)));
   const infoText = `Peak: ${peak?.key || '-'}  ·  ${streaks.quietDays} quiet days  ·  ${stats.totals.events.toLocaleString()} events  ·  active gaps ≤15m${stats.since ? `  ·  since ${stats.since}` : ''}`;
   lines.push(center(pc.dim(infoText), W));
 
@@ -876,7 +962,7 @@ export function renderTakomiStats(stats, opts = {}) {
   lines.push(renderTable('Top Models', stats.byModel.slice(0, modelLimit), [
     { width: 24, align: 'left',  get: r => pc.white(r.key) },
     { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
-    { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+    { width: 10, align: 'right', get: r => pc.dim(fmtEstimatedCost(r)) },
     { width: 12, align: 'right', get: r => pc.dim(r.events + ' calls') },
   ]));
 
@@ -886,7 +972,7 @@ export function renderTakomiStats(stats, opts = {}) {
     lines.push(renderTable('Top Projects', stats.byProject.slice(0, 5), [
       { width: 34, align: 'left',  get: r => pc.white(r.key.length > 34 ? '…' + r.key.slice(-33) : r.key) },
       { width: 10, align: 'right', get: r => pc.cyan(fmtTokens(r.total)) },
-      { width: 10, align: 'right', get: r => pc.dim(fmtMoney(r.cost)) },
+      { width: 10, align: 'right', get: r => pc.dim(fmtEstimatedCost(r)) },
     ]));
   }
 
@@ -967,7 +1053,8 @@ export function renderTakomiStats(stats, opts = {}) {
   lines.push('');
   lines.push('  ' + pc.dim(hrule(W - 4)));
   lines.push('  ' + pc.dim('Privacy: metadata only · no raw prompts or transcripts'));
-  lines.push('  ' + pc.dim('Costs use the oauth-router catalog when available; cache reads and writes are priced separately.'));
+  lines.push('  ' + pc.dim('Broad Pi usage; not complete task costs.'));
+  lines.push('  ' + pc.dim('Known estimates, not invoices or quota. * incomplete; ~ subscription zero.'));
   lines.push('');
 
   return lines.join('\n');

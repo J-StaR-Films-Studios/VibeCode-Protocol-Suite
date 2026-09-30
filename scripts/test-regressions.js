@@ -133,7 +133,7 @@ try {
   const cacheFile = path.join(statsHome, '.pi', 'takomi', 'cache', 'stats-cache.json');
   assert.ok(await fs.pathExists(cacheFile), 'stats cache file must be created at ~/.pi/takomi/cache/stats-cache.json');
   const cacheContent = await fs.readJson(cacheFile);
-  assert.equal(cacheContent.version, 3, 'stats cache must use version 3');
+  assert.equal(cacheContent.version, 5, 'stats cache must use version 5 after pricing coverage corrections');
   const cachedKeys = Object.keys(cacheContent.entries || {});
   assert.ok(cachedKeys.length >= 3, 'stats cache must contain entries for created session files');
 
@@ -158,6 +158,87 @@ try {
   assert.equal(turns[0].output, 3, 'turn output tokens should match usage');
   assert.equal(turns[0].total, 15, 'turn total tokens should match usage');
   assert.deepEqual(turns[0].tools, ['takomi_subagent'], 'turn tools should record invoked tool names');
+
+  // Persisted Pi 0.99.1 usage entries and a nested root that re-reaches the
+  // same canonical file. The global root scans first, so it owns the source.
+  const overlapHome = path.join(tempRoot, 'overlap-home');
+  const overlapSessions = path.join(overlapHome, '.pi', 'agent', 'sessions');
+  const overlapCwd = path.join(overlapSessions, 'nested-project');
+  const overlappingTakomiRoot = path.join(overlapCwd, '.pi', 'takomi');
+  await fs.ensureDir(overlappingTakomiRoot);
+  const overlapSessionFile = path.join(overlappingTakomiRoot, 'overlapping.jsonl');
+  await fs.writeFile(overlapSessionFile, [
+    JSON.stringify({ type: 'session', id: 'overlapping-session', cwd: overlapCwd, timestamp: '2026-10-01T00:00:00.000Z' }),
+    JSON.stringify({ type: 'message', id: 'user', parentId: null, timestamp: '2026-10-01T00:00:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'account this turn' }] } }),
+    JSON.stringify({ type: 'message', id: 'assistant', parentId: 'user', timestamp: '2026-10-01T00:00:02.000Z', message: { role: 'assistant', provider: 'openai', model: 'unpriced-model', usage: { input: 10, cacheRead: 2, cacheWrite: 3, output: 4 }, content: [] } }),
+    JSON.stringify({ type: 'message', id: 'tool', parentId: 'assistant', timestamp: '2026-10-01T00:00:03.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'nested-model-tool', usage: { input: 5, cacheRead: 0, cacheWrite: 0, output: 0 }, content: [] } }),
+    JSON.stringify({ type: 'compaction', id: 'compaction', parentId: 'tool', timestamp: '2026-10-01T00:00:04.000Z', usage: { input: 7, cacheRead: 0, cacheWrite: 2, output: 3 } }),
+    JSON.stringify({ type: 'branch_summary', id: 'branch', parentId: 'compaction', timestamp: '2026-10-01T00:00:05.000Z', usage: { input: 0, cacheRead: 11, cacheWrite: 0, output: 0 } }),
+    JSON.stringify({ type: 'usage', id: 'warm', parentId: 'branch', timestamp: '2026-10-01T00:00:06.000Z', kind: 'cache_warm', provider: 'openai', model: 'unpriced-model', usage: { input: 13, cacheRead: 0, cacheWrite: 17, output: 0 } }),
+    JSON.stringify({ type: 'usage', id: 'missing', parentId: 'warm', timestamp: '2026-10-01T00:00:07.000Z', kind: 'cache_warm', provider: 'openai', model: 'unpriced-model' }),
+    JSON.stringify({ type: 'message', id: 'failed', parentId: 'missing', timestamp: '2026-10-01T00:00:08.000Z', message: { role: 'assistant', provider: 'openai', model: 'unpriced-model', stopReason: 'error', content: [] } }),
+  ].join('\n'));
+  await fs.writeFile(path.join(overlapSessions, 'distinct.jsonl'), [
+    JSON.stringify({ type: 'session', id: 'distinct-session', cwd: overlapCwd, timestamp: '2026-10-01T01:00:00.000Z' }),
+    JSON.stringify({ type: 'message', id: 'distinct-assistant', parentId: null, timestamp: '2026-10-01T01:00:01.000Z', message: { role: 'assistant', provider: 'openai', model: 'unpriced-model', usage: { input: 0, cacheRead: 0, cacheWrite: 0, output: 19 }, content: [] } }),
+  ].join('\n'));
+
+  async function assertPersistedUsage(collector, cacheFile) {
+    const fresh = await collector({ home: overlapHome, cwd: overlapCwd, noCache: true });
+    const cachedCold = await collector({ home: overlapHome, cwd: overlapCwd, cacheFile });
+    const cached = await collector({ home: overlapHome, cwd: overlapCwd, cacheFile });
+    for (const result of [fresh, cachedCold, cached]) {
+      assert.deepEqual(result.totals, { input: 35, cache: 13, cacheWrite: 22, output: 26, total: 96, cost: 0, events: 6, toolCalls: 0, turns: 1, pricing: { pricedEvents: 0, unpricedEvents: 6, pricedTokens: 0, unpricedTokens: 96, subscriptionEvents: 0, subscriptionTokens: 0, estimatedTokenEvents: 0, estimatedTokens: 0, missingModels: ['unknown', 'unpriced-model'] } },   'persisted usage must include message, tool-result, compaction, branch, and cache-warm records once');
+      assert.deepEqual(result.bySource.map((row) => [row.key, row.total]), [['pi-global', 96]], 'first traversal source must retain the canonical file');
+      assert.deepEqual(result.byUsageKind.map((row) => [row.key, row.total]).sort((a, b) => a[0].localeCompare(b[0])), [['branch_summary', 11], ['cache_warm', 30], ['compaction', 12], ['message', 38], ['tool_result', 5]], 'persisted usage kinds must remain distinct');
+      assert.equal(result.byModel.find((row) => row.key === 'unknown')?.total, 28, 'tool-result, compaction and branch usage without native model provenance must remain unknown');
+      assert.equal(result.sessionRows.length, 2, 'a distinct session file must remain counted');
+    }
+    assert.deepEqual(cached.totals, fresh.totals, 'cached and uncached totals must match');
+    assert.deepEqual(cached.bySource, fresh.bySource, 'cached and uncached source attribution must match');
+    assert.deepEqual(cached.byUsageKind, fresh.byUsageKind, 'cached and uncached usage kinds must match');
+    return fresh;
+  }
+
+  const persistedCore = await assertPersistedUsage(collectTakomiStats, path.join(overlapHome, 'core-cache.json'));
+  const persistedRuntime = await assertPersistedUsage(collectRuntimeTakomiStats, path.join(overlapHome, 'runtime-cache.json'));
+  assert.deepEqual(persistedRuntime.totals, persistedCore.totals, 'runtime scanner must match core persisted usage totals');
+  assert.deepEqual(persistedRuntime.bySource, persistedCore.bySource, 'runtime scanner must preserve core source attribution');
+  assert.deepEqual(persistedRuntime.byUsageKind, persistedCore.byUsageKind, 'runtime scanner must preserve usage-kind totals');
+  const persistedTurns = await getSessionTurns(overlapSessionFile);
+  assert.equal(persistedTurns.length, 1, 'the inspector must retain the user-message turn boundary');
+  assert.equal(persistedTurns[0].total, 24, 'the inspector must include assistant and associated tool-result usage only');
+  assert.equal(persistedTurns[0].cacheWrite, 3, 'the inspector must retain cache writes in additive fallback totals');
+
+  // Pi tool results carry usage but no model or provider. A priced assistant
+  // immediately before one must not lend its identity or rate to that tool.
+  const toolHome = path.join(tempRoot, 'tool-usage-home');
+  const toolCwd = path.join(tempRoot, 'tool-usage-project');
+  const toolSessions = path.join(toolHome, '.pi', 'agent', 'sessions');
+  await fs.ensureDir(toolSessions);
+  const toolSessionFile = path.join(toolSessions, 'tool-usage.jsonl');
+  await fs.writeFile(toolSessionFile, [
+    JSON.stringify({ type: 'session', id: 'tool-usage', cwd: toolCwd, timestamp: '2026-10-02T00:00:00.000Z' }),
+    JSON.stringify({ type: 'message', timestamp: '2026-10-02T00:00:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'run tool' }] } }),
+    JSON.stringify({ type: 'message', timestamp: '2026-10-02T00:00:02.000Z', message: { role: 'assistant', provider: 'openai', model: 'gpt-5.4', usage: { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0 }, content: [{ type: 'toolCall', id: 'call-1', name: 'nested-model-tool', arguments: {} }] } }),
+    JSON.stringify({ type: 'message', timestamp: '2026-10-02T00:00:03.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'nested-model-tool', usage: { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0 }, content: [], isError: false } }),
+  ].join('\n'));
+  for (const [collector, name] of [[collectTakomiStats, 'core'], [collectRuntimeTakomiStats, 'runtime']]) {
+    const options = { home: toolHome, cwd: toolCwd, cacheFile: path.join(toolHome, `${name}-tool-cache.json`), statsConfig: path.join(toolHome, 'absent-config.json'), sessionsRoot: [], projectRoots: [], runHistory: [] };
+    for (const statsResult of [await collector({ ...options, noCache: true }), await collector(options), await collector(options)]) {
+      assert.equal(statsResult.totals.total, 2_000_000, `${name}: both assistant and tool tokens are counted`);
+      assert.equal(statsResult.totals.cost, 2.5, `${name}: only the assistant gets the known-model price`);
+      assert.equal(statsResult.byModel.find((row) => row.key === 'gpt-5.4')?.total, 1_000_000, `${name}: tool usage is not attributed to the assistant model`);
+      assert.equal(statsResult.byModel.find((row) => row.key === 'unknown')?.total, 1_000_000, `${name}: tool usage retains unknown model provenance`);
+      assert.equal(statsResult.byUsageKind.find((row) => row.key === 'tool_result')?.cost, 0, `${name}: tool usage receives no inferred model price`);
+      const toolEvent = statsResult.recent.find((event) => event.usageKind === 'tool_result');
+      assert.equal(toolEvent?.model, 'unknown', `${name}: tool event model is unknown`);
+      assert.equal(toolEvent?.provider, 'unknown', `${name}: tool event provider is unknown`);
+    }
+  }
+  const toolTurns = await getSessionTurns(toolSessionFile);
+  assert.equal(toolTurns[0].total, 2_000_000, 'inspector counts both usage records within the user window');
+  assert.equal(toolTurns[0].cost, 2.5, 'inspector does not invent tool-model cost');
 
   // CLI test: takomi stats default (non-interactive stdout), --static, and --json flags
   const { stdout: defaultOut } = await execFileAsync(process.execPath, [cli, 'stats', '--home', statsHome, '--cwd', statsCwd], { cwd: repoRoot, env });
