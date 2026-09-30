@@ -39,30 +39,27 @@ function renderProgressiveRule(config: ContextManagerConfig): string {
   ].join("\n");
 }
 
-function compactHeavyPolicyBlocks(prompt: string, config: ContextManagerConfig): { prompt: string; removedSections: string[] } {
+function compactHeavyPolicyBlocks(prompt: string, config: ContextManagerConfig, routingPolicyContent?: string): { prompt: string; removedSections: string[] } {
   let next = prompt;
   const removedSections: string[] = [];
-  if (config.promptCompaction.compactModelRouting) {
-    const modelRoutingRegex = /(Project|Bundled) Takomi model routing policy is active\. Apply it when choosing parent\/subagent models and escalation levels:\s*\n\n# Takomi Model Routing Policy[\s\S]*?(?=\nAvailable model context from Pi registry:)/;
-    if (modelRoutingRegex.test(next)) {
-      next = next.replace(modelRoutingRegex, [
-        "Takomi model routing policy is provided by the context manager before delegation.",
-        "",
-      ].join("\n"));
-      removedSections.push("full model routing policy");
-    }
-  }
-  if (config.promptCompaction.compactModelRegistry) {
-    const registryRegex = /Available model context from Pi registry:[^\n]*(?:\n|$)/;
-    if (registryRegex.test(next)) {
-      next = next.replace(registryRegex, "Available model registry context exists. Use exact provider-qualified model IDs when delegating.\n");
-      removedSections.push("verbose model registry list");
+  // Remove only the exact runtime copy of the policy the caller will supply again.
+  // Registry IDs and optional tool guidance are not duplicate policy content.
+  if (config.promptCompaction.compactModelRouting && routingPolicyContent) {
+    for (const source of ["Project", "Bundled"]) {
+      const block = `${source} Takomi model routing policy is active. Apply it when choosing parent/subagent models and escalation levels:\n\n${routingPolicyContent}`;
+      const start = next.indexOf(block);
+      const end = start + block.length;
+      if (start >= 0 && (start === 0 || next.slice(start - 2, start) === "\n\n")
+        && (end === next.length || next.slice(end, end + 2) === "\n\n")) {
+        next = next.slice(0, start) + "Takomi model routing policy is provided by the context manager before delegation." + next.slice(end);
+        removedSections.push("duplicate runtime model routing policy");
+      }
     }
   }
   return { prompt: next, removedSections };
 }
 
-export function rewritePrompt(systemPrompt: string, skills: Map<string, SkillRecord>, candidates: CandidateContext[], config: ContextManagerConfig): {
+export function rewritePrompt(systemPrompt: string, skills: Map<string, SkillRecord>, candidates: CandidateContext[], config: ContextManagerConfig, routingPolicyContent?: string): {
   prompt: string;
   changed: boolean;
   removedSections: string[];
@@ -79,9 +76,12 @@ export function rewritePrompt(systemPrompt: string, skills: Map<string, SkillRec
       renderSkillDisplay(sorted, candidates, config),
       renderProgressiveRule(config),
     ].filter(Boolean).join("\n\n");
-    const skillBlockRegex = /<available_skills>[\s\S]*?<\/available_skills>/i;
-    if (!skillBlockRegex.test(next)) {
-      warnings.push("No <available_skills> block found; appended progressive skill guidance instead.");
+    const skillBlockRegex = /<available_skills>([\s\S]*?)<\/available_skills>/i;
+    const block = next.match(skillBlockRegex);
+    const nativeSkillRegex = /<skill>\s*<name>[^<]+<\/name>\s*<description>[^<]*<\/description>\s*<location>[^<]+<\/location>\s*<\/skill>/gi;
+    const supported = block && nativeSkillRegex.test(block[1]) && !block[1].replace(nativeSkillRegex, "").trim();
+    if (!supported) {
+      warnings.push(`Skill description compaction unavailable: ${block ? "unsupported <available_skills> contents" : "no supported <available_skills> block found"}; preserved original instructions and appended loading guidance.`);
       next = `${next}\n\n${replacement}`;
       changed = true;
     } else {
@@ -91,7 +91,7 @@ export function rewritePrompt(systemPrompt: string, skills: Map<string, SkillRec
     }
   }
 
-  const compacted = compactHeavyPolicyBlocks(next, config);
+  const compacted = compactHeavyPolicyBlocks(next, config, routingPolicyContent);
   next = compacted.prompt;
   removedSections.push(...compacted.removedSections);
   changed = changed || compacted.removedSections.length > 0;

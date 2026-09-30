@@ -10,15 +10,17 @@ function meaningfulWords(value: string): string[] {
 function scoreSkill(prompt: string, skill: SkillRecord, config: ContextManagerConfig): CandidateContext | undefined {
   const promptNorm = normalizeText(prompt);
   if (!promptNorm) return undefined;
+  const promptWords = new Set(promptNorm.split(" "));
   const reasons: string[] = [];
   let score = 0;
-  const nameNorm = normalizeText(skill.name);
-  if (nameNorm && promptNorm.includes(nameNorm)) {
+  const name = normalizeName(skill.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const explicitName = new RegExp(`(?:^|[^\\p{L}\\p{N}_-])${name}(?=$|[^\\p{L}\\p{N}_-])`, "iu");
+  if (name && explicitName.test(prompt)) {
     score += 100;
     reasons.push("exact skill name match");
   }
   const nameWords = meaningfulWords(skill.name);
-  const matchedNameWords = nameWords.filter((word) => promptNorm.includes(word));
+  const matchedNameWords = nameWords.filter((word) => promptWords.has(word));
   if (matchedNameWords.length > 0 && matchedNameWords.length === nameWords.length) {
     score += 50;
     reasons.push(`matched skill name words: ${matchedNameWords.join(", ")}`);
@@ -27,7 +29,7 @@ function scoreSkill(prompt: string, skill: SkillRecord, config: ContextManagerCo
     reasons.push(`partial skill name words: ${matchedNameWords.join(", ")}`);
   }
   const descriptionWords = meaningfulWords(skill.description ?? "").slice(0, 50);
-  const matchedDescriptionWords = [...new Set(descriptionWords.filter((word) => promptNorm.includes(word)))];
+  const matchedDescriptionWords = [...new Set(descriptionWords.filter((word) => promptWords.has(word)))];
   if (matchedDescriptionWords.length > 0) {
     score += Math.min(50, matchedDescriptionWords.length * 10);
     reasons.push(`description keywords: ${matchedDescriptionWords.slice(0, 5).join(", ")}`);

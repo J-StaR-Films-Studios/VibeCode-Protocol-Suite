@@ -19,7 +19,15 @@ async function addJsExtensions(directory) {
     if (entry.isDirectory()) await addJsExtensions(filePath);
     if (entry.isFile() && entry.name.endsWith(".js")) {
       const source = await fs.readFile(filePath, "utf8");
-      await fs.writeFile(filePath, source.replace(/(from\s+["']\.\/?[^"']+)(["'])/g, "$1.js$2"));
+      let rewritten = source;
+      for (const match of source.matchAll(/(from\s+["']|import\(["'])(\.[^"']+)(["'])/g)) {
+        const [, prefix, specifier, suffix] = match;
+        if (specifier.endsWith(".js")) continue;
+        const absolute = path.resolve(path.dirname(filePath), specifier);
+        const extension = await fs.stat(path.join(absolute, "index.js")).then(() => "/index.js").catch(() => ".js");
+        rewritten = rewritten.replace(`${prefix}${specifier}${suffix}`, `${prefix}${specifier}${extension}${suffix}`);
+      }
+      await fs.writeFile(filePath, rewritten);
     }
   }
 }
@@ -76,6 +84,7 @@ try {
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/model-policy-gate.ts"),
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/prerequisite-gates.ts"),
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/index.ts"),
+      path.join(repoRoot, ".pi/extensions/takomi-runtime/index.ts"),
     ],
   }, null, 2));
   execFileSync(process.execPath, [path.join(repoRoot, "node_modules/typescript/bin/tsc"), "-p", tsconfigPath], { cwd: repoRoot, stdio: "inherit" });
@@ -90,6 +99,7 @@ try {
   await Promise.all([
     fs.copyFile(path.join(repoRoot, "src", "skills-catalog.js"), path.join(outDir, "src", "skills-catalog.js")),
     fs.copyFile(path.join(repoRoot, "src", "utils.js"), path.join(outDir, "src", "utils.js")),
+    fs.copyFile(path.join(repoRoot, ".pi/extensions/takomi-runtime/takomi-stats.js"), path.join(outDir, ".pi/extensions/takomi-runtime/takomi-stats.js")),
     fs.copyFile(
       path.join(repoRoot, ".pi/extensions/takomi-context-manager/skill-categories.js"),
       path.join(outDir, ".pi/extensions/takomi-context-manager/skill-categories.js"),
@@ -109,6 +119,11 @@ try {
   const { installPrerequisiteGates } = await moduleAt(".pi/extensions/takomi-context-manager/prerequisite-gates.js");
   const { default: contextManager } = await moduleAt(".pi/extensions/takomi-context-manager/index.js");
   const { resolveTakomiRoutingPolicy } = await moduleAt(".pi/extensions/takomi-runtime/routing-policy.js");
+  const { DEFAULT_CONFIG } = await moduleAt(".pi/extensions/takomi-context-manager/config.js");
+  const { findCandidates } = await moduleAt(".pi/extensions/takomi-context-manager/context-router.js");
+  const { rewritePrompt } = await moduleAt(".pi/extensions/takomi-context-manager/prompt-rewriter.js");
+  const { default: runtime } = await moduleAt(".pi/extensions/takomi-runtime/index.js");
+  const { renderReport } = await moduleAt(".pi/extensions/takomi-context-manager/diagnostics.js");
   const codingAgent = await import("@earendil-works/pi-coding-agent");
   const tui = await import("@earendil-works/pi-tui");
 
@@ -119,6 +134,63 @@ try {
   }));
 
   const plainTheme = { fg: (_color, text) => text, bold: (text) => text };
+
+  const lexicalSkills = registry.mergeSkills([
+    { name: "bro", description: "", source: "xml" },
+    { name: "git", description: "", source: "xml" },
+    { name: "unrelated-pack", description: "Use when art test code data", source: "xml" },
+    { name: "code-review", description: "", source: "xml" },
+    { name: "c++", description: "", source: "xml" },
+  ]);
+  const accidentalPrompt = "Inspect broken digital artifacts, contest codecs and databases.";
+  const knownXml = codingAgent.formatSkillsForPrompt([{
+    name: "code-review", description: "Review fixture code", filePath: "/fixture/SKILL.md", disableModelInvocation: false,
+  }]);
+  const unknownXml = "Safety before.\n<available_skills><safety>Ask before deleting files.</safety><tool>Keep exact model IDs.</tool></available_skills>\nSafety after.";
+  console.log("Matching/prompt reproduction:", JSON.stringify({
+    substringCandidates: findCandidates(accidentalPrompt, lexicalSkills, DEFAULT_CONFIG).map((entry) => entry.name),
+    namedCandidates: findCandidates("Use /skill:code-review and $bro", lexicalSkills, DEFAULT_CONFIG).map((entry) => entry.name),
+    knownRemoved: rewritePrompt(knownXml, lexicalSkills, [], DEFAULT_CONFIG).removedSections,
+    unknownPreserved: rewritePrompt(unknownXml, lexicalSkills, [], DEFAULT_CONFIG).prompt.includes(unknownXml),
+    absentWarnings: rewritePrompt("Safety only", lexicalSkills, [], DEFAULT_CONFIG).warnings,
+  }));
+  assert.deepEqual(findCandidates(accidentalPrompt, lexicalSkills, DEFAULT_CONFIG), [], "substrings inside unrelated words do not score as names or description keywords");
+  for (const name of ["bro", "git", "code-review", "c++"]) {
+    const candidate = findCandidates(`Use /skill:${name.toUpperCase()}.`, lexicalSkills, DEFAULT_CONFIG).find((entry) => entry.name === name);
+    assert.equal(candidate?.confidence, "high", `explicit named skill ${name} remains directly loadable`);
+    assert.ok(candidate.reasons.includes("exact skill name match"));
+  }
+  const longerName = findCandidates("Use code-review-extra", registry.mergeSkills([lexicalSkills.get("code-review")]), DEFAULT_CONFIG)[0];
+  assert.equal(longerName?.reasons.includes("exact skill name match"), false, "a longer identifier is not an explicit exact-name match");
+  assert.equal(findCandidates("art test code data", lexicalSkills, DEFAULT_CONFIG).find((entry) => entry.name === "unrelated-pack")?.score, 40, "whole description words retain medium scoring");
+  assert.deepEqual(findCandidates("help me", lexicalSkills, DEFAULT_CONFIG), [], "vague prompts do not promise semantic retrieval");
+  assert.equal(DEFAULT_CONFIG.skillDisplay.mode, "candidates");
+  assert.deepEqual(DEFAULT_CONFIG.candidateRouter, { maxCandidates: 5, highConfidence: 100, mediumConfidence: 40 });
+  const manySkills = registry.mergeSkills(Array.from({ length: 8 }, (_, index) => ({ name: `fixture-${index}`, source: "xml" })));
+  assert.equal(findCandidates([...manySkills.keys()].join(" "), manySkills, DEFAULT_CONFIG).length, 5, "candidate cap stays unchanged");
+  assert.equal(findCandidates("git", lexicalSkills, { ...DEFAULT_CONFIG, candidateRouter: { ...DEFAULT_CONFIG.candidateRouter, mediumConfidence: 1000 } }).length, 0, "configured threshold remains authoritative");
+
+  const knownRewrite = rewritePrompt(`Safety before.${knownXml}\nSafety after.`, lexicalSkills, [], DEFAULT_CONFIG);
+  assert.doesNotMatch(knownRewrite.prompt, /<available_skills>|Review fixture code/);
+  assert.match(knownRewrite.prompt, /Safety before\.|Safety after\.|Use skill_index/);
+  assert.ok(knownRewrite.removedSections.some((section) => section.includes("available_skills descriptions")));
+  for (const original of ["Safety only", unknownXml, "<skills_catalog>Keep this tool instruction.</skills_catalog>", "<available_skills version=\"2\">Keep this safety instruction.</available_skills>", "<available_skills><skill><name>code-review</name><description>Review</description><location>/fixture</location><safety>Keep me</safety></skill></available_skills>"]) {
+    const rewritten = rewritePrompt(original, lexicalSkills, [], DEFAULT_CONFIG);
+    assert.ok(rewritten.prompt.startsWith(original), "unknown or absent catalog instructions survive unchanged");
+    assert.equal(rewritten.removedSections.length, 0, "appended guidance is not reported as description removal");
+    assert.match(rewritten.warnings.join("\n"), /Skill description compaction unavailable/);
+    assert.match(rewritten.prompt, /Use skill_index/, "explicit discovery stays available on unknown shapes");
+  }
+  const diagnosticsState = createState();
+  diagnosticsState.report.promptRewrite = { attempted: true, changed: true, originalLength: 100, rewrittenLength: 150, removedSections: [], warnings: ["Skill description compaction unavailable"] };
+  for (const mode of ["summary", "verbose"]) {
+    const report = renderReport(diagnosticsState, mode);
+    assert.match(report, /SYSTEM-PROMPT CHARACTERS ONLY/);
+    assert.match(report, /Excludes tool schemas, history, tool results, retries, and child agents/);
+    assert.match(report, /Not billed tokens, cache behavior, or cost/);
+    assert.match(report, /-50%/, "appended guidance can grow rather than shrink the prompt");
+    assert.doesNotMatch(report, /available_skills descriptions/, "absent metadata is not claimed as removed");
+  }
 
   // Exercise the normal Pi path with Pi's real Skill fields and an upgrade-era
   // manifest whose owned entries predate persisted categories.
@@ -349,6 +421,10 @@ try {
   const loadResult = await skillLoad.execute("load", { skill: "Loader" }, undefined, undefined, toolContext);
   assert.match(render(skillLoad.renderResult(loadResult, { expanded: false }, plainTheme)), /✓ Loader Loadable description/, "skill_load compact renderer reports a successful load");
   assert.match(render(skillLoad.renderResult(loadResult, { expanded: true }, plainTheme)), /complete skill instructions/, "skill_load expanded renderer retains full loaded instructions");
+  const largeSkill = `# Required instructions\n${"Follow this required step.\n".repeat(10000)}Final required safety instruction.\n`;
+  await fs.writeFile(loadPath, largeSkill);
+  const largeLoad = await skillLoad.execute("large-load", { skill: "Loader" }, undefined, undefined, toolContext);
+  assert.ok(largeLoad.content[0].text.endsWith(largeSkill), "large required packs retain every instruction, including the final safety rule");
   const missingLoad = await skillLoad.execute("missing-load", { skill: "missing" }, undefined, undefined, toolContext);
   assert.match(render(skillLoad.renderResult(missingLoad, { expanded: false }, plainTheme)), /✗ Skill load skill not found/, "skill_load compact renderer reports missing skills as errors");
   assert.match(render(skillLoad.renderResult(missingLoad, { expanded: true }, plainTheme)), /Skill not found: missing/, "skill_load expanded renderer retains missing-skill details");
@@ -590,7 +666,100 @@ try {
   assert.match(updatedPrompt.systemPrompt, /New project routing guidance/, "new project policy replaces the cached bundled policy before delegation");
   assert.doesNotMatch(updatedPrompt.systemPrompt, /Sol Low/, "old bundled guidance is removed from the next turn");
 
+  const compositionProject = path.join(tempRoot, "prompt-composition");
+  await fs.mkdir(path.join(compositionProject, ".pi", "takomi"), { recursive: true });
+  await fs.mkdir(path.join(compositionProject, ".pi", "agents"), { recursive: true });
+  await fs.mkdir(path.join(compositionProject, ".pi", "prompts"), { recursive: true });
+  await fs.writeFile(path.join(compositionProject, ".pi", "agents", "coder.md"), "# Fixture coder\nKeep the complete role instruction.");
+  await fs.writeFile(path.join(compositionProject, ".pi", "prompts", "build-prompt.md"), "# Fixture build\nKeep the complete workflow instruction.");
+  const runtimeHandlers = new Map();
+  const runtimeTools = new Map();
+  const runtimeCommands = new Map();
+  runtime({
+    on: (event, handler) => runtimeHandlers.set(event, [...(runtimeHandlers.get(event) ?? []), handler]),
+    events: { on() {} }, appendEntry() {}, registerShortcut() {},
+    registerCommand: (name, command) => runtimeCommands.set(name, command),
+    registerTool: (tool) => runtimeTools.set(tool.name, tool),
+    getAllTools: () => [{ name: "ask_user_question" }, { name: "todo" }],
+  });
+  const compositionHandlers = new Map();
+  const compositionEntries = [];
+  contextManager({
+    on: (event, handler) => compositionHandlers.set(event, [...(compositionHandlers.get(event) ?? []), handler]),
+    registerTool() {}, registerCommand() {},
+    appendEntry: (_type, data) => compositionEntries.push(data),
+  });
+  const compositionContext = {
+    cwd: compositionProject, hasUI: false, ui: { notify() {} }, sessionManager: { getEntries: () => [] },
+    modelRegistry: { getAvailable: () => [{ provider: "openai-codex", id: "gpt-6.1-sol" }, { provider: "oauth-router", id: "gpt-6.1-sol" }] },
+  };
+  await compositionHandlers.get("session_start")[0]({}, compositionContext);
+  const compositionEvent = { prompt: "Use code-review", systemPrompt: `Preserve base safety.${knownXml}`, systemPromptOptions: { skills: [{ name: "code-review", description: "Review fixture code", filePath: "/fixture/SKILL.md" }] } };
+  const captures = [];
+  async function compose(label, expectedPolicy, active) {
+    const runtimeResult = await runtimeHandlers.get("before_agent_start")[0](compositionEvent, compositionContext);
+    const runtimePrompt = runtimeResult?.systemPrompt ?? compositionEvent.systemPrompt;
+    const result = await compositionHandlers.get("before_agent_start")[0]({ ...compositionEvent, systemPrompt: runtimePrompt }, compositionContext);
+    const count = expectedPolicy ? result.systemPrompt.split(expectedPolicy).length - 1 : 0;
+    assert.equal(count, expectedPolicy ? 1 : 0, `${label}: complete applicable policy is available exactly once before model choice`);
+    assert.match(result.systemPrompt, /Preserve base safety/);
+    if (active) {
+      assert.match(result.systemPrompt, /Keep the complete role instruction/);
+      assert.match(result.systemPrompt, /Active Takomi workflow/);
+      assert.match(result.systemPrompt, /Takomi Interview is available/);
+      assert.match(result.systemPrompt, /Takomi Todo is available/);
+      assert.match(result.systemPrompt, /Available model context from Pi registry: openai-codex\/gpt-6\.1-sol, oauth-router\/gpt-6\.1-sol/);
+      assert.match(result.systemPrompt, /Takomi execution gate: auto/);
+      assert.match(result.systemPrompt, /Before any Takomi subagent dispatch or model override/);
+    } else {
+      assert.equal(runtimeResult, undefined, `${label}: idle runtime does not inject role or workflow`);
+    }
+    const snapshot = compositionEntries.at(-1).report;
+    assert.deepEqual(snapshot.candidates.map((entry) => entry.name), ["code-review"], "current named prompt drives candidates on every turn");
+    captures.push({ label, active, policyCopies: count, originalCharacters: runtimePrompt.length, composedCharacters: result.systemPrompt.length, removed: snapshot.promptRewrite.removedSections });
+    return { runtimePrompt, prompt: result.systemPrompt };
+  }
+  const bundledFixture = "# Synthetic bundled routing policy\n\nRoute fixture requests to Sol Low.";
+  await compose("inactive first turn", bundledFixture, false);
+  await compose("inactive repeated turn", bundledFixture, false);
+  await runtimeTools.get("takomi_mode").execute("mode", { mode: "code" }, undefined, undefined, compositionContext);
+  await runtimeHandlers.get("input")[0]({ text: "vibe build" }, compositionContext);
+  const activeFirst = await compose("active first turn", bundledFixture, true);
+  assert.match(activeFirst.prompt, /Keep the complete workflow instruction/);
+  assert.ok(rewritePrompt(activeFirst.runtimePrompt, lexicalSkills, [], DEFAULT_CONFIG).prompt.includes(bundledFixture), "without a replacement policy guarantee, the runtime policy stays intact");
+  const contextFirst = await compositionHandlers.get("before_agent_start")[0](compositionEvent, compositionContext);
+  const runtimeLast = await runtimeHandlers.get("before_agent_start")[0]({ ...compositionEvent, systemPrompt: contextFirst.systemPrompt }, compositionContext);
+  assert.equal(runtimeLast.systemPrompt.split(bundledFixture).length - 1, 2, "reverse hook order conservatively retains both complete policy copies");
+  assert.match(runtimeLast.systemPrompt, /openai-codex\/gpt-6\.1-sol, oauth-router\/gpt-6\.1-sol/);
+  captures.push({ label: "reverse hook order", active: true, policyCopies: 2, composedCharacters: runtimeLast.systemPrompt.length });
+  const activeRepeat = await compose("active repeated turn", bundledFixture, true);
+  assert.match(activeRepeat.prompt, /Compact reminder: follow the vibe-build stage/);
+  assert.doesNotMatch(activeRepeat.prompt, /Keep the complete workflow instruction/, "native selected-workflow reminder behavior is unchanged");
+  const projectPolicyPath = path.join(compositionProject, ".pi", "takomi", "model-routing.md");
+  const projectFixture = "# Takomi Model Routing Policy\n\nUse the exact registry provider. Keep the full final sentence.";
+  await fs.writeFile(projectPolicyPath, projectFixture);
+  const changedActive = await compose("active changed policy", projectFixture, true);
+  assert.doesNotMatch(changedActive.prompt, /Sol Low/, "changed policy replaces previous guidance on the next turn");
+  const legacyPolicyPrompt = `${projectFixture}\n\nAvailable model context from Pi registry: openai-codex/gpt-6.1-sol`;
+  assert.ok(rewritePrompt(legacyPolicyPrompt, lexicalSkills, [], DEFAULT_CONFIG, projectFixture).prompt.includes(legacyPolicyPrompt), "unrecognized policy text and its registry are preserved rather than guessed");
+  await runtimeTools.get("takomi_mode").execute("idle", { mode: "idle" }, undefined, undefined, compositionContext);
+  await compose("inactive changed policy", projectFixture, false);
+  await fs.rm(projectPolicyPath);
   await fs.rm(path.join(outDir, ".pi", "takomi", "model-routing.md"));
+  await compose("inactive missing policy", undefined, false);
+  await runtimeTools.get("takomi_mode").execute("active-again", { mode: "code" }, undefined, undefined, compositionContext);
+  await runtimeHandlers.get("input")[0]({ text: "vibe build" }, compositionContext);
+  const missingActive = await compose("active missing policy", undefined, true);
+  assert.doesNotMatch(missingActive.prompt, /Takomi model-routing policy:/);
+  assert.match(missingActive.prompt, /No Takomi routing policy file was found/);
+  const blockedComposition = await compositionHandlers.get("tool_call")[0]({ toolName: "takomi_subagent", input: {} }, compositionContext);
+  assert.equal(blockedComposition.block, true, "missing policy still pauses the supported delegation entrypoint");
+  assert.equal(await compositionHandlers.get("tool_call")[0]({ toolName: "other_tool", input: {} }, compositionContext), undefined, "prerequisite gate does not claim universal tool coverage");
+  await runtimeCommands.get("takomi").handler("subagents off", compositionContext);
+  assert.equal((await runtimeHandlers.get("tool_call").at(-1)({ toolName: "takomi_subagent" }, compositionContext)).block, true, "runtime disable guard stays active");
+  assert.equal(await runtimeHandlers.get("tool_call").at(-1)({ toolName: "other_tool" }, compositionContext), undefined, "runtime disable guard keeps supported entrypoint scope");
+  console.log("Synthetic runtime prompt captures:", JSON.stringify(captures));
+
   const headlessProject = path.join(tempRoot, "headless-project");
   await fs.mkdir(headlessProject);
   const headlessHandlers = new Map();

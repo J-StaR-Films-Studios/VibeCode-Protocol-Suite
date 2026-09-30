@@ -52,7 +52,7 @@ The Takomi launcher recognizes its source checkout and starts Pi with one comple
 --theme .pi/themes/takomi-noir.json
 ```
 
-This keeps every project Takomi extension available while preventing duplicate global/project registrations. Plain `pi` cannot express this conditional behavior through `.pi/settings.json`: project settings can control project resources, but cannot conditionally disable matching user-global extensions.
+This source-checkout launch disables automatic extension discovery and loads the listed local extension paths. It avoids loading a second global copy through this launch path. `context_report` can also warn when known global and project extension paths overlap, but that path-based warning does not prove both copies registered during a particular run. Plain `pi` cannot express this conditional behavior through `.pi/settings.json`: project settings can control project resources, but cannot conditionally disable matching user-global extensions.
 
 The PowerShell script remains an equivalent fallback for passing raw Pi arguments:
 
@@ -77,19 +77,21 @@ If you run `takomi install pi`, expect it to replace those development links wit
 
 ## Adding a new extension
 
-There is no central registry. A new extension must be added to three explicit lists, or it will silently fail to load in one of the launch paths:
+There is no central registry. Add each extension to the explicit source-checkout lists:
 
-1. `scripts/pi-dev.ps1` — the local dev loop. Add the `$name = Join-Path $extensionsRoot '<name>\index.ts'` variable, the existence check, and the `--extension $name` line.
-2. `src/pi-harness.js` (`getSourceCheckoutLaunchArgs`) — the same list for the `takomi` wrapper. This only takes effect once published to npm.
-3. `scripts/sync-pi-global.ps1` — the global junction, for testing outside this repo via normal Pi discovery.
+1. `scripts/pi-dev.ps1` — add the extension path and its existence check.
+2. `src/pi-harness.js` (`getSourceCheckoutLaunchArgs`) — add the matching path for the repository's `takomi` launcher.
+3. `scripts/sync-pi-global.ps1` — add the global development junction for testing through normal Pi discovery.
 
-Miss one and the symptom is always the same: the extension loads in some directories but not others, with no error. Check the three lists first.
+Miss a list and the extension may load in one launch path but not another. Check all three.
 
-## The launcher-version trap
+## Pi version in development
 
-Inside this repo, the extension *files* Pi loads are local, but the *launcher* that builds the explicit list is whichever `takomi` binary runs. If the global install is older than the checkout and the checkout adds a new extension, the old launcher builds an old list with `--no-extensions`, and the new extension never loads from the repo root — while working fine everywhere else via global discovery.
+Both source-checkout launchers require the repository's local `@earendil-works/pi-coding-agent`; the PowerShell script checks that executable and invokes it with Node, and the `takomi` wrapper stops if it is missing. Both pass explicit local extension paths with automatic discovery disabled. The remediation worktree has all four Pi packages pinned to 0.99.1 and `pi-subagents` 0.31.0. Those are the local tested versions, not a claim about any global Pi installation. No global Pi installation is changed by this workflow.
 
-When a new extension is invisible only in the repo root, check `npm ls -g takomi`. Either run the checkout directly (`node bin/takomi.js` from root), use `scripts/pi-dev.ps1`, or publish and reinstall global. Do not `npm link` as a workaround; it makes every dirty edit instantly live in your global install.
+The explicit list prevents duplicate discovery in this source-checkout launch. A diagnostic warning based on overlapping global/project paths is only a hint; it does not establish that duplicate registrations occurred in a given process. Do not remove a global installation based on that warning alone.
+
+When a new extension is missing, confirm which launcher ran and inspect its explicit arguments. Run the checkout directly (`node bin/takomi.js` from root) or use `scripts/pi-dev.ps1` for the source loop. Do not `npm link` as a workaround; it makes every dirty edit instantly live in your global install.
 
 ## Do not edit `~/.pi` as the source of truth
 

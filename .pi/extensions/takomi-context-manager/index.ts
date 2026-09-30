@@ -66,11 +66,11 @@ export default function takomiContextManager(pi: ExtensionAPI) {
     state.skills = mergeSkills([...filesystemSkills, ...enrichedSuppliedSkills]);
 
     const candidates = findCandidates(event.prompt, state.skills, config);
-    const rewrite = rewritePrompt(event.systemPrompt, state.skills, candidates, config);
+    const routingPolicy = state.policies.get("model-routing");
+    const rewrite = rewritePrompt(event.systemPrompt, state.skills, candidates, config, routingPolicy?.content);
     const routingSummary = renderCompactTakomiModelRoutingSummary(await loadTakomiModelRoutingSnapshot(ctx.cwd));
     // The model must see routing guidance before choosing a subagent model.
     // A tool_call hook runs too late to supply it without blocking and retrying.
-    const routingPolicy = state.policies.get("model-routing");
     const policyContext = routingPolicy
       ? `Takomi model-routing policy:\n\n${routingPolicy.content}`
       : "";
