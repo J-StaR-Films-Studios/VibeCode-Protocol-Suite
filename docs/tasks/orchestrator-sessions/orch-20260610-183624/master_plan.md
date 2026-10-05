@@ -33,17 +33,17 @@
 | # | Subtask | Mode/Role | Workflow | Overlays | Dependency | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 01 | Capture installer/selectivity requirements and repo scan | Orchestrator | vibe-genesis | Pi docs | None | completed |
-| 02 | Design resource taxonomy, selection UX, and ownership manifest | Architect/Designer | vibe-design | None | 01 | pending |
-| 03 | Implement categorized selection and ownership-safe prune | Coder | vibe-build | None | 02 | pending |
-| 04 | Add tests/fixtures for install, refresh, sync, and manual resource preservation | Coder/Reviewer | vibe-build/review | None | 03 | pending |
+| 02 | Design resource taxonomy, selection UX, and ownership manifest | Architect/Designer | vibe-design | None | 01 | completed |
+| 03 | Implement categorized selection and ownership-safe prune | Coder | vibe-build | None | 02 | completed |
+| 04 | Add tests/fixtures for install, refresh, sync, and manual resource preservation | Coder/Reviewer | vibe-build/review | None | 03 | completed |
 
 ## Progress Checklist
 - [x] Parse user intent and specific excluded-by-default skills.
 - [x] Scan installer/resource code paths.
 - [x] Review relevant Pi docs for skills/packages/extensions behavior.
 - [x] Create Takomi orchestration session for the feature.
-- [ ] Produce design spec for resource packs and ownership-safe reconcile.
-- [ ] Implement shared resource selection model.
+- [x] Produce design spec for resource packs and ownership-safe reconcile.
+- [x] Implement shared resource selection model.
 - [ ] Verify refresh/install never installs all skills unless explicitly selected.
 - [ ] Verify deselection prunes only Takomi-owned resources.
 - [ ] Update user docs and CLI help.
