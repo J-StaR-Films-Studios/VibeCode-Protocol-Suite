@@ -11,6 +11,9 @@ import { cachePut, cacheGet, importFromCache } from "./lib/cache.mjs";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 const RESOLVE_CLI = join(import.meta.dirname, "resolve.mjs");
+const hasLocalCli = ["dist/cli.js", "src/cli.ts"].some((entry) =>
+  existsSync(join(REPO_ROOT, "packages/cli", entry)),
+);
 let tmp;
 
 function setup() {
@@ -50,9 +53,14 @@ function test(name, fn) {
   tests.push({ name, fn });
 }
 
+// These exercise the HyperFrames monorepo CLI, not the standalone skill shim.
+function testWithLocalCli(name, fn) {
+  tests.push({ name, fn, requiresLocalCli: true });
+}
+
 // --- manifest cache hit ---
 
-test("project manifest hit skips providers", () => {
+testWithLocalCli("project manifest hit skips providers", () => {
   setup();
   const record = makeRecord({ provenance: { prompt: "cached query", provider: "test" } });
   appendRecord(tmp, record);
@@ -122,7 +130,7 @@ test("freezeLocalFile creates parent dirs and copies", () => {
 
 // --- adopt existing assets ---
 
-test("--adopt registers existing assets/ files", () => {
+testWithLocalCli("--adopt registers existing assets/ files", () => {
   setup();
   mkdirSync(join(tmp, "assets/bgm"), { recursive: true });
   mkdirSync(join(tmp, "assets/icons"), { recursive: true });
@@ -141,7 +149,7 @@ test("--adopt registers existing assets/ files", () => {
   cleanup();
 });
 
-test("--adopt skips already-registered assets", () => {
+testWithLocalCli("--adopt skips already-registered assets", () => {
   setup();
   mkdirSync(join(tmp, "assets/bgm"), { recursive: true });
   writeFileSync(join(tmp, "assets/bgm/track.mp3"), "fake mp3");
@@ -156,7 +164,7 @@ test("--adopt skips already-registered assets", () => {
   cleanup();
 });
 
-test("resolve finds existing unregistered asset before hitting providers", () => {
+testWithLocalCli("resolve finds existing unregistered asset before hitting providers", () => {
   setup();
   mkdirSync(join(tmp, "assets/bgm"), { recursive: true });
   writeFileSync(join(tmp, "assets/bgm/ambient-track.mp3"), "existing bgm");
@@ -179,13 +187,13 @@ test("resolve finds existing unregistered asset before hitting providers", () =>
 
 // --- CLI interface ---
 
-test("--help exits 0", () => {
+testWithLocalCli("--help exits 0", () => {
   const out = runResolve(["--help"]);
   assert.ok(out.includes("media-use resolve"));
   assert.ok(out.includes("--type"));
 });
 
-test("missing required args exits 2", () => {
+testWithLocalCli("missing required args exits 2", () => {
   try {
     runResolve([], { stdio: "pipe" });
     assert.fail("should have exited");
@@ -194,7 +202,7 @@ test("missing required args exits 2", () => {
   }
 });
 
-test("--json returns error JSON on stub provider failure", () => {
+testWithLocalCli("--json returns error JSON on stub provider failure", () => {
   setup();
   try {
     runResolve(["--type", "bgm", "--intent", "stub fail", "--project", tmp, "--json"], {
@@ -210,7 +218,7 @@ test("--json returns error JSON on stub provider failure", () => {
   cleanup();
 });
 
-test("one-line output format matches contract", () => {
+testWithLocalCli("one-line output format matches contract", () => {
   setup();
   const record = makeRecord({ provenance: { prompt: "format test", provider: "test" } });
   appendRecord(tmp, record);
@@ -229,7 +237,13 @@ async function main() {
   console.log("media-use · resolve engine tests\n");
   let passed = 0;
   let failed = 0;
-  for (const { name, fn } of tests) {
+  let skipped = 0;
+  for (const { name, fn, requiresLocalCli } of tests) {
+    if (requiresLocalCli && !hasLocalCli) {
+      skipped++;
+      console.log(`  - ${name} (requires HyperFrames packages/cli)`);
+      continue;
+    }
     try {
       await fn();
       passed++;
@@ -240,7 +254,7 @@ async function main() {
       console.log(`    ${err.message}`);
     }
   }
-  console.log(`\n${passed} passed, ${failed} failed`);
+  console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
   if (failed > 0) process.exit(1);
 }
 

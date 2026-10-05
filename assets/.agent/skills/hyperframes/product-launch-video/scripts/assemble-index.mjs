@@ -6,13 +6,15 @@
 //
 // index.html is a *standalone* composition (root <div id="root"> directly in
 // <body>, no <template> wrapper — template is for sub-comps). Structure is
-// modeled on the canonical fixture packages/studio/fixtures/storyboard-sample/
-// index.html and the authoritative head/audio template in
+// modeled on the canonical fixture project index.html and the authoritative head/audio template in
 // packages/core/docs/quickstart-template.html. Frame mount order = STORYBOARD
 // document order. Transitions are NOT written here — the transitions injector
 // mutates this file afterward (data-start/duration/track-index + GSAP).
 //
-// Track lanes (same-track time-overlap is illegal — lint timeline_track_too_dense):
+// Track lanes. Same-track time-overlap is this workflow's own assembly convention,
+// not a framework rule: the render never reads data-track-index, and no lint rule
+// checks overlap (timeline_track_too_dense counts elements per lane for readability).
+// The convention exists because the frame injector below ping-pongs 0/1 for overlaps:
 //   1      frame sub-comp clips (sequential; the injector 0/1-ping-pongs for overlaps)
 //   2      captions sub-comp clip (full-duration overlay, on top of frames)
 //   10     per-frame voice <audio>
@@ -23,7 +25,7 @@
 // video, frames only). Durations come from STORYBOARD (audio sync-durations
 // writes them), NOT from here; this file carries only media PATHS, keyed by
 // frame number:
-//   { "bgm":   { "path": "assets/bgm/x.mp3", "volume": 0.8 } | null,
+//   { "bgm":   { "path": "assets/bgm/x.mp3", "volume": 0.12 } | null,
 //     "voices":[ { "frame": 3, "path": "assets/voice/03.wav" } ],
 //     "sfx":   [ { "frame": 3, "file": "assets/sfx/x.mp3", "offset_s": 0,
 //                  "duration_s": 1.0, "volume": 0.35 } ] }
@@ -38,8 +40,8 @@
 // `lint` failures surface HERE instead of after assembly + a wasted render):
 //   ① AUTO-REPAIR — a sub-comp root missing data-width/data-height: inject the canvas
 //      dims (the renderer needs them on the cloned root; else lint root_missing_dimensions).
-//   ② HARD FAIL  — <video>/<audio> inside a sub-comp: the runtime only drives media that
-//      is a DIRECT child of the host root, so sub-comp media renders blank/black.
+//   ② APPROVED VIDEO HOIST — an explicitly marked frame video is moved to the host root;
+//      audio remains orchestrator-owned and unmarked media is still a hard failure.
 //   ③ HARD FAIL  — a timed element (data-start+duration+track-index) that is not the root
 //      and lacks class="clip" (shows the whole frame), or two same-track clips that overlap.
 //
@@ -55,6 +57,7 @@ import { parseStoryboard } from "./lib/storyboard.mjs";
 import { parseFormat } from "./lib/dimensions.mjs";
 import { stageAssets } from "./lib/assets.mjs";
 import { parseColors, semanticColors } from "./lib/tokens.mjs";
+import { bgmDefaultVolume } from "./lib/bgm-volume.mjs";
 
 // ---------- argv ----------
 const argv = process.argv.slice(2);
@@ -62,6 +65,9 @@ const flag = (name, def) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
 };
+// Deliberate escape from the bgm_pending refusal below — for previewing while a detached
+// generate is still running. Off by default so a silent film can't ship by accident.
+const allowPendingBgm = argv.includes("--allow-pending-bgm");
 function die(msg) {
   console.error(`✗ assemble-index.mjs: ${msg}`);
   process.exit(1);
@@ -77,7 +83,7 @@ function ensureBgmCovers(relPath, hyperframesDir, total) {
   const abs = join(hyperframesDir, relPath);
   const probe = spawnSync(
     "ffprobe",
-    ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", abs],
+    ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", "--", abs],
     { encoding: "utf8" },
   );
   if (probe.status !== 0) return { looped: false, short: false, reason: "ffprobe unavailable" };
@@ -85,7 +91,10 @@ function ensureBgmCovers(relPath, hyperframesDir, total) {
   if (!Number.isFinite(dur) || dur <= 0)
     return { looped: false, short: false, reason: "unreadable duration" };
   if (dur >= total - 0.1) return { looped: false, short: false, dur }; // already covers
-  const relOut = relPath.replace(/\.([^./]+)$/, ".loop.$1");
+  // Always emit .mp3: the encode below is libmp3lame regardless of the source
+  // extension, so preserving relPath's own extension (e.g. "bgm.wav") would
+  // smuggle an MP3 stream into a .wav-named file (PRINFRA-309).
+  const relOut = relPath.replace(/\.([^./]+)$/, ".loop.mp3");
   const absOut = join(hyperframesDir, relOut);
   const fadeOut = Math.max(0, total - 1.5);
   const ff = spawnSync(
@@ -160,9 +169,127 @@ function findRootTag(html) {
   return firstCompId;
 }
 
+function attrValueFrom(attrs, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = attrs.match(new RegExp(`(?:^|\\s)${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`));
+  return match ? (match[1] ?? match[2]) : null;
+}
+
+function escapeHtmlAttr(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function approvedVideoAttrs(attrs) {
+  const forwarded = [];
+  for (const name of ["id", "src", "poster", "preload", "aria-label", "data-media-start"]) {
+    const value = attrValueFrom(attrs, name);
+    if (value !== null) forwarded.push(`${name}="${escapeHtmlAttr(value)}"`);
+  }
+  for (const name of ["muted", "playsinline", "loop"]) {
+    if (attrPresent(attrs, name)) forwarded.push(name);
+  }
+  return forwarded.join(" ");
+}
+
+function approvedVideoLayout(attrs) {
+  const names = ["x", "y", "width", "height"];
+  const raw = Object.fromEntries(
+    names.map((name) => [name, attrValueFrom(attrs, `data-frame-video-${name}`)]),
+  );
+  const rawFit = attrValueFrom(attrs, "data-frame-video-fit");
+  const values = Object.fromEntries(names.map((name) => [name, Number(raw[name])]));
+  if (
+    names.some(
+      (name) => raw[name] === null || raw[name].trim() === "" || !Number.isFinite(values[name]),
+    ) ||
+    values.width <= 0 ||
+    values.height <= 0
+  ) {
+    return {
+      style: null,
+      error:
+        "approved frame video layout data-frame-video-x/y/width/height must all be finite numeric values, with positive width and height",
+    };
+  }
+
+  const fit = rawFit ?? "cover";
+  if (!["cover", "contain", "fill", "none", "scale-down"].includes(fit)) {
+    return {
+      style: null,
+      error:
+        'approved frame video layout data-frame-video-fit must be "cover", "contain", "fill", "none", or "scale-down"',
+    };
+  }
+
+  return {
+    style: `position:absolute;left:${values.x}px;top:${values.y}px;width:${values.width}px;height:${values.height}px;object-fit:${fit}`,
+    error: null,
+  };
+}
+
+function hoistApprovedVideos(html, label) {
+  const videos = [];
+  const errors = [];
+  const scan = html
+    .replace(/<!--[\s\S]*?-->/g, (match) => " ".repeat(match.length))
+    .replace(/<script\b[\s\S]*?<\/script[^>]*>/gi, (match) => " ".repeat(match.length))
+    .replace(/<style\b[\s\S]*?<\/style[^>]*>/gi, (match) => " ".repeat(match.length));
+  const re = /<video\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/video\s*>/gi;
+  const repaired = html.replace(re, (full, attrs, inner, offset) => {
+    if (scan[offset] !== "<") return full;
+    if (attrValueFrom(attrs, "data-frame-video") !== "approved") return full;
+    const rawStart = attrValueFrom(attrs, "data-start");
+    const rawDuration = attrValueFrom(attrs, "data-duration");
+    const rawTrack = attrValueFrom(attrs, "data-track-index");
+    if (rawStart === null || rawDuration === null || rawTrack === null) {
+      errors.push(
+        `${label}: approved frame video must declare quoted data-start, data-duration, and data-track-index`,
+      );
+      return full;
+    }
+    const start = Number(rawStart);
+    const duration = Number(rawDuration);
+    const track = Number(rawTrack);
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(duration) ||
+      duration <= 0 ||
+      !Number.isFinite(track)
+    ) {
+      errors.push(
+        `${label}: approved frame video must declare finite data-start, positive data-duration, and data-track-index`,
+      );
+      return full;
+    }
+    const layout = approvedVideoLayout(attrs);
+    if (layout.error) {
+      errors.push(`${label}: ${layout.error}`);
+      return full;
+    }
+    videos.push({
+      attrs: approvedVideoAttrs(attrs),
+      inner,
+      start,
+      duration,
+      track,
+      layoutStyle: layout.style,
+    });
+    return "<!-- approved frame video hoisted by assemble-index -->";
+  });
+  return { html: repaired, videos, errors };
+}
+
 // Returns { errors: string[], repairedHtml: string|null, repairNote: string|null }.
 function guardFrame(html, label) {
   const errors = [];
+  const originalHtml = html;
+  const approved = hoistApprovedVideos(html, label);
+  html = approved.html;
+  errors.push(...approved.errors);
   // Scan a copy with comments + <script>/<style> bodies blanked, so a tag-like string
   // in a comment (e.g. "<!-- match the host <video> coords -->") or in GSAP code can't
   // trip ②/③. ① still splices into the ORIGINAL html, so its offsets stay correct.
@@ -175,7 +302,7 @@ function guardFrame(html, label) {
   const media = scan.match(/<(video|audio)(?=[\s/>])/i);
   if (media) {
     errors.push(
-      `${label}: has a <${media[1].toLowerCase()}> inside the sub-composition. The runtime only drives media that is a DIRECT child of the host root (index.html) — sub-comp media renders blank/black. Move the clip to index.html as a root-level <video>/<audio> and drive any per-scene motion on the main timeline (composition-patterns.md archetype B).`,
+      `${label}: has a <${media[1].toLowerCase()}> inside the sub-composition. This workflow hoists media to index.html so the frame injector owns it; the framework itself renders media inside a sub-composition identically to media at the host root (verified by render, and pinned by packages/producer/tests/sub-composition-video), so this is an assembly convention, not a runtime limit. Move the clip to index.html as a root-level <video>/<audio> and drive any per-scene motion on the main timeline (composition-patterns.md archetype B).`,
     );
   }
 
@@ -215,7 +342,7 @@ function guardFrame(html, label) {
     for (let i = 1; i < list.length; i++) {
       if (list[i].start < list[i - 1].end - EPS) {
         errors.push(
-          `${label}: clips on track ${track} overlap (one ends at ${r3(list[i - 1].end)}s, the next starts at ${r3(list[i].start)}s) — same-track time-overlap causes a render conflict. Put them on distinct data-track-index lanes or fix their windows.`,
+          `${label}: clips on track ${track} overlap (one ends at ${r3(list[i - 1].end)}s, the next starts at ${r3(list[i].start)}s). This workflow's injector assumes one clip per lane at a time. The render itself tolerates the overlap; put them on distinct data-track-index lanes or fix their windows.`,
         );
         break; // one report per track is enough
       }
@@ -223,7 +350,7 @@ function guardFrame(html, label) {
   }
 
   // ① auto-repair: ensure the root carries data-width / data-height.
-  let repairedHtml = null;
+  let repairedHtml = approved.html !== originalHtml ? approved.html : null;
   let repairNote = null;
   const root = findRootTag(html);
   if (root) {
@@ -238,7 +365,7 @@ function guardFrame(html, label) {
     }
   }
 
-  return { errors, repairedHtml, repairNote };
+  return { errors, repairedHtml, repairNote, hoistedVideos: approved.videos };
 }
 
 // ---------- resolve mountable frames in document order ----------
@@ -298,7 +425,12 @@ for (const f of manifest.frames) {
   ) {
     die(`${label}: ${f.src} has no data-composition-id="${compId}" (host/inner id must match)`);
   }
-  mounted.push({ frame: f, compId, durationSeconds: r3(f.durationSeconds) });
+  mounted.push({
+    frame: f,
+    compId,
+    durationSeconds: r3(f.durationSeconds),
+    hoistedVideos: guard.hoistedVideos,
+  });
 }
 if (frameErrors.length) {
   die(
@@ -317,6 +449,33 @@ for (const m of mounted) {
   acc += m.durationSeconds;
 }
 const TOTAL = r3(acc);
+
+// ---------- duration expectation (advisory) ----------
+// Frontmatter `duration:` carries the brief's rough length expectation
+// (storyboard-format.md § Frontmatter). Never blocks the build: report where
+// the cut lands, and flag a large gap so the agent judges whether the drift
+// serves the piece.
+let durationNote = "";
+const rawTarget = manifest.globals.extra?.duration;
+if (rawTarget != null && String(rawTarget).trim() !== "") {
+  const targetMatch = String(rawTarget).match(/(\d+(?:\.\d+)?)/);
+  const target = targetMatch ? parseFloat(targetMatch[1]) : NaN;
+  if (!Number.isFinite(target) || target <= 0) {
+    anomalies.push(
+      `frontmatter duration "${rawTarget}" is not parseable (e.g. "22s") — skipped the expectation check`,
+    );
+  } else {
+    const diff = r3(TOTAL - target);
+    durationNote = ` (expected ~${target}s, ${diff >= 0 ? "+" : ""}${diff}s)`;
+    const pct = Math.abs((diff / target) * 100);
+    if (pct > 10) {
+      anomalies.push(
+        `total ${TOTAL}s lands ${Math.round(pct)}% ${diff > 0 ? "over" : "under"} the brief's ~${target}s expectation — ` +
+          `judge whether the drift serves the piece (pacing, narration fit); re-pace, or update \`duration:\` if the new length is intended`,
+      );
+    }
+  }
+}
 const startOfFrameNumber = new Map();
 for (const m of mounted) if (m.frame.number != null) startOfFrameNumber.set(m.frame.number, m);
 
@@ -325,7 +484,14 @@ let audio = { bgm: null, voices: [], sfx: [] };
 if (existsSync(audioMetaPath)) {
   try {
     const parsed = JSON.parse(readFileSync(audioMetaPath, "utf8"));
-    audio = { bgm: parsed.bgm ?? null, voices: parsed.voices ?? [], sfx: parsed.sfx ?? [] };
+    // bgm_pending rides along: without it this step cannot tell a detached generate that has
+    // not landed yet from a film that is silent by design, and it would build the silent one.
+    audio = {
+      bgm: parsed.bgm ?? null,
+      bgm_pending: !!parsed.bgm_pending,
+      voices: parsed.voices ?? [],
+      sfx: parsed.sfx ?? [],
+    };
   } catch (e) {
     die(`audio_meta.json parse: ${e.message}`);
   }
@@ -372,6 +538,26 @@ for (const m of mounted) {
   body.push("");
 }
 
+// Approved frame videos are mounted at the host root after frame clips. Translate
+// frame-relative timing to the global timeline and keep them off audio/frame lanes.
+for (const [frameIndex, m] of mounted.entries()) {
+  for (const video of m.hoistedVideos ?? []) {
+    const globalStart = r3(m.start + video.start);
+    const track = 1000 + frameIndex * 1000 + video.track;
+    const id = /(?:^|\s)id\s*=/.test(video.attrs) ? "" : ` id="el-${m.compId}-video-${frameIndex}"`;
+    body.push(
+      `      <video${id} ${video.attrs}`,
+      `        class="clip"`,
+      ...(video.layoutStyle ? [`        style="${video.layoutStyle}"`] : []),
+      `        data-start="${globalStart}"`,
+      `        data-duration="${r3(video.duration)}"`,
+      `        data-track-index="${track}"`,
+      `      >${video.inner}</video>`,
+      "",
+    );
+  }
+}
+
 // (track 11) BGM — duck under narration when any voice is present. Loop-extend a short
 // track to the full video length so the tail isn't silent (libraries return ~15–30s clips).
 let bgmEmitted = false;
@@ -388,7 +574,9 @@ if (audio.bgm?.path) {
         `bgm is ${cov.dur?.toFixed?.(1) ?? "?"}s (< ${TOTAL}s) and could not be extended (${cov.reason}) — the tail will be silent; install ffmpeg`,
       );
     }
-    const vol = audio.bgm.volume != null ? audio.bgm.volume : voiceCount > 0 ? 0.8 : 0.9;
+    // An explicit volume from audio_meta always wins; otherwise the shared
+    // media-use default (bed ~ -18 dB under narration, forward for a silent film).
+    const vol = audio.bgm.volume != null ? audio.bgm.volume : bgmDefaultVolume(voiceCount > 0);
     body.push(
       `      <!-- BGM -->`,
       `      <audio`,
@@ -405,6 +593,21 @@ if (audio.bgm?.path) {
   } else {
     anomalies.push(`bgm ${audio.bgm.path} not on disk — skipped`);
   }
+} else if (audio.bgm_pending) {
+  // The distinction the flag exists to make. A warning is not enough here: assemble is re-run
+  // on Step 6 rework, long after the audio step's own warning scrolled past, and it would
+  // happily build a silent film from a snapshot whose JSON says the bed is still generating.
+  // Refuse by default; --allow-pending-bgm is the deliberate escape for previewing mid-generate.
+  if (!allowPendingBgm) {
+    die(
+      "audio_meta.json says bgm_pending — the music bed is still generating and is NOT in this " +
+        "assembly. Wait for the track, re-run the audio step, then assemble again. To assemble a " +
+        "deliberately silent preview anyway, pass --allow-pending-bgm.",
+    );
+  }
+  anomalies.push(
+    "bgm still generating (bgm_pending) — assembled without a bed per --allow-pending-bgm",
+  );
 }
 
 // (track 2) captions — captions.mjs writes this or legally skips; key off existence.
@@ -559,7 +762,7 @@ console.log(`  bgm    (track 11): ${bgmEmitted ? "yes" + bgmNote : "no"}`);
 console.log(`  captions (track 2): ${captionsEmitted ? "yes" : "no"}`);
 console.log(`  sfx    (track 20+): ${sfxEmitted}`);
 console.log(`  assets staged:     ${staged}/${wanted.size}`);
-console.log(`  total duration:    ${TOTAL}s`);
+console.log(`  total duration:    ${TOTAL}s${durationNote}`);
 if (repairs.length) {
   console.log(`\nrepaired (frame files updated in place):`);
   for (const rp of repairs) console.log(`  - ${rp}`);

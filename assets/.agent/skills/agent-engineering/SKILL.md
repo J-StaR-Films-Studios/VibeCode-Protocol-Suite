@@ -1,6 +1,6 @@
 ---
 name: agent-engineering
-description: Use when engineering LLM prompts, compiling skills from sources ('source-to-skill'), engineering expert systems ('expert-system-engineer' CommonKADS/rules), writing agent docs ('writing-for-agents'), modeling domain vocabulary ('domain-modeling' CONTEXT.md/ADRs), creating specs ('conversation-to-spec'), curating/importing skills ('skill-curator'), spawning task DAGs ('spawn-task'), running code tournaments ('arena'), or managing subagents.
+description: Use when engineering LLM prompts, compiling skills from sources ('source-to-skill'), engineering expert systems ('expert-system-engineer' CommonKADS/rules), writing agent docs ('writing-for-agents'), modeling domain vocabulary ('domain-modeling' CONTEXT.md/ADRs), creating specs ('conversation-to-spec'), curating/importing skills ('skill-curator'), spawning task DAGs ('spawn-task'), running code tournaments ('arena'), managing subagents, or delegating browser and desktop tasks to Codex CLI.
 author: J StaR Films / Matt Pocock / P-Stack
 coauthored: J StaR Films / Takomi
 version: 2.1.0
@@ -18,6 +18,7 @@ Comprehensive suite for prompt engineering, agent steering rules, domain diction
 | Sub-Skill | Purpose | Path |
 |---|---|---|
 | **`writing-for-agents`** | Core rules for writing skills, AGENTS.md, context pointers, and router mechanics | [`writing-for-agents/SKILL.md`](writing-for-agents/SKILL.md) |
+| **`codex-control`** | Delegate browser, desktop, and native-plugin tasks through the installed Codex CLI | [`codex-control/SKILL.md`](codex-control/SKILL.md) |
 | **`skill-curator`** | Intake, standardize, classify, and wire new skills into the ecosystem | [`skill-curator/SKILL.md`](skill-curator/SKILL.md) |
 | **`skill-creator`** | Scaffolding new agent skills following repository conventions | [`skill-creator/SKILL.md`](skill-creator/SKILL.md) |
 | **`source-to-skill`** | Distill raw sources (docs, books, transcripts, PDFs) into operational agent skills | [`source-to-skill/SKILL.md`](source-to-skill/SKILL.md) |

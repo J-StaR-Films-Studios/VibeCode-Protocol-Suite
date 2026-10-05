@@ -6,6 +6,8 @@
 
 Fetch the page via `hyperframes capture` (DOM + screenshots) or a provided screenshot → frozen project-local image(s)/DOM. `asset_needs`: `{ kind: web, source: <url>, treatment: none }`.
 
+After capture, inspect `capture/BLOCKED.md`; its presence is a hard stop. Do not continue with a blocked capture or use its partial artifacts. A provided screenshot is an alternative only with explicit user approval. If capture is blocked and no approved screenshot is available, use an asset-free fallback that does not claim to depict the page.
+
 ## Vocabulary / leans on
 
 - Rules: `hyperframes-animation/rules/{3d-page-scroll, demo-page-scroll-spotlight, cursor-click-ripple, coordinate-target-zoom, viewport-change}`.

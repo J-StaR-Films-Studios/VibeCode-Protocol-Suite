@@ -1,13 +1,65 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveNpmSpawnCommand } from "./package-loader.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENV = "HYPERFRAMES_SKILL_PKG_VERSION";
+
+test("resolveNpmSpawnCommand routes Windows npm through node and npm-cli.js", () => {
+  const npmCli = "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js";
+  const node = "C:\\Program Files\\nodejs\\node.exe";
+  const resolved = resolveNpmSpawnCommand(
+    ["install", "@hyperframes/producer@0.7.55", "value & calc"],
+    "win32",
+    { npm_execpath: npmCli, npm_node_execpath: node },
+    node,
+    (path) => path === npmCli,
+  );
+
+  assert.deepEqual(resolved, {
+    cmd: node,
+    args: [npmCli, "install", "@hyperframes/producer@0.7.55", "value & calc"],
+    opts: { stdio: "inherit", windowsHide: true },
+  });
+  assert.equal(resolved.opts.shell, undefined);
+});
+
+test("resolveNpmSpawnCommand finds npm-cli.js beside node for direct Windows runs", () => {
+  const node = "C:\\Program Files\\nodejs\\node.exe";
+  const npmCli = "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js";
+  const resolved = resolveNpmSpawnCommand(
+    ["install", "@hyperframes/producer@0.7.55"],
+    "win32",
+    {},
+    node,
+    (path) => path === npmCli,
+  );
+
+  assert.equal(resolved?.cmd, node);
+  assert.deepEqual(resolved?.args, [npmCli, "install", "@hyperframes/producer@0.7.55"]);
+});
+
+test(
+  "resolveNpmSpawnCommand launches the installed npm CLI on Windows",
+  { skip: process.platform !== "win32" },
+  () => {
+    const resolved = resolveNpmSpawnCommand(["--version"]);
+    assert.ok(resolved);
+
+    const result = spawnSync(resolved.cmd, resolved.args, {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout.trim(), /^\d+\./);
+  },
+);
 
 // (a) env override wins — no ancestor lookup, exact version echoed back.
 test("hyperframesPackageSpec: env override wins", async () => {
@@ -22,15 +74,23 @@ test("hyperframesPackageSpec: env override wins", async () => {
   }
 });
 
-// (b) resolvable version (in-repo) pins the bundled hyperframes/@hyperframes/cli version.
-test("hyperframesPackageSpec: resolvable in-repo version pins it", async () => {
+// (b) A monorepo-like fixture pins the bundled hyperframes/@hyperframes/cli version.
+test("hyperframesPackageSpec: bundled manifest version pins it", async () => {
   const prev = process.env[ENV];
   delete process.env[ENV];
+  const dir = mkdtempSync(join(tmpdir(), "hf-pkgloader-repo-"));
   try {
-    const { hyperframesPackageSpec } = await import("./package-loader.mjs");
-    const spec = hyperframesPackageSpec("@hyperframes/producer");
-    assert.match(spec, /^@hyperframes\/producer@\d+\.\d+\.\d+/);
+    const scriptsDir = join(dir, "assets", ".agent", "skills", "hyperframes", "scripts");
+    mkdirSync(scriptsDir, { recursive: true });
+    copyFileSync(join(HERE, "package-loader.mjs"), join(scriptsDir, "package-loader.mjs"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "hyperframes", version: "1.2.3" }));
+
+    const { hyperframesPackageSpec } = await import(
+      pathToFileURL(join(scriptsDir, "package-loader.mjs")).href
+    );
+    assert.equal(hyperframesPackageSpec("@hyperframes/producer"), "@hyperframes/producer@1.2.3");
   } finally {
+    rmSync(dir, { recursive: true, force: true });
     if (prev !== undefined) process.env[ENV] = prev;
   }
 });

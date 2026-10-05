@@ -1,7 +1,13 @@
 ---
 name: hyperframes-creative
-description: Non-animation creative direction for HyperFrames videos. Use for design spec (frame.md / design.md) handling, palettes, typography, narration, beat planning, audio-reactive visuals, composition patterns, and brand / style decisions. For atomic motion patterns and scene blueprints, use `hyperframes-animation`.
+description: >-
+  Use when non-animation creative direction for HyperFrames videos. Use for design spec (frame.md / design.md) handling, palettes, typography, narration, beat planning, audio-reactive visuals, composition patterns, and brand / style decisions. For atomic motion patterns and scene blueprints, use `hyperframes-animation`.
+author: HeyGen
+coauthored: J StaR Films / Takomi
+version: 1.0.0
 ---
+
+**Plugin installs:** Before setup or freshness commands, follow [plugin execution rules](../references/plugin-installation.md) when this skill is inside a HyperFrames plugin. Standalone installs keep the update instructions below.
 
 # HyperFrames Creative
 
@@ -12,13 +18,13 @@ For motion patterns, scene blueprints, transitions, and CSS marker effects, use 
 > **Read these two FIRST for any non-trivial composition — they override web instincts:**
 >
 > - `references/house-style.md` — "interpret the prompt, generate real content," the lazy-default list, and the background/foreground layer recipe. This is what turns a literal restyle into a _concept_.
-> - `references/video-composition.md` — video-medium density, scale, foreground metadata (the "produced, not generated" detailing: data bars, registration marks, monospace readouts, 8-10 elements/scene).
+> - `references/video-composition.md` — video-medium scale, depth, and foreground detail. It explains how to avoid empty web-page layouts without imposing a universal element count.
 >
 > Skipping these is the single biggest cause of generic, web-page-looking output. They are not optional rows in the routing table below — for anything beyond a one-line edit, open both before you choose colors or write HTML.
 
 ## Workflow
 
-1. If a project has a design spec, **read it first** and treat its frontmatter tokens as brand truth (colors, fonts, spacing, tone, constraints). Which file to read (precedence `frame.md` → `design.md` → `DESIGN.md`) and how to parse it (frontmatter = normative, prose = context) are defined once in [`references/design-spec.md`](references/design-spec.md) — resolve and load per that doc.
+1. If a project has a design spec, **read it first** and treat its frontmatter tokens as brand truth (colors, fonts, spacing, tone, constraints). Which file to read (precedence `frame.md` → `design.md` → `DESIGN.md`) and how to parse it (frontmatter = normative, prose = context) are defined once in [`references/design-spec.md`](./references/design-spec.md) — resolve and load per that doc.
 2. If no design spec exists and the user asks for visual direction, choose a route:
    - Ready-made frame-preset (optional) → `frame-presets/` (adopt a `FRAME.md` as `frame.md`; see `references/design-spec.md`)
    - Named style or mood → `references/visual-styles.md`
@@ -29,22 +35,23 @@ For motion patterns, scene blueprints, transitions, and CSS marker effects, use 
 
 ## Routing
 
-| Topic                                                                    | Read                                           |
-| ------------------------------------------------------------------------ | ---------------------------------------------- |
-| Adopt a ready-made frame-preset as `frame.md` (optional)                 | `frame-presets/` · `references/design-spec.md` |
-| Default palettes, motion, typography, lazy defaults to question          | `references/house-style.md`                    |
-| Named style presets, mood-to-style routing                               | `references/visual-styles.md`                  |
-| Palette-specific color tokens                                            | `palettes/*.md`                                |
-| Composition patterns — PiP, text-behind-subject, title card, slide show  | `references/composition-patterns.md`           |
-| Stats / infographic presentation                                         | `references/data-in-motion.md`                 |
-| Structured expansion for open-ended prompts                              | `references/prompt-expansion.md`               |
-| Video-medium density, scale, color, frame composition                    | `references/video-composition.md`              |
-| Per-beat direction, rhythm planning, transition timing                   | `references/beat-direction.md`                 |
-| Post-authoring spec verification (colors, type, corners, spacing, depth) | `references/design-adherence.md`               |
-| High-level motion guardrails and GSAP-quality rules                      | `references/motion-principles.md`              |
-| Font selection, pairings, rendered-video type guardrails                 | `references/typography.md`                     |
-| Script pacing, tone, openings, number pronunciation                      | `references/narration.md`                      |
-| Precomputed audio bands mapped to motion                                 | `references/audio-reactive.md`                 |
+| Topic                                                                                                   | Read                                           |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Adopt a ready-made frame-preset as `frame.md` (optional)                                                | `frame-presets/` · `references/design-spec.md` |
+| Default palettes, motion, typography, lazy defaults to question                                         | `references/house-style.md`                    |
+| Named style presets, mood-to-style routing                                                              | `references/visual-styles.md`                  |
+| Palette-specific color tokens                                                                           | `palettes/*.md`                                |
+| Composition patterns — PiP, text-behind-subject, title card, slide show                                 | `references/composition-patterns.md`           |
+| Stats / infographic presentation                                                                        | `references/data-in-motion.md`                 |
+| Structured expansion for open-ended prompts                                                             | `references/prompt-expansion.md`               |
+| Video-medium density, scale, color, frame composition                                                   | `references/video-composition.md`              |
+| Per-beat direction, rhythm planning, transition timing                                                  | `references/beat-direction.md`                 |
+| Post-authoring spec verification (colors, type, corners, spacing, depth)                                | `references/design-adherence.md`               |
+| High-level motion guardrails and GSAP-quality rules                                                     | `references/motion-principles.md`              |
+| Font selection, pairings, rendered-video type guardrails                                                | `references/typography.md`                     |
+| Story doctrine — hook language, value-before-evidence, storyboard-as-proposal, source-traceable visuals | `references/story-spine.md`                    |
+| Script pacing, tone, openings, number pronunciation                                                     | `references/narration.md`                      |
+| Precomputed audio bands mapped to motion                                                                | `references/audio-reactive.md`                 |
 
 ## Scripts
 
