@@ -617,22 +617,31 @@ export function getSourceCheckoutLaunchArgs(cwd) {
 }
 
 export async function launchTakomiHarness(cwd = process.cwd()) {
+  const launchArgs = getSourceCheckoutLaunchArgs(cwd);
+  const localCli = path.join(cwd, 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'bundle', 'cli.js');
+  const sourceCheckout = launchArgs.length > 0;
+  if (sourceCheckout && !fs.existsSync(localCli)) {
+    console.error('Local Pi is missing. Run pnpm install in this source checkout first.');
+    return 1;
+  }
   // Keep the common `takomi` path lean. A full environment inspection shells out
   // to `pi --version`, which costs multiple seconds on Windows before Pi even
   // starts. For launch we only need to know the command exists and the required
   // global Takomi extensions are present; `takomi doctor` still performs the
   // complete diagnostic check.
-  const [pi, installed] = await Promise.all([
-    detectPiCommand({ includeVersion: false }),
-    inspectInstalledTakomiPiHarness(),
-  ]);
+  const [pi, installed] = sourceCheckout
+    ? [{ installed: true, path: process.execPath }, null]
+    : await Promise.all([
+        detectPiCommand({ includeVersion: false }),
+        inspectInstalledTakomiPiHarness(),
+      ]);
 
   if (!pi.installed) {
     printFirstRunGuidance('Pi is not installed yet.');
     return 1;
   }
 
-  if (!installed.runtimeInstalled || !installed.subagentsInstalled) {
+  if (!sourceCheckout && (!installed?.runtimeInstalled || !installed.subagentsInstalled)) {
     printFirstRunGuidance('Takomi Pi harness is not fully installed yet.');
     return 1;
   }
@@ -647,8 +656,9 @@ export async function launchTakomiHarness(cwd = process.cwd()) {
   };
 
   return await new Promise((resolve) => {
-    const launchArgs = getSourceCheckoutLaunchArgs(cwd);
-    const resolved = resolveCommandForSpawn(pi.path || 'pi', launchArgs);
+    const resolved = sourceCheckout
+      ? { command: process.execPath, args: [localCli, ...launchArgs] }
+      : resolveCommandForSpawn(pi.path || 'pi', launchArgs);
     const child = spawn(resolved.command, resolved.args, {
       cwd,
       stdio: 'inherit',

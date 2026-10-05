@@ -161,7 +161,7 @@ function formatCost(value: number): string {
 }
 
 function formatUsageWindow(window: RouterUsageWindowSummary): string {
-  return `${window.label}: ${window.requests} req | tokens=${formatNumber(window.totalTokens)} input=${formatNumber(window.input)} output=${formatNumber(window.output)} cache=${formatNumber(window.cacheRead + window.cacheWrite)} cost=${formatCost(window.costTotal)}`;
+  return `${window.label}: ${window.requests} req | tokens=${formatNumber(window.totalTokens)} input=${formatNumber(window.input)} output=${formatNumber(window.output)} cache=${formatNumber(window.cacheRead + window.cacheWrite)} estimated-cost=${formatCost(window.costTotal)}`;
 }
 
 function findDuplicateAccount(account: StoredRouterAccount, accounts: StoredRouterAccount[]): StoredRouterAccount | undefined {
@@ -252,7 +252,7 @@ export function formatUsageReport(runtime: RouterRuntime, accountId?: string): s
   return [
     "# oauth-router usage",
     "",
-    "Provider bars show OpenAI/Codex reported quota remaining. Local line shows only traffic routed through this extension.",
+    "Provider bars show OpenAI/Codex reported quota remaining. Local line shows only observed completed routed responses, not account-wide usage. Costs are estimates, not invoices. Provider quota is separate and time-bound.",
     "",
     ...rows,
   ].join("\n");

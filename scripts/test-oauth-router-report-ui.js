@@ -218,6 +218,9 @@ try {
   const usageLines = events.widgets[2][1].join("\n");
   assert.match(usageLines, /Local:/, "usage distinguishes locally observed traffic");
   assert.match(usageLines, /Provider/, "usage labels provider quota separately");
+  assert.match(usageLines, /observed completed routed responses, not account-wide usage/, "local windows describe completed router observations only");
+  assert.match(usageLines, /not invoices.*Provider quota is separate and time-bound/, "invoice spend and quota remain separate measurements");
+  assert.match(events.widgets[4][1].join("\n"), /estimated-cost=/, "raw local windows label cost as an estimate");
   assert.match(usageLines, /\[[█░]{18}\]/, "RPC fallback retains full provider quota bars");
   const detailedRawLines = events.widgets[4][1].join("\n");
   assert.doesNotMatch(detailedRawLines, /super-secret|opaque-refresh|not-for-display|\x1b/, "raw report redacts provider secrets and controls");

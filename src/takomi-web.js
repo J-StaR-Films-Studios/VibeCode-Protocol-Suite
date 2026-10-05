@@ -2,6 +2,11 @@ import http from 'node:http';
 import { exec } from 'node:child_process';
 import os from 'node:os';
 import pc from 'picocolors';
+import { fmtEstimatedCost, pricingSummary } from './takomi-stats.js';
+
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
 
 export function startTakomiWebServer(stats, port = 8766, opts = {}) {
   const openBrowser = opts.open !== false;
@@ -56,6 +61,9 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
     <div class="badge">Generated: ${new Date(stats.generatedAt).toLocaleString()}</div>
   </div>
 
+  <p class="kpi-lbl">Broad Pi usage. Known estimates, not invoices or quota. * incomplete; ~ modeled subscription zero, tokens estimated.</p>
+  <p class="kpi-lbl">${escapeHtml(pricingSummary(stats.totals))}</p>
+
   <div class="kpi-grid">
     <div class="card">
       <div class="kpi-val cyan">${Number(stats.totals.total || 0).toLocaleString()}</div>
@@ -66,8 +74,8 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
       <div class="kpi-lbl">Prompt Cache Hit Rate</div>
     </div>
     <div class="card">
-      <div class="kpi-val amber">$${Number(stats.totals.cost || 0).toFixed(2)}</div>
-      <div class="kpi-lbl">Estimated Total Spend</div>
+      <div class="kpi-val amber">${fmtEstimatedCost(stats.totals)}</div>
+      <div class="kpi-lbl">Known estimated subtotal</div>
     </div>
     <div class="card">
       <div class="kpi-val">${stats.sessions || 0}</div>
@@ -80,14 +88,14 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
       <div class="section-title">Top Projects</div>
       <table>
         <thead>
-          <tr><th>Project</th><th class="text-right">Tokens</th><th class="text-right">Cost</th></tr>
+          <tr><th>Project</th><th class="text-right">Tokens</th><th class="text-right">Known est.</th></tr>
         </thead>
         <tbody>
           ${(stats.byProject || []).slice(0, 8).map(p => `
             <tr>
               <td><b>${p.key}</b></td>
               <td class="text-right cyan">${Number(p.total || 0).toLocaleString()}</td>
-              <td class="text-right amber">$${Number(p.cost || 0).toFixed(2)}</td>
+              <td class="text-right amber">${fmtEstimatedCost(p)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -98,14 +106,14 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
       <div class="section-title">Top Models</div>
       <table>
         <thead>
-          <tr><th>Model</th><th class="text-right">Tokens</th><th class="text-right">Cost</th></tr>
+          <tr><th>Model</th><th class="text-right">Tokens</th><th class="text-right">Known est.</th></tr>
         </thead>
         <tbody>
           ${(stats.byModel || []).slice(0, 8).map(m => `
             <tr>
               <td><b>${m.key}</b></td>
               <td class="text-right cyan">${Number(m.total || 0).toLocaleString()}</td>
-              <td class="text-right amber">$${Number(m.cost || 0).toFixed(2)}</td>
+              <td class="text-right amber">${fmtEstimatedCost(m)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -117,7 +125,7 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
     <div class="section-title">Recent Sessions & Turns</div>
     <table>
       <thead>
-        <tr><th>Session</th><th>Project</th><th class="text-right">Turns</th><th class="text-right">Tools</th><th class="text-right">Tokens</th><th class="text-right">Cost</th></tr>
+        <tr><th>Session</th><th>Project</th><th class="text-right">Turns</th><th class="text-right">Tools</th><th class="text-right">Tokens</th><th class="text-right">Known est.</th></tr>
       </thead>
       <tbody>
         ${(stats.sessionRows || []).slice(0, 10).map(s => `
@@ -127,7 +135,7 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
             <td class="text-right">${s.turns || 0}</td>
             <td class="text-right">${s.toolCalls || 0}</td>
             <td class="text-right cyan">${Number(s.total || 0).toLocaleString()}</td>
-            <td class="text-right amber">$${Number(s.cost || 0).toFixed(2)}</td>
+            <td class="text-right amber">${fmtEstimatedCost(s)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -151,4 +159,5 @@ export function startTakomiWebServer(stats, port = 8766, opts = {}) {
       exec(cmd, () => {});
     }
   });
+  return server;
 }

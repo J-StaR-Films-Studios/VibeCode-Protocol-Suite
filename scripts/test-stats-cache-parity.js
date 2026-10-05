@@ -62,4 +62,13 @@ for (const name of [
   assert.strictEqual(b, a, `${name} must stay identical across copies`);
 }
 
-console.log('✓ stats cache parity passed');
+const core = fs.readFileSync(path.join(repoRoot, 'src', 'takomi-stats.js'), 'utf8');
+for (const name of ['canonicalModel', 'qualifyAntigravityModel', 'emptyPricing', 'addPricing', 'add', 'findDiscount', 'priceForUsage', 'priceUsage', 'loadPrices', 'usageFields', 'fmtEstimatedCost', 'pricingSummary']) {
+  const normalize = source => extractFunction(source, name).replace(/^export/, '');
+  assert.equal(normalize(runtime), normalize(core), `${name} pricing contract must match core/runtime`);
+}
+for (const [start, end] of [['const PRICES =', 'const MODEL_ALIASES'], ['const MODEL_ALIASES =', 'function canonicalModel'], ['const GPT_5_6_PRICE_CHANGE_AT =', '/** @returns']]) {
+  const block = source => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))).replace(/\s+/g, '');
+  assert.equal(block(runtime), block(core), `${start} recorded rates/aliases must match core/runtime`);
+}
+console.log('✓ stats cache and pricing mirror parity passed');

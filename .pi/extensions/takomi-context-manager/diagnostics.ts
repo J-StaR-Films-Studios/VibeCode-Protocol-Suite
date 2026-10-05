@@ -7,6 +7,8 @@ import { renderDuplicateExtensionGuidance } from "./extension-conflicts";
 
 export type ContextReportMode = "summary" | "verbose" | "problems";
 
+const PROMPT_CHARACTER_SCOPE = "SYSTEM-PROMPT CHARACTERS ONLY. Excludes tool schemas, history, tool results, retries, and child agents. Not billed tokens, cache behavior, or cost.";
+
 type IssueSeverity = "info" | "attention" | "blocked" | "failed";
 
 type ReportIssue = {
@@ -170,7 +172,7 @@ function promptRewriteState(state: ContextManagerState): string {
   if (!rewrite.attempted) return "Not run yet";
   if (rewrite.rewrittenLength === 0) return "Failed";
   if (!rewrite.changed) return "Checked · no change";
-  return `Applied · ${reductionPercent(rewrite.originalLength, rewrite.rewrittenLength)}% reduction`;
+  return `Applied · ${reductionPercent(rewrite.originalLength, rewrite.rewrittenLength)}% system-prompt character reduction`;
 }
 
 function restoreState(state: ContextManagerState): string {
@@ -225,6 +227,8 @@ function renderSummary(state: ContextManagerState): string {
     renderSummaryLine("Policies", policyState(state)),
     renderSummaryLine("Prompt rewrite", promptRewriteState(state)),
     renderSummaryLine("Warnings", status.warningCount === 0 ? "None" : String(status.warningCount)),
+    "",
+    PROMPT_CHARACTER_SCOPE,
   ];
 
   const visibleProblems = issues.filter((issue) => issue.severity !== "info").slice(0, 3);
@@ -482,6 +486,7 @@ function renderVerbose(state: ContextManagerState): string {
       : "    - No gated tool policy mapping discovered",
     "",
     "Prompt rewrite",
+    `  ${PROMPT_CHARACTER_SCOPE}`,
     renderSummaryLine("Result", rewrite.attempted ? rewrite.rewrittenLength === 0 ? "Failed" : rewrite.changed ? "Applied" : "Checked, no change" : "Not run yet"),
     renderSummaryLine("Original", `${fmtNumber(rewrite.originalLength)} chars`),
     renderSummaryLine("Rewritten", `${fmtNumber(rewrite.rewrittenLength)} chars`),

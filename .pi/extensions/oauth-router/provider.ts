@@ -4,7 +4,7 @@ import {
   type AssistantMessage,
   type AssistantMessageEvent,
   type AssistantMessageEventStream,
-  type Context,
+  type TranscriptContext,
   type Model,
   type SimpleStreamOptions,
   streamSimpleOpenAICodexResponses,
@@ -177,7 +177,7 @@ function classifyFailure(
 function delegateStream(
   upstream: RouterUpstreamConfig,
   model: Model<Api>,
-  context: Context,
+  context: TranscriptContext,
   options: SimpleStreamOptions | undefined,
 ): AssistantMessageEventStream {
   switch (upstream.api) {
@@ -503,7 +503,7 @@ export class RouterRuntime {
   private async tryAccountWithClientNetworkRetries(
     selection: DelegateSelection,
     outerStream: ReturnType<typeof createAssistantMessageEventStream>,
-    context: Context,
+    context: TranscriptContext,
     modelId: string,
     options?: SimpleStreamOptions,
   ): Promise<{ completed: boolean; emittedMeaningfulOutput: boolean; failure?: FailureClassification }> {
@@ -549,7 +549,7 @@ export class RouterRuntime {
   private async trySingleAccount(
     selection: DelegateSelection,
     outerStream: ReturnType<typeof createAssistantMessageEventStream>,
-    context: Context,
+    context: TranscriptContext,
     options?: SimpleStreamOptions,
   ): Promise<{ completed: boolean; emittedMeaningfulOutput: boolean; failure?: FailureClassification }> {
     let responseStatus: number | undefined;
@@ -643,7 +643,7 @@ export class RouterRuntime {
     };
   }
 
-  stream(model: Model<Api>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream {
+  stream(model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions): AssistantMessageEventStream {
     this.reloadConfig();
     this.state.clearAbortHealth(this.accounts.list().map((account) => account.id));
     const outer = createAssistantMessageEventStream();
