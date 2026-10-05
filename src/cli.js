@@ -46,6 +46,7 @@ import { runDoctor } from './doctor.js';
 import { disableRawPiSubagentsActivation, ensurePiInstalled, ensurePiSubagentsInstalled, formatRawPiSubagentsDisableActions, formatRawPiSubagentsFindings, inspectRawPiSubagentsActivation, launchTakomiHarness, printPiInstallResult, printPiSubagentsInstallResult, updatePiCliPackage, updatePiManagedPackages, printPiManagedPackageUpdateResult } from './pi-harness.js';
 import { installPiHarnessAssets, printPiInstallSummary, syncPiHarnessAssets, validatePiHarnessInstall } from './pi-installer.js';
 import { offerPiOptionalFeatures } from './pi-optional-features.js';
+import { setupComputerUse, computerUseDoctor, disableComputerUse, desktopMcpRegistration } from './computer-use/setup.js';
 import {
   buildSkillsReconcilePlan,
   getInstalledTakomiSkillNames,
@@ -682,7 +683,12 @@ async function syncAllTargets() {
   await syncSkillsTarget();
 }
 
-async function setup(target) {
+async function setup(target, options = {}) {
+  if (target === 'computer-use') {
+    try { console.log((await setupComputerUse(options)).report); }
+    catch (error) { console.error(error.message); process.exitCode = 1; }
+    return;
+  }
   await install(target);
 }
 
@@ -1339,6 +1345,7 @@ Primary flow:
 Examples:
   takomi setup pi     Set up the Pi harness
   takomi setup pi-features  Add optional Pi feature packs
+  takomi setup computer-use Opt into Windows desktop MCP access
   takomi setup skills Install bundled skills
   takomi setup project
   takomi refresh      One-command maintenance
@@ -1351,19 +1358,37 @@ Legacy aliases still work:
 
 program
   .command('setup [target]')
-  .description('Set up Takomi: guided setup, or setup pi|pi-features|skills|project|all')
-  .action(async (target) => {
+  .description('Set up Takomi: guided setup, or setup pi|pi-features|computer-use|skills|project|all')
+  .option('--server <name>', 'Reuse a compatible server from user-level Pi mcp.json')
+  .option('--codex-cli <path>', 'Use an explicit Codex .exe or codex.js path')
+  .option('--yes', 'Confirm optional desktop setup in non-interactive runs')
+  .action(async (target, options) => {
     if (target === 'project') {
       await init();
       return;
     }
-    await setup(target);
+    await setup(target, options);
   });
 
 program
   .command('refresh [target]')
   .description('One-command refresh: update Takomi plus Pi/assets/skills, or refresh pi|skills|project|all')
   .action(refresh);
+
+program
+  .command('computer-use <action>')
+  .description('Desktop MCP: doctor, config, or disable')
+  .action(async (action) => {
+    try {
+      if (action === 'doctor') {
+        const result = await computerUseDoctor();
+        console.log(result.report);
+        if (!result.ok) process.exitCode = 1;
+      } else if (action === 'config') console.log(JSON.stringify(await desktopMcpRegistration(), null, 2));
+      else if (action === 'disable') console.log(await disableComputerUse());
+      else { console.error('Use takomi computer-use doctor|config|disable.'); process.exitCode = 1; }
+    } catch { console.error('Computer-use configuration could not be read or updated.'); process.exitCode = 1; }
+  });
 
 program
   .command('status')

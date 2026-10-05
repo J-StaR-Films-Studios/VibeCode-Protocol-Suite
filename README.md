@@ -66,8 +66,23 @@ Optional global skills and feature packs:
 
 ```bash
 takomi setup skills        # Core Skills on first install, custom category browser on repeat
-takomi setup pi-features   # Optional Pi packages (Interview, Todo, Browser QA, Doc Preview)
+takomi setup pi-features   # Interview, Todo, Browser QA, Doc Preview, opt-in desktop control
 ```
+
+### Optional Windows desktop control
+
+Computer use stays off until you opt in. It uses your installed Codex desktop runtime or a compatible stdio MCP already registered in `~/.pi/agent/mcp.json`.
+
+```powershell
+takomi setup computer-use
+takomi computer-use doctor
+```
+
+Keep Codex open and Windows unlocked. Restart Pi after setup. The `takomi_computer_use` tool provides JavaScript execution, kernel reset, status, and the full safety instructions. App dialogs offer request, session, and permanent permission when the server supports those scopes. Remembered app access does not authorize destructive or sensitive actions.
+
+For another MCP client, run `takomi computer-use config` and merge the printed registration into that client's MCP settings. That client must support form elicitation. Takomi does not edit Codex or other clients' configuration, patch Pi, or redistribute Codex binaries. Only one agent should send desktop input at a time.
+
+See [desktop setup, existing-server reuse, and revocation](docs/features/Codex_Computer_Use.md).
 
 ### Codex Plugin Marketplace
 
@@ -255,6 +270,8 @@ Install once into `~/.takomi/` — Takomi syncs skills to each harness automatic
 | `takomi` | Launch in the current project |
 | `takomi setup` | Guided first-time setup |
 | `takomi setup pi\|skills\|project\|all` | Targeted setup |
+| `takomi setup computer-use` | Opt into Windows desktop MCP access |
+| `takomi computer-use doctor\|config\|disable` | Check, export, or disable desktop integration |
 | `takomi refresh` | One-command update (CLI + Pi + skills) |
 | `takomi refresh pi\|skills\|project\|all` | Targeted refresh |
 | `takomi add <url>` | Pull skills from any GitHub repo |

@@ -19,6 +19,9 @@ importers:
 
   .:
     dependencies:
+      '@earendil-works/pi-mcp':
+        specifier: 1.0.3
+        version: 1.0.3
       commander:
         specifier: ^13.1.0
         version: 13.1.0
@@ -37,6 +40,9 @@ importers:
       prompts:
         specifier: ^2.4.2
         version: 2.4.2
+      proper-lockfile:
+        specifier: 4.1.2
+        version: 4.1.2
     devDependencies:
       '@earendil-works/pi-agent-core':
         specifier: 0.99.1
@@ -53,6 +59,9 @@ importers:
       '@types/node':
         specifier: ^25.5.2
         version: 25.5.2
+      '@types/proper-lockfile':
+        specifier: 4.1.4
+        version: 4.1.4
       typebox:
         specifier: ^1.1.33
         version: 1.1.33
@@ -179,6 +188,10 @@ packages:
 
   '@earendil-works/pi-mcp@0.99.1':
     resolution: {integrity: sha512-YCFGPkmDzLwQuIzwfbP6Vuk/g/ukKpZhwTpbcfzomuI1Fkiu6hHRkOGwAqsO3G8cTkZWkM8vmOkFJjStQNC4qA==}
+    engines: {node: '>=22.19.0'}
+
+  '@earendil-works/pi-mcp@1.0.3':
+    resolution: {integrity: sha512-ZAhL/g0rpjyKtcKzD0jSDk7sFIrMCQocmKtpAE1F9eRnI5fGGVWUyiZwALG/Tn1sagzxFbSqtc29zGx5OvDDGA==}
     engines: {node: '>=22.19.0'}
 
   '@earendil-works/pi-telemetry@0.99.1':
@@ -423,6 +436,9 @@ packages:
 
   '@types/node@25.5.2':
     resolution: {integrity: sha512-tO4ZIRKNC+MDWV4qKVZe3Ql/woTnmHDr5JD8UI5hn2pwBrHEwOEMZK7WlNb5RKB6EoJ02gwmQS9OrjuFnZYdpg==}
+
+  '@types/proper-lockfile@4.1.4':
+    resolution: {integrity: sha512-uo2ABllncSqg9F1D4nugVl9v93RmjxF6LJzQLMLDdPaXCUIDPeOJ21Gbqi43xNKzBi/WQ0Q0dICqufzQbMjipQ==}
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
@@ -1101,6 +1117,10 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
+  '@earendil-works/pi-mcp@1.0.3':
+    dependencies:
+      cross-spawn: 7.0.6
+
   '@earendil-works/pi-telemetry@0.99.1': {}
 
   '@earendil-works/pi-tui@0.74.0':
@@ -1271,6 +1291,10 @@ snapshots:
   '@types/node@25.5.2':
     dependencies:
       undici-types: 7.18.2
+
+  '@types/proper-lockfile@4.1.4':
+    dependencies:
+      '@types/retry': 0.12.0
 
   '@types/retry@0.12.0': {}
 

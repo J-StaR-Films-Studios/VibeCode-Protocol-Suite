@@ -9,6 +9,7 @@ It is intentionally separate from the existing cross-harness assets under `asset
 - `extensions/takomi-runtime/` - Pi runtime glue, embedded workflow playbooks, and orchestrator board tools
 - `extensions/takomi-subagents/` - Takomi-facing subagent wrapper over Pi-style execution semantics with resumable conversation IDs
 - `extensions/takomi-context-manager/` - Progressive context loading, skill manifests, policy packs, model-routing gates, and context diagnostics
+- `extensions/takomi-computer-use/` - Inactive until enabled. Windows desktop MCP client with app approval dialogs.
 - `prompts/` - Pi-native prompt shortcuts
 - `agents/` - Pi-native specialist agent definitions, including a design-stage agent
 
@@ -52,6 +53,18 @@ Inside Pi, use:
   - `/vibe-spawnTask`
   - `/vibe-syncDocs`
 
+## Optional desktop MCP
+
+Run `takomi setup computer-use` to reuse a compatible server from your user-level `~/.pi/agent/mcp.json`, or install the shared launcher for your own Codex desktop runtime. Setup installs the extension's pinned dependencies. It leaves other MCP registrations and Codex files unchanged. Pi needs no installed-file patches.
+
+The `takomi_computer_use` tool has `js`, `reset`, `instructions`, and `status` actions. Read `instructions` before sending input. Keep Codex open and Windows unlocked. Only one agent should control the desktop at a time.
+
+The extension handles approval forms on its own MCP connection. It does not repair or replace Pi's built-in MCP connections. If the same server is also registered with built-in MCP, use the Takomi tool for Takomi's approval handling. Stored grants apply only to ordinary low-risk app access. Sensitive operations still need confirmation.
+
+Run `takomi computer-use doctor` for a read-only inventory check, `takomi computer-use config` for another client's registration, or `takomi computer-use disable` to turn this extension off. Restart Pi after setup or disable. Headless sessions cannot request new approval, though they can reuse valid permanent app grants.
+
+See [configuration, permissions, and troubleshooting](../docs/features/Codex_Computer_Use.md).
+
 ## Dependency + ownership notes
 
 This is the current ownership model other agents should assume:
@@ -72,6 +85,7 @@ Bundled with Takomi now:
 - `.pi/extensions/takomi-runtime/`
 - `.pi/extensions/takomi-subagents/`
 - `.pi/extensions/takomi-context-manager/`
+- `.pi/extensions/takomi-computer-use/`, inactive by default
 - `.pi/prompts/`
 - `.pi/agents/`
 - `.pi/themes/`

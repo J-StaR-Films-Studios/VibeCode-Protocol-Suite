@@ -2,8 +2,18 @@ import fs from 'fs-extra';
 import prompts from 'prompts';
 import pc from 'picocolors';
 import { detectPiCommand, getPiGlobalTargets, runCommand } from './pi-harness.js';
+import { setupComputerUse } from './computer-use/setup.js';
 
 export const TAKOMI_PI_OPTIONAL_FEATURES = [
+  {
+    id: 'takomi-computer-use',
+    title: 'Codex desktop computer use (Windows, opt-in)',
+    packageSpec: 'bundled:takomi-computer-use',
+    bundled: true,
+    selectedByDefault: false,
+    recommended: false,
+    description: 'Reuse a desktop MCP or installed Codex runtime, with per-app approvals.',
+  },
   {
     id: 'takomi-interview',
     title: 'Takomi Interview',
@@ -106,7 +116,11 @@ export async function installPiOptionalFeatures(featureIds) {
   const selected = TAKOMI_PI_OPTIONAL_FEATURES.filter((feature) => featureIds.includes(feature.id));
   const results = [];
   for (const feature of selected) {
-    const result = await installPiPackage(feature.packageSpec);
+    let result;
+    if (feature.bundled) {
+      try { result = await setupComputerUse(); }
+      catch (error) { result = { ok: false, changed: false, report: error.message }; }
+    } else result = await installPiPackage(feature.packageSpec);
     results.push({ feature, ...result });
   }
   return results;
@@ -120,7 +134,9 @@ export function printPiOptionalFeatureResults(results) {
 
   for (const result of results) {
     const icon = result.ok ? (result.changed ? pc.green('✔') : pc.dim('•')) : pc.yellow('⚠');
-    const action = result.ok ? (result.changed ? 'Installed' : 'Already installed') : 'Could not install';
+    const action = result.feature.bundled
+      ? (result.ok ? (result.changed ? 'Enabled' : 'Skipped') : 'Could not enable')
+      : (result.ok ? (result.changed ? 'Installed' : 'Already installed') : 'Could not install');
     console.log(`${icon} ${action} ${result.feature.title} (${result.feature.packageSpec})`);
     if (result.report) console.log(pc.dim(result.report.split(/\r?\n/).slice(-4).join('\n')));
   }

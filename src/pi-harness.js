@@ -586,6 +586,7 @@ export function getSourceCheckoutLaunchArgs(cwd) {
     path.join(extensionsRoot, 'notify-sound', 'index.ts'),
     path.join(extensionsRoot, 'antigravity-provider', 'index.ts'),
     path.join(extensionsRoot, 'takomi-vault', 'index.ts'),
+    path.join(extensionsRoot, 'takomi-computer-use', 'index.ts'),
   ];
   const promptsRoot = path.join(cwd, '.pi', 'prompts');
   const theme = path.join(cwd, '.pi', 'themes', 'takomi-noir.json');
