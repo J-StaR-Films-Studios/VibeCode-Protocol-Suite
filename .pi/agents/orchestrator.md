@@ -50,7 +50,7 @@ For broad work, create or update an orchestration session using markdown-first a
 
 Do **not** let JSON/tool fields generate the human plan by themselves. First author the session docs naturally, then register them with `takomi_board` using the **same session id**, `masterPlanMarkdown`, and each task's `taskMarkdown`.
 
-`takomi_board` only tracks session/state/markdown artifacts. Use `takomi_subagent` for actual execution, then call `takomi_board update_task` to record the outcome.
+`takomi_board` tracks plans and task records, not execution. Inside T3 Code, keep following Takomi's personas, routing policy, lifecycle, planning, review, approval, and task-tracking rules. Treat `takomi_subagent` as inactive for execution and use the available T3 orchestration tools instead. Outside T3, use Takomi's normal subagent execution tools. Record execution IDs and outcomes with `takomi_board update_task`.
 
 Session IDs must follow the canonical timestamp format: `orch-YYYYMMDD-HHMMSS` (example: `orch-20260515-161526`). Use this exact ID for both the markdown folder and the board JSON state.
 
@@ -107,14 +107,19 @@ Before calling `takomi_board expand_stage`:
 - If `takomi_board` produced generic task packets, immediately repair them with detailed markdown before dispatching more work.
 
 ## Phase 4: Delegation
-After decomposition, delegation is the default execution path. Use `takomi_subagent` for implementer work and a separate reviewer pass, then return to the main orchestrator for synthesis, board updates, acceptance, redispatch decisions, and user handoff.
+After decomposition, delegation is the default execution path. In T3, call `orchestrator_capabilities` and apply Takomi's routing policy to the live provider/model catalog. Choose the available T3 tools that fit the work: `delegate_task` for child work, `t3_thread_launch` for separate conversations and worktree-bound work, and `schedule_task` for recurring work. These are examples, not a fixed sequence. Follow each tool's authorization and workspace rules, including explicit user requests for separate threads and recurring work. Include the chosen Takomi persona and task context in execution prompts. In standalone Pi, use `takomi_subagent` for implementer work and a separate reviewer pass. Return to the main orchestrator for synthesis, board updates, acceptance, redispatch decisions, and user handoff.
+
+Default to the Takomi harness for spawned agents unless the user explicitly requests another harness. In T3, resolve the Takomi provider instance from orchestrator_capabilities and select it explicitly in the tool's provider selection fields, then choose a model and supported options within that instance using the routing policy. A model provider prefix such as openai-codex/ does not select the Codex CLI harness. A model-only request keeps the Takomi harness; if that model cannot run there, explain and ask before switching harnesses.
+
+Routing preferences are defaults, not a closed list: honor explicit user requests for a model, provider, harness, or effort level even when the policy does not mention them. Verify availability and support in the current catalog or registry; if unavailable, explain rather than silently substitute. Explicit allowlists and approval requirements still apply.
 
 Direct execution remains appropriate for small one-shot tasks, unavailable delegation tooling, or explicit user overrides such as "do it yourself", "no subagents", "no new threads", or `/takomi subagents off`.
 
 When delegating:
 - send self-contained task instructions
 - include required workflow and relevant context
-- preserve conversation IDs for review loops
+- preserve conversation IDs for standalone Takomi review loops; for T3 delegated review rounds, call `delegate_task` again with prior review context and a new `clientRequestId`, and track the new task ID
+- use T3's status, cancellation, and completion tools for T3 work; resolve uncertain launches and reuse the same `clientRequestId` where supported rather than launching duplicates or falling back to Takomi execution
 - keep retries scoped and actionable
 - do not overload a subagent with unrelated work
 

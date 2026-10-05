@@ -162,6 +162,10 @@ try {
   assert.match(resultText(invalidExpansion), /shallow-task-markdown/);
   assert.equal((JSON.parse(await fs.readFile(statePath, "utf8"))).tasks.length, 1, "invalid expansion does not append tasks");
   assert.equal(await fs.readFile(paths.masterPlan, "utf8"), authoredPlan);
+  const beforeExpansion = JSON.parse(await fs.readFile(statePath, "utf8"));
+  beforeExpansion.createdAt = "2020-01-01T00:00:00.000Z";
+  beforeExpansion.updatedAt = "2020-01-02T00:00:00.000Z";
+  await fs.writeFile(statePath, JSON.stringify(beforeExpansion, null, 2));
   const expansion = await execute({
     action: "expand_stage",
     sessionId,
@@ -169,12 +173,20 @@ try {
     masterPlanMarkdown: "short replacement",
     tasks: [{ id: "BLD-003", title: "Implement safely", role: "coder", checklist: ["Verify"], expectedArtifacts: ["code"], taskMarkdown: taskDoc("BLD-003", "Implement safely") }],
   });
+  const expandedState = JSON.parse(await fs.readFile(statePath, "utf8"));
+  assert.equal(expandedState.createdAt, beforeExpansion.createdAt, "stage expansion preserves the session creation time");
+  assert.ok(Date.parse(expandedState.updatedAt) > Date.parse(beforeExpansion.updatedAt), "stage expansion refreshes the session update time");
   assert.equal(await fs.readFile(paths.masterPlan, "utf8"), authoredPlan, "stage expansion preserves a human-authored master plan byte-for-byte");
   assert.equal(expansion.details.masterPlanDisposition, "preserved", "stage expansion reports preservation disposition");
   assert.equal(await fs.readFile(path.join(workspace, "docs", "tasks", "orchestrator-sessions", sessionId, "pending", "BLD-003_implement_safely.task.md"), "utf8"), taskDoc("BLD-003", "Implement safely"));
   assert.match(resultText(expansion), /WARNING: Preserved/, "stage expansion visibly warns when incoming content is rejected");
 
+  expandedState.updatedAt = "2020-01-03T00:00:00.000Z";
+  await fs.writeFile(statePath, JSON.stringify(expandedState, null, 2));
   await execute({ action: "update_task", sessionId, taskId: "BLD-003", status: "in-progress" });
+  const updatedState = JSON.parse(await fs.readFile(statePath, "utf8"));
+  assert.equal(updatedState.createdAt, beforeExpansion.createdAt, "task updates preserve the session creation time");
+  assert.ok(Date.parse(updatedState.updatedAt) > Date.parse(expandedState.updatedAt), "task updates refresh the session update time");
   assert.equal(await fs.readFile(paths.masterPlan, "utf8"), authoredPlan, "task status changes cannot alter the authored master plan");
 
   const currentHash = (await import("node:crypto")).createHash("sha256").update(authoredPlan).digest("hex");

@@ -1246,7 +1246,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
     promptSnippet: "Register or update Takomi session/state/markdown artifacts; subagent execution happens elsewhere.",
     promptGuidelines: [
       "Use this when you need a concrete orchestrator session directory and task artifacts on disk.",
-      "takomi_board never runs subagents. Author the human-facing markdown first, use takomi_subagent for execution, then return here with takomi_board update_task to record the outcome.",
+      "takomi_board tracks plans and task records, not execution. Author the human-facing markdown first. Inside T3 Code, keep Takomi's orchestration rules and choose the available T3 execution tools that fit the work; treat takomi_subagent as inactive for execution. Outside T3, use takomi_subagent. Record execution IDs and outcomes with takomi_board update_task.",
       "Session IDs must use the canonical timestamp format orch-YYYYMMDD-HHMMSS. Use the same sessionId for the authored docs folder and the board JSON state.",
       "Author master_plan.md and each new task packet before init_session or expand_stage. Supply masterPlanMarkdown and taskMarkdown or write the files under docs/tasks/orchestrator-sessions/<id> first. Reuse that sessionId; do not create a second session.",
       "JSON fields should carry IDs/status/roles/workflow/dependencies/checklists for tracking, not replace expressive markdown.",
@@ -1254,7 +1254,7 @@ export default function takomiRuntime(pi: ExtensionAPI) {
       "If a task packet would render with Scope/Definition Of Done/Expected Artifacts as None specified, repair it before launching subagents.",
       "A new session should normally begin Genesis-first, then expand Design and Build into as many tasks as the scope actually needs.",
       "If the request is small enough, do not force orchestration just because the tool exists.",
-      "If a reviewed task needs more work, reuse the task conversationId when you call takomi_subagent again, then update the board with the new result.",
+      "If a reviewed task needs more work, reuse its conversationId with takomi_subagent; for T3, delegate a new review round with prior context and a new task ID. Then update the board with the result.",
     ],
     parameters: Type.Object({
       action: StringEnum(["init_session", "expand_stage", "show_workflows", "show_session", "update_task", "replace_master_plan"] as const),
@@ -1413,17 +1413,10 @@ ${stateJson}`
         persistState();
         syncContextPanelState();
         await refreshUi(ctx, state, footerStateRef);
-        const nextState = buildSessionState(
-          sessionState.sessionId,
-          sessionState.title,
-          sessionState.tasks,
-          new Date(),
-          {
-            sessionIntent: sessionState.sessionIntent,
-            lifecycle: sessionState.lifecycle,
-            artifacts: sessionState.artifacts,
-          },
-        );
+        const nextState = normalizeSessionState({
+          ...sessionState,
+          updatedAt: new Date().toISOString(),
+        });
         const paths = await syncTaskArtifacts(ctx.cwd, nextState);
         await syncBoardTaskRunState(
           ctx,
@@ -1456,17 +1449,10 @@ ${stateJson}`
         } catch (error) {
           return createBoardErrorResult(error instanceof Error ? error.message : String(error), "invalid-task-routing", "error");
         }
-        let nextState = buildSessionState(
-          sessionState.sessionId,
-          sessionState.title,
+        let nextState = normalizeSessionState({
+          ...sessionState,
           tasks,
-          new Date(),
-          {
-            sessionIntent: sessionState.sessionIntent,
-            lifecycle: sessionState.lifecycle,
-            artifacts: sessionState.artifacts,
-          },
-        );
+        });
         nextState = markStageExpanded(nextState, params.stage, params.notes);
         const invalidDocs = await validateBoardAuthoredDocs(ctx.cwd, nextState, params.tasks as IncomingTask[], params.masterPlanMarkdown, tasks.slice(sessionState.tasks.length));
         if (invalidDocs) return invalidDocs;
@@ -1718,10 +1704,11 @@ ${stateJson}`
       orchestrationActive ? "Task fan-out is flexible. Do not force exactly three tasks; decompose Genesis, Design, and Build work to fit the actual scope." : "",
       orchestrationActive ? "A new orchestration session should usually begin with one Genesis foundation task that creates or updates the required markdown artifacts, then expand later stages only when the scope justifies it." : "",
       orchestrationActive ? "If a follow-up request is small, one-shot it. If it is multi-part or large, create or expand an orchestration session instead of pretending it is a single task." : "",
-      "Before any Takomi subagent dispatch or model override, use the injected Pi model-registry context and project routing policy. Prefer provider-qualified model IDs. Do not run `pi --list-models` unless the registry context is missing or the user asks for a visible diagnostic.",
+      "Inside T3 Code, keep following Takomi's personas, routing policy, lifecycle, planning, review, approval, and task-tracking rules, but treat takomi_subagent as inactive for execution. Discover capabilities with orchestrator_capabilities and choose available T3 tools by purpose: delegate_task for child work, t3_thread_launch for separate conversations and worktree-bound work, and schedule_task for recurring work. Follow each tool's authorization and workspace rules, including explicit user requests for separate threads and recurring work. Include the chosen persona and task context in execution prompts. Outside T3, use Takomi's normal subagent execution tools.",
+      "Apply Takomi's routing policy when choosing models. Default to the Takomi harness for spawned agents unless the user explicitly requests another harness. In T3, resolve the Takomi provider instance from orchestrator_capabilities and select it explicitly in the tool's provider selection fields, then choose a model and supported options within that instance using the routing policy. A model provider prefix such as openai-codex/ does not select the Codex CLI harness. A model-only request keeps the Takomi harness; if that model cannot run there, explain and ask before switching harnesses. Routing preferences are defaults, not a closed list: honor explicit user requests for a model, provider, harness, or effort level even when the policy does not mention them. Verify availability and support in the current catalog or registry; if unavailable, explain rather than silently substitute. Explicit allowlists and approval requirements still apply. In T3, resolve provider instances, models, and options from orchestrator_capabilities. In standalone Pi, use the injected Pi model-registry context and prefer provider-qualified model IDs. Run `pi --list-models` only when registry context is missing or the user asks for a visible diagnostic.",
       "When useful, state the current Takomi mode/stage and the recommended next step.",
       orchestrationActive && effectiveState.stage === "build"
-        ? "For build orchestration, use takomi_subagent to dispatch work to specialist subagents, then record the result on takomi_board; reuse the same conversation id when sending fixes back to the agent."
+        ? "For build orchestration, record execution IDs and outcomes on takomi_board. In T3, use its status, cancellation, and completion tools. Resolve uncertain launches and reuse the same clientRequestId where supported rather than launching duplicate work or falling back to Takomi execution."
         : "",
     ].filter(Boolean);
 

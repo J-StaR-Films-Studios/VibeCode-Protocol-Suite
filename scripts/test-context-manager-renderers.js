@@ -82,7 +82,7 @@ try {
   await addJsExtensions(outDir);
   await fs.mkdir(path.join(outDir, "src"), { recursive: true });
   await fs.mkdir(path.join(outDir, ".pi", "takomi"), { recursive: true });
-  await fs.copyFile(path.join(repoRoot, ".pi", "takomi", "model-routing.md"), path.join(outDir, ".pi", "takomi", "model-routing.md"));
+  await fs.writeFile(path.join(outDir, ".pi", "takomi", "model-routing.md"), "# Test routing policy\n\nSol Low: use for ordinary judgment.\n");
   const isolatedHome = path.join(tempRoot, "isolated-home");
   process.env.HOME = isolatedHome;
   process.env.USERPROFILE = isolatedHome;
