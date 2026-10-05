@@ -1,7 +1,7 @@
 ---
 name: marketing-growth
 displayName: Marketing & Growth Suite
-description: Use when planning product marketing, writing marketing copy, designing pricing tiers, building programmatic SEO pages, optimizing on-page SEO, planning social media calendars, running Twitter automation, conducting Google Trends research, brainstorming brand/domain names, or producing YouTube videos.
+description: Use when planning product marketing, writing marketing copy, designing pricing tiers, building programmatic SEO pages, optimizing on-page SEO, managing social media accounts and publishing queues, planning social media calendars, running Twitter automation, conducting Google Trends research, brainstorming brand/domain names, or producing YouTube videos.
 version: 2.0.0
 author: J StaR Films
 tags: [marketing, copywriting, seo, pricing, social, naming, youtube]
@@ -24,6 +24,7 @@ This is the router for product marketing, conversion copywriting, SEO, naming, a
 |---|---|---|
 | Marketing Copy | `copywriting/SKILL.md` | Writing landing pages, headlines, hero sections, value props |
 | Social Content | `social-content/SKILL.md` | Creating content calendars, threads, LinkedIn posts |
+| Social Media Manager | `social-media-manager/SKILL.md` | Managing an account's content, approvals and publishing queue |
 | Twitter Automation | `twitter-automation/SKILL.md` | Automating Twitter/X posting and scheduling |
 | YouTube Pipeline | `youtube-pipeline/SKILL.md` | Full YouTube pipeline: strategy, scripting, production |
 

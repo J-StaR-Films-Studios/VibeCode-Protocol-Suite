@@ -1,0 +1,4 @@
+interface:
+  display_name: "Social Media Manager"
+  short_description: "Plan, create and maintain a verified social content queue"
+  default_prompt: "Use $social-media-manager to manage my content planning, production and publishing queue using the available material and my brand preferences."
