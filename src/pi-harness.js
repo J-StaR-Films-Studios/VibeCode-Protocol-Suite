@@ -329,7 +329,26 @@ function quoteWindowsCommandArg(value) {
   const text = String(value);
   if (text.length === 0) return '""';
   if (!/[\s"&|<>^()%!]/.test(text)) return text;
-  return `"${text.replace(/"/g, '\\"')}"`;
+
+  // Properly escape backslashes that precede a quote (and a trailing run of
+  // backslashes before the closing quote) so a crafted value cannot break out
+  // of the quoted segment and inject additional cmd.exe commands/arguments.
+  let escaped = '';
+  let backslashes = 0;
+  for (const char of text) {
+    if (char === '\\') {
+      backslashes += 1;
+      continue;
+    }
+    if (char === '"') {
+      escaped += '\\'.repeat(backslashes * 2 + 1) + '"';
+    } else {
+      escaped += '\\'.repeat(backslashes) + char;
+    }
+    backslashes = 0;
+  }
+  escaped += '\\'.repeat(backslashes * 2);
+  return `"${escaped}"`;
 }
 
 function resolveCommandForSpawn(command, args = []) {
