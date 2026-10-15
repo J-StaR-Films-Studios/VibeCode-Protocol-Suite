@@ -1,9 +1,10 @@
 ---
 name: ai-media
 displayName: AI Media & Generation Suite
-description: Use when generating AI media, avatar videos, AI marketing videos with Google Flow, producing AI podcasts, product photography, social media content, voice cloning, photo books, or editing sermons and talking-head videos in DaVinci Resolve.
+description: Use when generating AI media, avatar videos, AI marketing videos with Google Flow, producing AI podcasts, product photography, social media content, voice cloning, photo books, or editing videos with editorial judgment, clip selection, B-roll sourcing, motion direction and standalone story-driven motion films.
 version: 2.0.0
 author: J StaR Films
+coauthored: J StaR Films / Takomi
 tags: [ai, media, flow, avatar, video, voice, podcast, photography]
 ---
 
@@ -18,7 +19,7 @@ This is the router for AI media generation, synthetic video, voice cloning, and 
 | Takomi Flow | `takomi-flow/SKILL.md` | Operating Google Flow via browser automation for video/images |
 | Avatar Video | `ai-avatar-video/SKILL.md` | Creating talking avatar videos (HeyGen, D-ID, Runway) |
 | Marketing Videos | `ai-marketing-videos/SKILL.md` | Scripting and generating AI video ads and promos |
-| Resolve Editing | `resolve-video-editing/SKILL.md` | Editing sermons and talking-head videos in DaVinci Resolve |
+| Video Editing & Motion Films | `video-editor/SKILL.md` | Editing client ads, talking-head videos, YouTube and sermons; directing motion graphics and standalone story-driven films |
 
 ## Audio & Voice
 

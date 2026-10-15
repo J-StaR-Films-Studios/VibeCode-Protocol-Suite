@@ -22,6 +22,12 @@ This isn't prompt engineering. This is **orchestrated development** — a battle
 
 ---
 
+## Takomi Code
+
+See [Takomi Code](https://github.com/JStaRFilms/Takomi-Code) for the companion project.
+
+---
+
 ## Features
 
 - **🧠 160+ Skills Across 31 Suites** - Specialized capabilities from WebGL creative development to CommonKADS expert systems, AI video, and security audits, installed on demand

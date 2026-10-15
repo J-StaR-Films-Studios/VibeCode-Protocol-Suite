@@ -186,7 +186,7 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── global-brand-namer/SKILL.md
 │   └── youtube-pipeline/SKILL.md
 │
-├── 🔷 ai-media/                       (8 sub-skills)
+├── 🔷 ai-media/                       (9 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
 │   ├── takomi-flow/SKILL.md
 │   ├── ai-avatar-video/SKILL.md
@@ -195,7 +195,8 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── ai-podcast-creation/SKILL.md
 │   ├── ai-product-photography/SKILL.md
 │   ├── ai-social-media-content/SKILL.md
-│   └── ai-voice-cloning/SKILL.md
+│   ├── ai-voice-cloning/SKILL.md
+│   └── video-editor/SKILL.md
 │
 └── 🔷 remotion/                       (2 sub-skills)
     ├── SKILL.md                       (Router + Best Practices)

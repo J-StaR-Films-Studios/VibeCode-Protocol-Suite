@@ -115,6 +115,9 @@ try {
   result = await installer.installBundledSkills('test', { mode: 'all', selectedSkills: allSkills });
   assert.equal(result.selectedCount, allSkills.length, 'all mode should select every bundled skill');
   assert.equal(await fs.pathExists(skillPath('ai-media')), true);
+  assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'video-editor', 'SKILL.md')), true, 'media suite should install the renamed video-editor skill');
+  assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'video-editor', 'scripts', 'transcribe_groq.py')), true, 'video-editor should retain its transcription helper');
+  assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'resolve-video-editing')), false, 'media suite should not install the obsolete editing folder');
   manifest = await installer.readSkillsInstallManifest();
   assert.equal(manifest.owned['frontend-ui'].category, 'frontend', 'installer manifest must persist real catalog taxonomy for flat skills');
   assert.equal(manifest.owned['web-dev-standards'].category, 'dev-workflows', 'future explicit installs must persist transactional email taxonomy');
