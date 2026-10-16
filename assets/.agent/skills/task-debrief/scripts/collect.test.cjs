@@ -45,7 +45,7 @@ try {
   const unpriced = run([child], 1, 'unpriced');
   assert.equal(unpriced.status, 0, unpriced.stderr);
   assert.equal(JSON.parse(fs.readFileSync(path.join(unpriced.out, 'usage.json'))).scope.completeRecordedUsage, false);
-  console.log('task-retrospective collector: 7 scenarios passed');
+  console.log('task-debrief collector: 7 scenarios passed');
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }

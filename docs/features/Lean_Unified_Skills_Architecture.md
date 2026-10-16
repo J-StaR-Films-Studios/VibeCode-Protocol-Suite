@@ -222,7 +222,7 @@ Specialized tools that remain standalone at the top level:
 - `high-fidelity-extraction` (DOM scraping & web intelligence protocol)
 - `algorithmic-art` (Generative art with p5.js)
 - `cos` (CreativeOS CLI project and storage operations)
-- `task-retrospective` (On-demand private task and usage audit)
+- `task-debrief` (On-demand private task and usage audit)
 
 ---
 
@@ -241,4 +241,4 @@ Specialized tools that remain standalone at the top level:
 | `ai-media` | AI Media / Content Creation | `ai-media` |
 | `marketing-seo` | Marketing / SEO / Growth | `marketing-growth` |
 | `office-docs` | Docs / Office / Extraction | `office-docs`, `high-fidelity-extraction` |
-| `agent-engineering` | Agent Engineering & Prompting | `agent-engineering`, `task-retrospective` |
+| `agent-engineering` | Agent Engineering & Prompting | `agent-engineering`, `task-debrief` |

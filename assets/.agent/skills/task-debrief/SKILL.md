@@ -1,15 +1,15 @@
 ---
-name: task-retrospective
-description: Use when the user explicitly invokes a task retrospective to audit a task, its child agents, time, logged model cost, and workflow lessons in a private report.
+name: task-debrief
+description: Use when the user invokes a task debrief to verify the agent's completed work and audit its child agents, time, logged model cost, and workflow lessons in a private report.
 author: J StaR Films
 coauthored: J StaR Films / Takomi
-version: 1.0.1
+version: 1.1.0
 disable-model-invocation: true
 ---
 
-# Task retrospective
+# Task debrief
 
-Run this only when the user invokes `/skill:task-retrospective`. Arguments may name a task or time range. This is a read-only audit of work, apart from files in `C:/Users/johno/.agents/task-audits/`. Do not modify project files, skills, configuration or external services as part of the audit. Suggest improvements; seek separate approval to apply any of them. Do not spawn agents to audit agents by default.
+Run this only when the user invokes `/skill:task-debrief`. Arguments may name a task or time range. This is a read-only audit of work, apart from files in `C:/Users/johno/.agents/task-audits/`. Do not modify project files, skills, configuration or external services as part of the audit. Suggest improvements; seek separate approval to apply any of them. Do not spawn agents to audit agents by default.
 
 1. **Completion gate, before any audit work.** Check your own live `todo` list and Takomi board, if used, for work belonging to the task being audited. Verify completed items against deliverables and checks, not status labels alone; report any relevant `pending`, `in_progress`, or `blocked` items. Do not mistake unrelated tasks for this task's unfinished work, silently mark items complete, or treat deferred work as finished. If this task has unfinished work, report it and stop before opening transcripts, collecting usage, or writing notes. If its task state cannot be inspected, report that limit and stop. Do not ask the user whether their to-do list is done; this is the agent's completion check. Continue with unfinished or unverifiable work only when the user explicitly requests an interim audit, and label it as such. After the gate passes, locate the invoking user message timestamp and use it as the cutoff so this audit does not count itself. If that timestamp is unavailable, state the chosen cutoff and its limitation. Use the current `PI_SESSION_FILE` from a Pi shell tool as the parent journal. If the journal holds multiple tasks, establish the requested task's start and end from the user's messages and completion; ask if the boundary is ambiguous. An ephemeral session or unavailable journal means costs are unknown, not zero. The current project is the repository root (or the working directory if no repository). Use its directory name as the report's project label; distinguish same-named projects by a short path hash if needed. Make a new report directory `C:/Users/johno/.agents/task-audits/<project>/<task-id>/`, using the task's existing thread ID or journal session ID for `<task-id>`. Keep reports private and do not copy full transcripts or personal records into them.
 2. **Establish child ownership.** If T3 is available, get the current thread ID from `t3_thread_list` and paginate `includeSubagents: true` across the project. Select only descendants with an unbroken `parentThreadId` chain to this thread, not merely similar titles. Use `t3_thread_read` activity for each owned child to record its runs and their statuses/times. Match each child to a local Pi journal by a unique session name, creation time and worktree/session provenance. Inspect only candidate session headers, not every unrelated chat's messages. A matching title alone is insufficient. If several journals could match, leave that child unmatched and disclose the gap. If T3 isn't available, use explicit task/child IDs in local execution artifacts or user-supplied manifests; report ownership as unverified. Other providers' agents may have no local Pi journal; include them as missing-usage children, not as $0 agents. Never infer ownership from a project-wide file count.

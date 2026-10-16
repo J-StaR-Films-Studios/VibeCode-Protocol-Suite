@@ -55,8 +55,8 @@ try {
   assert.equal(catalog.getSkillCategory('unslop'), 'core', 'unslop must use the core category');
   assert.equal(catalog.getSkillCategory('babysit-pr'), 'core', 'Babysit PR must use the core category');
   assert.equal(catalog.getSkillCategory('cos'), 'dev-workflows', 'COS must be an optional CLI skill');
-  assert.equal(catalog.getSkillCategory('task-retrospective'), 'agent-engineering', 'task retrospective must be optional');
-  assert.equal(core.includes('cos') || core.includes('task-retrospective'), false, 'new standalone skills must not enter Core');
+  assert.equal(catalog.getSkillCategory('task-debrief'), 'agent-engineering', 'task debrief must be optional');
+  assert.equal(core.includes('cos') || core.includes('task-debrief'), false, 'new standalone skills must not enter Core');
   assert.equal(catalog.getSkillCategory('tailscale'), 'dev-workflows', 'Tailscale suite must use the dev-workflows category');
   assert.equal(core.includes('tailscale'), false, 'Tailscale suite must be opt-in');
   assert.equal(await fs.pathExists(path.join(process.cwd(), 'assets', '.agent', 'skills', 'tailscale', 'html-private-pages', 'SKILL.md')), true);
@@ -73,7 +73,8 @@ try {
 
   const allSkills = await catalog.listBundledSkillNames();
   assert.equal(allSkills.includes('pr-babysitter'), false, 'duplicate PR skill must not be bundled');
-  assert.equal(allSkills.includes('cos') && allSkills.includes('task-retrospective'), true, 'optional standalone skills must be bundled');
+  assert.equal(allSkills.includes('cos') && allSkills.includes('task-debrief'), true, 'optional standalone skills must be bundled');
+  assert.equal(allSkills.includes('task-retrospective'), false, 'old debrief skill name must not remain bundled');
 
   // Manual folder with the same name as a bundled skill must not be overwritten
   // or claimed in the ownership manifest, even on repeated installs.
@@ -123,7 +124,7 @@ try {
   assert.equal(await fs.pathExists(path.join(skillPath('web-dev-standards'), 'shared-resend-portfolio', 'SKILL.md')), true, 'web-dev suite should include consolidated company email rules');
   assert.equal(await fs.pathExists(path.join(skillPath('web-dev-standards'), 'resend-company')), false, 'duplicate Resend subskill must not be bundled');
   assert.equal(await fs.pathExists(path.join(skillPath('frontend-ui'), 'unslop-gpt-ui', 'SKILL.md')), true, 'frontend suite should include UI-copy review');
-  assert.equal(await fs.pathExists(path.join(skillPath('task-retrospective'), 'scripts', 'collect.cjs')), true, 'task retrospective should include its collector');
+  assert.equal(await fs.pathExists(path.join(skillPath('task-debrief'), 'scripts', 'collect.cjs')), true, 'task debrief should include its collector');
   assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'video-editor', 'scripts', 'transcribe_groq.py')), true, 'video-editor should retain its transcription helper');
   assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'resolve-video-editing')), false, 'media suite should not install the obsolete editing folder');
   manifest = await installer.readSkillsInstallManifest();

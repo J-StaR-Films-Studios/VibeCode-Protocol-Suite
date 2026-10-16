@@ -133,7 +133,7 @@ export const SKILL_CATEGORIES = [
     skills: [
       'agent-engineering',
       'role-delivery',
-      'task-retrospective',
+      'task-debrief',
     ],
   },
 ];
