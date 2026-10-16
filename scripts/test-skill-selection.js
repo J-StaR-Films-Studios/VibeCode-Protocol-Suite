@@ -120,7 +120,8 @@ try {
   assert.equal(result.selectedCount, allSkills.length, 'all mode should select every bundled skill');
   assert.equal(await fs.pathExists(skillPath('ai-media')), true);
   assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'video-editor', 'SKILL.md')), true, 'media suite should install the renamed video-editor skill');
-  assert.equal(await fs.pathExists(path.join(skillPath('web-dev-standards'), 'resend-company', 'SKILL.md')), true, 'web-dev suite should include company email rules');
+  assert.equal(await fs.pathExists(path.join(skillPath('web-dev-standards'), 'shared-resend-portfolio', 'SKILL.md')), true, 'web-dev suite should include consolidated company email rules');
+  assert.equal(await fs.pathExists(path.join(skillPath('web-dev-standards'), 'resend-company')), false, 'duplicate Resend subskill must not be bundled');
   assert.equal(await fs.pathExists(path.join(skillPath('frontend-ui'), 'unslop-gpt-ui', 'SKILL.md')), true, 'frontend suite should include UI-copy review');
   assert.equal(await fs.pathExists(path.join(skillPath('task-retrospective'), 'scripts', 'collect.cjs')), true, 'task retrospective should include its collector');
   assert.equal(await fs.pathExists(path.join(skillPath('ai-media'), 'video-editor', 'scripts', 'transcribe_groq.py')), true, 'video-editor should retain its transcription helper');

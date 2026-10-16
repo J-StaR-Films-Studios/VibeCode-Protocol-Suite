@@ -94,7 +94,7 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── optimize-agent-context/SKILL.md
 │   └── crafting-effective-readmes/SKILL.md
 │
-├── 🔷 web-dev-standards/              (9 sub-skills)
+├── 🔷 web-dev-standards/              (8 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
 │   ├── codebase-design/SKILL.md       (Deep Modules + Design-It-Twice)
 │   ├── test-driven-development/SKILL.md (Mock boundaries & observable behavior)
@@ -103,8 +103,7 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── nextjs-standards/SKILL.md
 │   ├── upgrading-expo/SKILL.md
 │   ├── monorepo-management/SKILL.md
-│   ├── shared-resend-portfolio/SKILL.md
-│   └── resend-company/SKILL.md
+│   └── shared-resend-portfolio/SKILL.md (Includes J StaR's company policy)
 │
 ├── 🔷 git-github-tools/               (5 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
