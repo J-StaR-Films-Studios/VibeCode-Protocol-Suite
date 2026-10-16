@@ -113,6 +113,7 @@ This enables safe reconciliation across setup, refresh, global store sync, and h
 
 ## Implemented Coverage
 - Direct global skills target: `takomi setup skills`, `takomi refresh skills`, and `takomi setup all` skills portion.
+- Refresh installs the npm package first, then runs the remaining target-specific Pi and skills steps in a new process from the updated global package. If that package cannot be located, refresh stops rather than offering the previous version's skill catalog.
 - Multi-IDE global store setup: `takomi setup` / legacy `takomi install` skills and workflows portions.
 - Harness sync: ownership-aware copying and pruning for skills/workflows synced from the global store.
 - Safety behavior: manual collisions and modified Takomi-owned resources are preserved and reported.

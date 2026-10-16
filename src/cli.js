@@ -66,7 +66,7 @@ import {
   SKILL_CATEGORIES,
 } from './skills-catalog.js';
 import { promptSkillCategoryTui } from './skills-selection-tui.js';
-import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, upgradeTakomiPackage } from './update-check.js';
+import { notifyIfTakomiUpdateAvailable, printTakomiUpdateStatus, runUpdatedTakomi, upgradeTakomiPackage } from './update-check.js';
 import { printTakomiStats } from './takomi-stats.js';
 
 const packageJson = await fs.readJson(PATHS.packageJson);
@@ -722,10 +722,10 @@ async function upgrade(target = 'all') {
     return;
   }
 
-  if (normalizedTarget === 'cli') {
-    return;
-  }
+  if (normalizedTarget !== 'cli') process.exitCode = runUpdatedTakomi(normalizedTarget);
+}
 
+async function finishUpgrade(normalizedTarget) {
   if (normalizedTarget === 'pi') {
     console.log(pc.cyan('\n📦 Updating Pi CLI...\n'));
     printPiInstallResult(await updatePiCliPackage());
@@ -1374,6 +1374,16 @@ program
   .command('refresh [target]')
   .description('One-command refresh: update Takomi plus Pi/assets/skills, or refresh pi|skills|project|all')
   .action(refresh);
+
+program
+  .command('__refresh-installed [target]', { hidden: true })
+  .action(async (target = 'all') => {
+    if (!['all', 'pi', 'skills'].includes(target)) {
+      process.exitCode = 1;
+      return;
+    }
+    await finishUpgrade(target);
+  });
 
 program
   .command('computer-use <action>')

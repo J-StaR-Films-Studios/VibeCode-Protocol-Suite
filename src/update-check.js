@@ -149,3 +149,26 @@ export function upgradeTakomiPackage() {
   console.log(pc.red('\nTakomi update failed. Try manually: npm install -g takomi@latest'));
   return result.status || 1;
 }
+
+export function runUpdatedTakomi(target, globalRoot) {
+  if (!globalRoot) {
+    const rootResult = process.platform === 'win32'
+      ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'root', '-g'], { encoding: 'utf8' })
+      : spawnSync('npm', ['root', '-g'], { encoding: 'utf8' });
+    if (rootResult.status !== 0 || !rootResult.stdout?.trim()) {
+      console.error(pc.red('Could not locate the updated global Takomi package. Run `takomi setup skills` after confirming the npm installation.'));
+      return 1;
+    }
+    globalRoot = rootResult.stdout.trim();
+  }
+
+  const bin = path.join(globalRoot, 'takomi', 'bin', 'takomi.js');
+  if (!fs.existsSync(bin)) {
+    console.error(pc.red(`Updated Takomi CLI not found at ${bin}. Stopping before installing stale skills.`));
+    return 1;
+  }
+
+  const result = spawnSync(process.execPath, [bin, '__refresh-installed', target], { stdio: 'inherit' });
+  if (result.error) console.error(pc.red(`Could not start updated Takomi: ${result.error.message}`));
+  return result.status ?? 1;
+}
