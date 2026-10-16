@@ -94,7 +94,7 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── optimize-agent-context/SKILL.md
 │   └── crafting-effective-readmes/SKILL.md
 │
-├── 🔷 web-dev-standards/              (8 sub-skills)
+├── 🔷 web-dev-standards/              (9 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
 │   ├── codebase-design/SKILL.md       (Deep Modules + Design-It-Twice)
 │   ├── test-driven-development/SKILL.md (Mock boundaries & observable behavior)
@@ -103,7 +103,8 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── nextjs-standards/SKILL.md
 │   ├── upgrading-expo/SKILL.md
 │   ├── monorepo-management/SKILL.md
-│   └── shared-resend-portfolio/SKILL.md
+│   ├── shared-resend-portfolio/SKILL.md
+│   └── resend-company/SKILL.md
 │
 ├── 🔷 git-github-tools/               (5 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
@@ -113,9 +114,11 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── github-ops/SKILL.md
 │   └── pr-comment-fix/SKILL.md
 │
-├── 🔷 frontend-ui/                    (10 sub-skills)
+├── 🔷 frontend-ui/                    (13 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
 │   ├── prototyping-variants/SKILL.md  (Logic simulator demo & UI switch bar)
+│   ├── story-engineer/SKILL.md
+│   ├── creative-web-development/SKILL.md
 │   ├── frontend-design/SKILL.md
 │   ├── web-design-guidelines/SKILL.md
 │   ├── ui-ux-pro-max/SKILL.md
@@ -124,7 +127,8 @@ Each suite is installed as a complete atomic directory. Standard harnesses disco
 │   ├── component-analysis/SKILL.md
 │   ├── figma/SKILL.md
 │   ├── stitch/SKILL.md
-│   └── webapp-testing/SKILL.md
+│   ├── webapp-testing/SKILL.md
+│   └── unslop-gpt-ui/SKILL.md
 │
 ├── 🔷 office-docs/                    (6 sub-skills)
 │   ├── SKILL.md                       (Router + Directory)
@@ -218,6 +222,8 @@ Specialized tools that remain standalone at the top level:
 - `audit-website` (Website SEO and security audit via Squirrelscan)
 - `high-fidelity-extraction` (DOM scraping & web intelligence protocol)
 - `algorithmic-art` (Generative art with p5.js)
+- `cos` (CreativeOS CLI project and storage operations)
+- `task-retrospective` (On-demand private task and usage audit)
 
 ---
 
@@ -228,7 +234,7 @@ Specialized tools that remain standalone at the top level:
 | `core` | Core / Recommended | `takomi`, `grill-me`, `code-review`, `sync-docs`, `security-audit`, `agent-recovery`, `avoid-feature-creep`, `git-commit-generation` |
 | `code-intelligence` | Code Intelligence & Comprehension | `code-intelligence` |
 | `principles` | Engineering Principles | `engineering-principles` |
-| `dev-workflows` | Developer / Frameworks | `web-dev-standards`, `ai-sdk`, `git-github-tools`, `context7`, `jules`, `anti-gravity`, `wait-what`, `bro`, `poteto-mode` |
+| `dev-workflows` | Developer / Frameworks | `web-dev-standards`, `ai-sdk`, `git-github-tools`, `context7`, `cos`, `jules`, `anti-gravity`, `wait-what`, `bro`, `poteto-mode` |
 | `security` | Security & Web Audits | `security-audit`, `audit-website` |
 | `frontend` | Frontend / UI | `frontend-ui` |
 | `convex` | Convex Suite | `convex` |
@@ -236,4 +242,4 @@ Specialized tools that remain standalone at the top level:
 | `ai-media` | AI Media / Content Creation | `ai-media` |
 | `marketing-seo` | Marketing / SEO / Growth | `marketing-growth` |
 | `office-docs` | Docs / Office / Extraction | `office-docs`, `high-fidelity-extraction` |
-| `agent-engineering` | Agent Engineering & Prompting | `agent-engineering` |
+| `agent-engineering` | Agent Engineering & Prompting | `agent-engineering`, `task-retrospective` |

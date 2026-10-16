@@ -1,6 +1,6 @@
 ---
 name: web-dev-standards
-description: Use when designing software architectures ('codebase-design' Deep Modules/Design-It-Twice), writing tests ('test-driven-development' mock boundaries), creating setup scripts ('interactive-wizard'), TypeScript standards, Next.js, Expo, or Monorepos.
+description: Use when designing software architectures ('codebase-design' Deep Modules/Design-It-Twice), writing tests ('test-driven-development' mock boundaries), creating setup scripts ('interactive-wizard'), applying TypeScript, Next.js, Expo, or monorepo standards, or configuring shared-domain Resend email ('resend-company').
 author: J StaR Films / Matt Pocock / P-Stack
 coauthored: J StaR Films / Takomi
 version: 2.0.0
@@ -22,3 +22,4 @@ Architectural doctrines, testing boundaries, language standards, and framework g
 | **`upgrading-expo`** | Expo SDK upgrades and React Native configuration | [`upgrading-expo/SKILL.md`](upgrading-expo/SKILL.md) |
 | **`monorepo-management`** | Turborepo and pnpm workspace dependency and boundary management | [`monorepo-management/SKILL.md`](monorepo-management/SKILL.md) |
 | **`shared-resend-portfolio`** | Shared transactional email integration with Resend | [`shared-resend-portfolio/SKILL.md`](shared-resend-portfolio/SKILL.md) |
+| **`resend-company`** | J StaR's shared-domain sender, per-product keys, contact routing, and email verification rules | [`resend-company/SKILL.md`](resend-company/SKILL.md) |

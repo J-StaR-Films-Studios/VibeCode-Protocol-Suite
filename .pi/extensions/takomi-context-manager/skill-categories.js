@@ -49,6 +49,7 @@ export const SKILL_CATEGORIES = [
       'ai-sdk',
       'git-github-tools',
       'context7',
+      'cos',
       'jules',
       'anti-gravity',
       'wait-what',
@@ -132,6 +133,7 @@ export const SKILL_CATEGORIES = [
     skills: [
       'agent-engineering',
       'role-delivery',
+      'task-retrospective',
     ],
   },
 ];

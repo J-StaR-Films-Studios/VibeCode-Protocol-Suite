@@ -1,6 +1,6 @@
 ---
 name: frontend-ui
-description: Use when designing web or mobile UI, creating prototypes, directing or engineering distinctive web experiences, structuring evidence-based web narratives, applying UI/UX guidance, using 21st.dev components, Stitch, or Figma.
+description: Use when designing web or mobile UI, creating prototypes, directing or engineering distinctive web experiences, structuring evidence-based web narratives, reviewing visible UI copy for unsupported claims ('unslop-gpt-ui'), applying UI/UX guidance, using 21st.dev components, Stitch, or Figma.
 author: J StaR Films / Matt Pocock
 coauthored: J StaR Films / Takomi
 version: 2.2.0
@@ -26,3 +26,4 @@ Design systems, interactive component libraries, throwaway prototyping patterns,
 | **`stitch`** | Component stitching and layout orchestration | [`stitch/SKILL.md`](stitch/SKILL.md) |
 | **`component-analysis`** | Auditing component composition and hierarchy | [`component-analysis/SKILL.md`](component-analysis/SKILL.md) |
 | **`webapp-testing`** | Playwright web application integration testing | [`webapp-testing/SKILL.md`](webapp-testing/SKILL.md) |
+| **`unslop-gpt-ui`** | Audit visible UI copy against actual states, user needs, and supported claims | [`unslop-gpt-ui/SKILL.md`](unslop-gpt-ui/SKILL.md) |

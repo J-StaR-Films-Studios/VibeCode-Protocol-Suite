@@ -1,10 +1,10 @@
 ---
 name: babysit-pr
-description: Use when the user wants to babysit a PR, monitor its checks and review comments, address confirmed findings, track PR readiness, or capture deferred review feedback as follow-up issues.
+description: Use when the user wants to babysit a PR, monitor its checks and review comments, address confirmed findings, or track PR readiness.
 metadata:
   author: J StaR Films
   coauthored: J StaR Films / Takomi
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Babysit PR
@@ -52,27 +52,9 @@ Gather every review channel before editing. Confirm which commit each reviewer i
 - Out of scope
 - Needs user decision
 
-A review comment is a recommendation, not an automatic task. Fix confirmed regressions, correctness or security defects, data-loss risks, tenant-isolation defects, explicit requirement violations, and CI failures caused by this PR. Diagnose failing checks before changing code. Keep optional suggestions, style preferences, and unrelated work out of the PR.
+A review comment is a recommendation, not an automatic task. While babysitting the PR, keep working through confirmed, necessary in-scope failures: regressions, correctness or security defects, data-loss or tenant-isolation risks, explicit requirement violations, and required checks broken by this PR. Diagnose first, make the narrowest fix, push to the PR branch, and recheck the latest head and affected tests and checks. If a fix requires an unapproved design choice, expanded scope, or risky external action, ask the user rather than guessing or calling the PR ready.
 
-## Track worthwhile deferred feedback
-
-Keep useful optional or out-of-scope findings separate from work required for this PR. Verify each finding against the current source and explain why it is worth revisiting and why it is deferred. False positives, already-fixed findings, and rejected suggestions do not need follow-up issues.
-
-Batch worthwhile deferred findings into one approval request. GitHub issues are the default recommendation, not an automatic action. Ask, for example:
-
-> These findings are worth revisiting but are outside this PR's scope. Would you like me to create follow-up GitHub issues and link them in the PR? I can document them in the repo instead, or leave them in this report.
-
-Show the proposed findings and target repository before asking. Wait for explicit approval of the selected findings and destination before creating issues, posting tracking links, or writing repo documentation. General PR-babysitting authorization does not authorize these actions. If the user declines or has not answered, keep the findings in the report and leave threads awaiting that decision open.
-
-For approved GitHub tracking:
-
-1. Confirm the PR's repository and search existing issues for the same findings. Propose reusing matching issues rather than creating duplicates. If an earlier attempt has an uncertain result, check GitHub before retrying.
-2. Create one issue per distinct finding, grouping comments about the same root cause. Use the available GitHub tool or `gh issue create --repo <owner/repo> --title <title> --body-file <file>`.
-3. Include the finding, affected files or behavior, supporting evidence, source PR URL and review-comment URLs, reason for deferral, and a bounded follow-up goal. State that it is optional follow-up work, not a blocker for this PR, and the user may close it if they decide against it. Keep confirmed blockers in the PR's required work.
-4. Verify the issue exists and capture its URL. Reply in each matching review thread with the deferral reason and issue link. For feedback from a top-level PR comment, post the link in a PR comment instead. Use ordinary links, not `Closes` or `Fixes` references, so merging this PR leaves the follow-up issue open.
-5. Resolve a deferred thread only after the user has approved its disposition and the tracking reply has been posted. Record the issue URL in the comment ledger. Report creation or linking failures accurately; keep any successfully created issue URL so a retry does not create a duplicate.
-
-If the user chooses repo documentation, confirm the path and follow the repo's existing backlog or follow-up convention. Record the same finding, source links, deferral reason, and follow-up goal there. Report the path and add it to the ledger instead of creating an issue. Tracking a finding does not authorize implementing it or starting another review round.
+If a finding is worthwhile but unnecessary for this PR and leaving it will not cause a major regression, search for an existing issue and ask the user before creating a new one. Show the finding and target repository; wait for approval before filing an issue or posting tracking links. If the user declines or issue creation is unavailable, report the deferred finding and why. Do not expand the PR to address it. Do not file style nits, speculation, duplicates, or false positives.
 
 ## Limit review rounds
 
@@ -85,7 +67,7 @@ The default process is:
 
 Do not keep asking reviewers for criticism until none remains.
 
-If the final review produces a new finding, report and classify it. Do not fix or reply unless the user authorizes another round. Fix immediately only when the user has already authorized release-blocking security, tenant-isolation, or data-loss corrections.
+These rounds are a default, not a stop condition for confirmed, necessary in-scope failures. If one appears after the final review, classify it, fix it, rerun affected checks, and obtain a focused review of the correction. Continue until blockers and required checks are resolved or a user decision is needed. Do not keep soliciting broad criticism or fixing optional suggestions; defer worthwhile non-blocking work to issues. Never merge or deploy without separate authorization.
 
 ## Reply to review feedback
 
@@ -96,7 +78,7 @@ Reply with one clear disposition:
 - Fixed in `<commit>` and how
 - Already handled in `<commit>`
 - Rejected with framework-specific reasoning
-- Deferred because it is optional or out of scope
+- Deferred as non-blocking and safe to leave out of this PR, with an issue link or a stated reason one could not be filed
 - Waiting for user decision
 
 Before resolving a thread, confirm its finding has been addressed or explained in a reply. Leave threads awaiting a user decision open. Report unanswered and unresolved counts.
@@ -179,14 +161,14 @@ For this project:
 
 ## Completion report
 
-State:
+At the end of the monitoring window or handoff, give a concrete account of the work and its outcome:
 
-- Current PR head
-- Checks that actually passed
-- Failed, blank, stale, or pending checks
-- Comment ledger totals
-- Unanswered and unresolved thread counts
-- New deferred findings, their issue URLs or repo documentation paths, and any declined, pending, or failed tracking requests
-- Final Vercel preview status
-- Runtime E2E status
-- Merge, deployment, and migration authorization
+- PR link, base and current head commit, and whether it is open, blocked, or merged
+- Confirmed errors fixed, the commits and changes that fixed them, and any remaining blockers
+- Tests and builds actually run, with results; checks passed on the current head and any failed, blank, stale, skipped, or pending checks
+- Comment dispositions, unanswered comments, and unresolved thread counts
+- Links to deferred issues and any findings not filed, with the reason
+- Final Vercel preview and runtime E2E status, using the separate readiness labels above
+- Merge, deployment, or migration actions taken, approvals still needed, and real remaining risks
+
+Do not claim a check passed or a release completed unless it was verified.
