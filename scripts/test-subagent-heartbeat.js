@@ -130,7 +130,7 @@ try {
       return () => { globalThis.__detachedUnregisters = (globalThis.__detachedUnregisters ?? 0) + 1; unsubscribe(); };
     }
   `);
-  const indexUrl = await transpile("index.ts", {
+  const indexImports = {
     typebox: typeboxStubUrl,
     "./async-lifecycle": lifecycleStubUrl,
     "./detached-results": detachedStubUrl,
@@ -138,8 +138,43 @@ try {
     "./pi-subagents-internal": internalsStubUrl,
     "./result-heartbeat": heartbeatUrl,
     "./tool-runner": toolRunnerStubUrl,
-  });
+  };
+  const indexUrl = await transpile("index.ts", indexImports);
   const extension = await import(indexUrl);
+
+  for (const [specifier, exportName] of [
+    ["./pi-subagents-internal", "loadPiSubagentsInternals"],
+    ["./async-lifecycle", "initializeTakomiAsyncLifecycle"],
+  ]) {
+    const failingStubUrl = dataModule(`
+      export async function ${exportName}() { throw new Error("EPERM: mkdir async-subagent-results"); }
+      export function resetTakomiAsyncLifecycle() {}
+    `);
+    const failingExtension = await import(await transpile("index.ts", { ...indexImports, [specifier]: failingStubUrl }));
+    const handlers = new Map();
+    await failingExtension.default({
+      registerTool() { assert.fail("unavailable subagents must not register a tool"); },
+      events: { on() { assert.fail("unavailable subagents must not register completion listeners"); } },
+      on(event, handler) { handlers.set(event, handler); },
+    });
+    assert.deepEqual([...handlers.keys()], ["session_start"], "failed initialization only registers a startup warning");
+    const notices = [];
+    await handlers.get("session_start")({}, { hasUI: true, ui: { notify: (message, level) => notices.push({ message, level }) } });
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].level, "warning");
+    assert.match(notices[0].message, /disabled for this session.*EPERM/);
+
+    const originalWarn = console.warn;
+    const warnings = [];
+    try {
+      console.warn = (message) => warnings.push(message);
+      await handlers.get("session_start")({}, { hasUI: false });
+      assert.deepEqual(warnings, [notices[0].message], "non-UI startup reports the warning on stderr");
+    } finally {
+      console.warn = originalWarn;
+    }
+  }
+
   const lifecycleHandlers = new Map();
   const eventHandlers = new Map();
   let completionUnsubscribed = false;

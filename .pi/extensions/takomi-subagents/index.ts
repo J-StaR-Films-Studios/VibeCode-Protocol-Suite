@@ -134,11 +134,24 @@ export default async function takomiSubagents(pi: ExtensionAPI) {
   // callbacks are synchronous, so if we only lazy-load internals during execution
   // a completed takomi_subagent result can fall back to Takomi's plain text
   // renderer and lose the native compact/expanded details shown by `subagent`.
-  await loadPiSubagentsInternals();
-  // A same-process Takomi reload reuses the ExtensionAPI identity, so explicitly
-  // discard the cached engine before replacing its lifecycle generation.
-  invalidateTakomiPiSubagentsEngine(pi);
-  const cleanupAsyncLifecycle = await initializeTakomiAsyncLifecycle(pi);
+  let cleanupAsyncLifecycle: () => void;
+  try {
+    await loadPiSubagentsInternals();
+    // A same-process Takomi reload reuses the ExtensionAPI identity, so explicitly
+    // discard the cached engine before replacing its lifecycle generation.
+    invalidateTakomiPiSubagentsEngine(pi);
+    cleanupAsyncLifecycle = await initializeTakomiAsyncLifecycle(pi);
+  } catch (error) {
+    // Optional subagents must not prevent Pi from starting. Do not register a
+    // tool or session lifecycle hooks backed by an unavailable runtime.
+    const reason = error instanceof Error ? error.message : String(error);
+    const warning = `Takomi subagents disabled for this session: ${reason}. Fix the error and reload to retry.`;
+    pi.on("session_start", (_event, ctx) => {
+      if (ctx.hasUI) ctx.ui.notify(warning, "warning");
+      else console.warn(warning);
+    });
+    return;
+  }
   registerSubagentTool(pi);
 
   // Replace native completion notification through pi-subagents' own reload-safe
