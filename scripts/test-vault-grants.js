@@ -1,5 +1,6 @@
+import './vault-test-loader.js';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
@@ -24,9 +25,9 @@ try {
     { name: 'password', value: 'scratch-secret-123', visibility: 'inject-only' },
   ] });
   const fields = ['username'];
-  const grant = issueGrant({ credentialId: credential.id, target: 'example.test', operation: 'login', scope: 'once', fields });
+  const grant = issueGrant({ credentialId: credential.id, target: 'example.test', operation: 'login', tool: 'terminal', scope: 'once', fields });
   const use = { grantId: grant.grantId, credentialId: credential.id, target: 'example.test', agent: 'pi', tool: 'terminal', operation: 'login', fields };
-  for (const change of [{ agent: 'other' }, { operation: 'reset' }, { target: 'other.test' }, { tool: 'file' }, { fields: ['password'] }]) {
+  for (const change of [{ agent: 'other' }, { target: 'other.test' }, { tool: 'file' }, { fields: ['password'] }]) {
     assert.throws(() => spendGrant({ ...use, ...change }));
   }
   assert.equal(listGrants()[0].useCount, 0);
@@ -34,7 +35,7 @@ try {
   assert.equal(env.stdout, '[REDACTED]');
   assert.throws(() => spendGrant(use), /spent/);
 
-  const stdinGrant = issueGrant({ credentialId: credential.id, target: 'example.test', operation: 'login', scope: 'once', fields });
+  const stdinGrant = issueGrant({ credentialId: credential.id, target: 'example.test', operation: 'login', tool: 'terminal', scope: 'once', fields });
   assert.throws(() => execWithStdin({ grantId: stdinGrant.grantId, credentialId: credential.id, target: 'example.test', operation: 'login', field: 'password', command: process.execPath }), /fields/);
   assert.equal(listGrants().find((g) => g.grantId === stdinGrant.grantId)?.useCount, 0);
   const stdin = execWithStdin({ grantId: stdinGrant.grantId, credentialId: credential.id, target: 'example.test', operation: 'login', field: 'username', command: process.execPath, args: ['-e', 'process.stdin.on("data", d => process.stdout.write(d))'] });
@@ -46,27 +47,37 @@ try {
   writeTempEnvFile({ grantId: fileGrant.grantId, credentialId: credential.id, target: 'example.test', operation: 'login', path: file, expectedParent: home, entries: { USER: 'username' }, persistent: false });
   assert.equal(readFileSync(file, 'utf8'), 'USER=tester\n');
 
-  const race = issueGrant({ credentialId: credential.id, target: 'example.test', scope: 'once', fields: ['username'] });
+  const race = issueGrant({ credentialId: credential.id, target: 'example.test', tool: 'terminal', scope: 'once', fields: ['username'] });
   const moduleUrl = pathToFileURL(join(process.cwd(), '.pi/extensions/takomi-vault/grant-store.ts')).href;
   const worker = `import { spendGrant } from ${JSON.stringify(moduleUrl)}; spendGrant(${JSON.stringify({ ...use, grantId: race.grantId, operation: 'use' })});`;
   const children = Array.from({ length: 6 }, () => new Promise((resolve) => {
-    const child = spawn(process.execPath, ['--input-type=module', '-e', worker], { env: { ...process.env, HOME: home, USERPROFILE: home }, stdio: 'ignore' });
+    const child = spawn(process.execPath, ['--import', './scripts/vault-test-loader.js', '--input-type=module', '-e', worker], { cwd: process.cwd(), env: { ...process.env, HOME: home, USERPROFILE: home }, stdio: 'ignore' });
     child.on('exit', (code) => resolve(code));
   }));
   assert.deepEqual((await Promise.all(children)).filter((code) => code === 0), [0]);
   assert.equal(listGrants().find((g) => g.grantId === race.grantId)?.useCount, 1);
 
   const handlers = new Map();
-  registerVaultTools({ registerTool: (tool) => handlers.set(tool.name, tool.execute) });
+  registerVaultTools({ registerTool: (tool) => handlers.set(tool.name, tool.execute), on: () => () => {} });
+  const sessionManager = { getSessionId: () => 'synthetic-test-session', getSessionFile: () => join(home, 'synthetic.jsonl') };
   let scopePrompts = 0;
   const ui = { select: async (title, choices) => {
     if (title.startsWith('Use an existing')) return choices[0];
-    if (title.startsWith('Pi will ')) return 'username';
+    if (title.startsWith('Purpose: ')) return 'username';
     scopePrompts++;
-    return 'once — one operation';
+    return choices.find((choice) => choice.startsWith('once:'));
   } };
-  const request = await handlers.get('vault_request')('id', { service: 'test', host: 'example.test', operation: 'login', scope: 'target' }, undefined, undefined, { mode: 'tui', hasUI: true, ui });
+  const request = await handlers.get('vault_request')('id', { service: 'test', host: 'example.test', operation: 'login', scope: 'target' }, undefined, undefined, { mode: 'tui', hasUI: true, ui, sessionManager });
   assert.equal(request.details.scope, 'once');
+  const approved = listGrants().find((g) => g.grantId === request.details.grantId);
+  for (const key of ['credentialId', 'grantId', 'target', 'tool', 'operation', 'scope', 'expiresAt', 'useCount']) {
+    assert.equal(request.details[key], approved[key]);
+  }
+  assert.deepEqual(request.details.fields, ['username']);
+  assert.equal(request.details.saved, true);
+  assert.equal(request.details.ephemeral, false);
+  assert.match(request.content[0].text, /vault_use_env or vault_use_stdin/);
+  assert.doesNotMatch(request.content[0].text, /vault_write_env_file/);
   assert.equal(scopePrompts, 1, 'model-supplied scope must not bypass UI');
   assert.deepEqual(listGrants().find((g) => g.grantId === request.details.grantId)?.fields, ['username']);
   const denied = await handlers.get('vault_request')('id', { service: 'test', host: 'example.test', scope: 'target' }, undefined, undefined, { hasUI: false });
@@ -102,7 +113,7 @@ try {
   assert.equal(readFileSync(AUDIT_PATH, 'utf8').includes('never-in-audit'), false);
 
   const fileHandler = handlers.get('vault_write_env_file');
-  const freshGrant = () => issueGrant({ credentialId: credential.id, target: 'example.test', tool: 'file', scope: 'session', fields: ['username'] });
+  const freshGrant = () => issueGrant({ credentialId: credential.id, target: 'example.test', tool: 'file', scope: 'session', fields: ['username'], ownerSessionId: sessionManager.getSessionId() });
   const writeParams = (grantId, path) => ({ grantId, credentialId: credential.id, target: 'example.test', path, entries: { USER: 'username' } });
   const output = join(home, 'new.env');
   const deniedGrant = freshGrant();
@@ -112,28 +123,28 @@ try {
   assert.equal(listGrants().find((g) => g.grantId === deniedGrant.grantId).useCount, 0);
   let prompt = '';
   const deniedUi = { confirm: async (_title, body) => { prompt = body; return false; } };
-  assert.equal((await fileHandler('id', writeParams(deniedGrant.grantId, output), undefined, undefined, { hasUI: true, cwd: home, ui: deniedUi })).isError, true);
+  assert.equal((await fileHandler('id', writeParams(deniedGrant.grantId, output), undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: deniedUi })).isError, true);
   assert.match(prompt, /Repo\/cwd:.*Resolved path:.*Keys: USER.*Plaintext file/s);
   assert.equal(existsSync(output), false);
   const approvedUi = { confirm: async (_title, body) => { prompt = body; return true; } };
-  const written = await fileHandler('id', writeParams(deniedGrant.grantId, output), undefined, undefined, { hasUI: true, cwd: home, ui: approvedUi });
+  const written = await fileHandler('id', writeParams(deniedGrant.grantId, output), undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: approvedUi });
   assert.equal(written.isError, undefined);
   assert.equal(readFileSync(output, 'utf8'), 'USER=tester\n');
   assert.equal(JSON.stringify(written).includes(output), false);
-  assert.equal((await fileHandler('id', writeParams(freshGrant().grantId, output), undefined, undefined, { hasUI: true, cwd: home, ui: approvedUi })).isError, true);
+  assert.equal((await fileHandler('id', writeParams(freshGrant().grantId, output), undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: approvedUi })).isError, true);
   assert.equal(readFileSync(output, 'utf8'), 'USER=tester\n');
   const persistentPath = join(home, 'persistent.env');
-  const persistent = await fileHandler('id', { ...writeParams(freshGrant().grantId, persistentPath), persistent: true }, undefined, undefined, { hasUI: true, cwd: home, ui: approvedUi });
+  const persistent = await fileHandler('id', { ...writeParams(freshGrant().grantId, persistentPath), persistent: true }, undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: approvedUi });
   assert.equal(persistent.isError, undefined);
   assert.match(prompt, /Persistent plaintext file/);
   assert.equal(readFileSync(persistentPath, 'utf8'), 'USER=tester\n');
   const ephemeral = createCredential({ label: 'one-use', service: 'test', host: 'example.test', type: 'token', createdBy: 'agent-once', fields: [{ name: 'token', value: 'temp-secret' }] });
   const failedGrant = issueGrant({ credentialId: ephemeral.id, target: 'example.test', tool: 'file', scope: 'once', fields: ['token'] });
-  assert.throws(() => writeTempEnvFile({ grantId: failedGrant.grantId, credentialId: ephemeral.id, target: 'example.test', path: output, expectedParent: home, entries: { TOKEN: 'token' }, persistent: false }), /EEXIST/);
+  assert.throws(() => writeTempEnvFile({ grantId: failedGrant.grantId, credentialId: ephemeral.id, target: 'example.test', path: output, expectedParent: home, entries: { TOKEN: 'token' }, persistent: false }), (error) => error.reason === 'destination_exists');
   assert.equal(listGrants().find((g) => g.grantId === failedGrant.grantId).useCount, 1);
   assert.equal(listCredentials().some((entry) => entry.id === ephemeral.id), false, 'spent grant failure removes one-time credential');
   const revocable = createCredential({ label: 'revoke-once', service: 'test', host: 'example.test', type: 'token', createdBy: 'agent-once', fields: [{ name: 'token', value: 'scratch-revoke' }] });
-  const revocableGrant = issueGrant({ credentialId: revocable.id, target: 'example.test', scope: 'once' });
+  const revocableGrant = issueGrant({ credentialId: revocable.id, target: 'example.test', tool: 'terminal', scope: 'once', fields: ['token'] });
   const revokedOnce = await handlers.get('vault_revoke')('id', { grantId: revocableGrant.grantId });
   assert.deepEqual(revokedOnce.details.removed, [revocable.id]);
   assert.equal(listCredentials().some((entry) => entry.id === revocable.id), false, 'revoke by grant must remove one-time credential');
@@ -147,16 +158,16 @@ try {
   const swapped = join(parentLink, 'swapped.env');
   const swapUi = { confirm: async () => { unlinkSync(parentLink); symlinkSync(second, parentLink, 'dir'); return true; } };
   const swapGrant = freshGrant();
-  assert.equal((await fileHandler('id', writeParams(swapGrant.grantId, swapped), undefined, undefined, { hasUI: true, cwd: home, ui: swapUi })).isError, true);
+  assert.equal((await fileHandler('id', writeParams(swapGrant.grantId, swapped), undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: swapUi })).isError, true);
   assert.equal(existsSync(join(first, 'swapped.env')), false);
   assert.equal(existsSync(join(second, 'swapped.env')), false);
   assert.equal(listGrants().find((g) => g.grantId === swapGrant.grantId).useCount, 1);
 
   const link = join(home, 'linked.env');
   symlinkSync(output, link);
-  assert.equal((await fileHandler('id', writeParams(freshGrant().grantId, link), undefined, undefined, { hasUI: true, cwd: home, ui: approvedUi })).isError, true);
+  assert.equal((await fileHandler('id', writeParams(freshGrant().grantId, link), undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: approvedUi })).isError, true);
   assert.equal(readFileSync(output, 'utf8'), 'USER=tester\n');
-  assert.equal(JSON.stringify(await fileHandler('id', writeParams(freshGrant().grantId, link), undefined, undefined, { hasUI: true, cwd: home, ui: approvedUi })).includes(link), false);
+  assert.equal(JSON.stringify(await fileHandler('id', writeParams(freshGrant().grantId, link), undefined, undefined, { hasUI: true, cwd: home, sessionManager, ui: approvedUi })).includes(link), false);
   const saveBefore = listCredentials().length;
   const cancelledUi = { input: async () => 'new-label', custom: async (factory) => {
     let result;
@@ -166,10 +177,10 @@ try {
     return result;
   }, select: async (title) => {
     if (title === 'Save this credential?') return 'Save to vault';
-    if (title.startsWith('Pi will ')) return 'All fields';
+    if (title.startsWith('Purpose: ')) return 'All fields';
     return undefined;
   } };
-  await assert.rejects(handlers.get('vault_request')('id', { service: 'brandnew', host: 'brandnew.test' }, undefined, undefined, { mode: 'tui', hasUI: true, ui: cancelledUi }), /Cancelled/);
+  await assert.rejects(handlers.get('vault_request')('id', { service: 'brandnew', host: 'brandnew.test' }, undefined, undefined, { mode: 'tui', hasUI: true, ui: cancelledUi, sessionManager }), /Cancelled/);
   assert.equal(listCredentials().length, saveBefore, 'cancelled approval must not persist credentials');
   const suspicious = 'never-in-audit';
   logAudit({ at: Date.now(), credentialId: near.id, event: 'denied', result: suspicious, target: suspicious, operation: 'secret/password', grantId: 'grant_bad' });
@@ -193,6 +204,104 @@ try {
   await commands.get('vault-status')('', { hasUI: true, ui: { notify: (text) => { notice = text; } } });
   assert.match(notice, /grant_[A-F0-9]{32}/);
 
+  // Native identity, fixed expiry and durable revocation survive fresh module/process reads.
+  const stableOwner = sessionManager.getSessionId();
+  const originalNow = Date.now;
+  const fixedNow = Date.now();
+  try {
+    Date.now = () => fixedNow;
+    for (const [scope, ttl] of [['once', 300000], ['turn', 900000], ['session', 43200000], ['target', 2592000000]]) {
+      const ownerInput = scope === 'session' || scope === 'turn' ? { ownerSessionId: stableOwner } : {};
+      const timed = issueGrant({ credentialId: credential.id, target: ' EXAMPLE.TEST ', tool: 'terminal', fields, scope, ...ownerInput });
+      assert.equal(timed.createdAt, fixedNow);
+      assert.equal(timed.expiresAt, fixedNow + ttl);
+      assert.equal(timed.target, 'example.test');
+      Date.now = () => timed.expiresAt;
+      assert.throws(() => spendGrant({ ...use, grantId: timed.grantId, ownerSessionId: stableOwner }), (error) => error.reason === 'grant_expired');
+      assert.equal(listGrants().find((row) => row.grantId === timed.grantId).useCount, 0);
+      Date.now = () => fixedNow;
+    }
+  } finally { Date.now = originalNow; }
+  const durable = ['session', 'turn'].map((scope) => issueGrant({
+    credentialId: credential.id, target: 'example.test', tool: 'terminal', fields, scope, ownerSessionId: stableOwner,
+  }));
+  const restartWorker = `
+    import assert from 'node:assert/strict';
+    import { spendGrant, listGrants } from './.pi/extensions/takomi-vault/grant-store.ts';
+    import vault from './.pi/extensions/takomi-vault/index.ts';
+    const hooks = new Map();
+    vault({registerTool() {}, registerCommand() {}, on: (name, fn) => {
+      hooks.set(name, fn); return () => hooks.delete(name);
+    }});
+    const grants = ${JSON.stringify(durable)};
+    const input = ${JSON.stringify({ ...use, ownerSessionId: stableOwner })};
+    const other = { hasUI: false, sessionManager: { getSessionId: () => 'unrelated-native-session' } };
+    for (const name of ['session_start', 'turn_start', 'session_shutdown']) await hooks.get(name)({}, other);
+    for (const grant of grants) {
+      assert.equal(listGrants().find((row) => row.grantId === grant.grantId).revoked, false);
+      for (const ownerSessionId of [undefined, '', 'fork-native-id', 'new-native-id', 'clone-native-id']) {
+        assert.throws(() => spendGrant({...input, grantId: grant.grantId, ownerSessionId}),
+          (error) => error.reason === (ownerSessionId ? 'owner_mismatch' : 'owner_unavailable'));
+      }
+      const used = spendGrant({...input, grantId: grant.grantId, operation: 'another purpose'});
+      assert.equal(used.expiresAt, grant.expiresAt);
+    }
+  `;
+  for (let restart = 0; restart < 2; restart++) {
+    const run = spawnSync(process.execPath, ['--import', './scripts/vault-test-loader.js', '--input-type=module', '-e', restartWorker], {
+      cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, HOME: home, USERPROFILE: home },
+    });
+    assert.equal(run.status, 0, run.stderr);
+  }
+  assert.equal(existsSync(file), false, 'shutdown still removes temporary plaintext files');
+  assert.equal(existsSync(persistentPath), true, 'shutdown does not remove confirmed persistent files');
+  for (const row of durable) assert.equal(listGrants().find((grant) => grant.grantId === row.grantId).useCount, 2);
+  revokeGrants({ grantId: durable[0].grantId });
+  const revokedWorker = `
+    import assert from 'node:assert/strict';
+    import { spendGrant } from './.pi/extensions/takomi-vault/grant-store.ts';
+    assert.throws(() => spendGrant(${JSON.stringify({ ...use, grantId: durable[0].grantId, ownerSessionId: stableOwner })}),
+      (error) => error.reason === 'grant_revoked');
+  `;
+  const revokedRead = spawnSync(process.execPath, ['--import', './scripts/vault-test-loader.js', '--input-type=module', '-e', revokedWorker], {
+    cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, HOME: home, USERPROFILE: home },
+  });
+  assert.equal(revokedRead.status, 0, revokedRead.stderr);
+
+  // Safe legacy stores remain narrow; first issuance raises the outer version permanently.
+  const beforeCompatibility = readFileSync(GRANTS_PATH, 'utf8');
+  const legacyTarget = { ...grant, grantId: 'grant_OLDTARGET', policyVersion: undefined, ownerSessionId: undefined, scope: 'target', operation: 'Exact purpose', useCount: 0 };
+  const legacySession = { ...legacyTarget, grantId: 'grant_OLDCHAT', scope: 'session' };
+  writeFileSync(GRANTS_PATH, JSON.stringify({ version: 1, grants: [legacyTarget, legacySession] }));
+  assert.throws(() => spendGrant({ ...use, grantId: legacyTarget.grantId, operation: 'exact purpose' }), (error) => error.reason === 'operation_mismatch');
+  assert.equal(spendGrant({ ...use, grantId: legacyTarget.grantId, operation: 'Exact purpose' }).useCount, 1);
+  assert.throws(() => spendGrant({ ...use, grantId: legacySession.grantId, operation: 'Exact purpose', ownerSessionId: stableOwner }), (error) => error.reason === 'legacy_reapproval');
+  assert.equal(JSON.parse(readFileSync(GRANTS_PATH, 'utf8')).version, 1);
+  const newChat = issueGrant({ credentialId: credential.id, target: 'example.test', tool: 'terminal', fields, scope: 'session', ownerSessionId: stableOwner });
+  const upgraded = JSON.parse(readFileSync(GRANTS_PATH, 'utf8'));
+  assert.equal(upgraded.version, 2);
+  assert.equal(upgraded.grants.find((row) => row.grantId === legacyTarget.grantId).policyVersion, undefined);
+  assert.equal(upgraded.grants.find((row) => row.grantId === legacyTarget.grantId).operation, 'Exact purpose');
+  const statusContext = { hasUI: true, sessionManager, ui: { notify: (text) => { notice = text; } } };
+  await commands.get('vault-describe')(credential.id, statusContext);
+  assert.match(notice, /unexpiredGrants=3 usableHere=2/);
+  assert.match(notice, /legacy-reapproval/);
+  assert.equal(notice.includes(stableOwner), false);
+  await commands.get('vault-status')('', { ...statusContext, sessionManager: { getSessionId: () => 'another-chat' } });
+  assert.match(notice, /unexpired grants: 3 \| usable here: 1/);
+  // The prior loader's envelope check refuses v2, before it can ignore row ownership.
+  const oldLoad = (file) => {
+    if (file.version !== 1 || !Array.isArray(file.grants)) throw new Error("Grant file has invalid structure; refusing to use it.");
+    return file.grants;
+  };
+  assert.throws(() => oldLoad(upgraded), /refusing to use it/);
+  revokeGrants({ grantId: newChat.grantId });
+  assert.equal(JSON.parse(readFileSync(GRANTS_PATH, 'utf8')).version, 2);
+  writeFileSync(GRANTS_PATH, JSON.stringify({ version: 2, grants: [legacyTarget] }));
+  revokeGrants({ grantId: legacyTarget.grantId });
+  assert.equal(JSON.parse(readFileSync(GRANTS_PATH, 'utf8')).version, 2);
+  writeFileSync(GRANTS_PATH, beforeCompatibility);
+
   const vaultOriginal = readFileSync(VAULT_PATH, 'utf8');
   const grantsOriginal = readFileSync(GRANTS_PATH, 'utf8');
   for (const malformed of ['null', '{}', '{"version":1,"credentials":[{}]}']) {
@@ -201,13 +310,38 @@ try {
     assert.equal(readFileSync(VAULT_PATH, 'utf8'), malformed);
   }
   writeFileSync(VAULT_PATH, vaultOriginal);
-  for (const malformed of ['null', '{}', '{"version":1,"grants":[{}]}']) {
+  const newRow = listGrants().find((row) => row.policyVersion === 2 && row.scope === 'session');
+  const malformedStores = [
+    'null', '{}', '{"version":1,"grants":[{}]}', '{"version":3,"grants":[]}',
+    JSON.stringify({ version: 1, grants: [newRow] }),
+    ...[
+      { ...newRow, policyVersion: 3 },
+      { ...newRow, policyVersion: null },
+      { ...newRow, ownerSessionId: undefined },
+      { ...newRow, ownerSessionId: '' },
+      { ...newRow, ownerSessionId: 'bad\u0000id' },
+      { ...newRow, ownerSessionId: 'x'.repeat(257) },
+      { ...newRow, scope: 'target' },
+      { ...newRow, policyVersion: undefined },
+      { ...newRow, fields: undefined },
+      { ...newRow, fields: [] },
+      { ...newRow, fields: [''] },
+      { ...newRow, tool: 'any' },
+    ].map((row) => JSON.stringify({ version: 2, grants: [row] })),
+  ];
+  for (const malformed of malformedStores) {
     writeFileSync(GRANTS_PATH, malformed);
     assert.throws(() => listGrants(), /invalid structure/);
+    assert.throws(() => revokeGrants({ all: true }), /invalid structure/);
+    assert.throws(() => issueGrant({ credentialId: credential.id, target: 'example.test', tool: 'terminal', fields, scope: 'once' }), /invalid structure/);
     assert.equal(readFileSync(GRANTS_PATH, 'utf8'), malformed);
   }
   writeFileSync(GRANTS_PATH, grantsOriginal);
-  const legacy = issueGrant({ credentialId: credential.id, target: 'example.test', scope: 'once' });
+  // Legacy all-fields access remains legacy, never a newly issued broad grant.
+  const legacy = { ...grant, grantId: 'grant_LEGACY', operation: 'use', fields: undefined, policyVersion: undefined, useCount: 0 };
+  const mixed = JSON.parse(readFileSync(GRANTS_PATH, 'utf8'));
+  mixed.grants.push(legacy);
+  writeFileSync(GRANTS_PATH, JSON.stringify(mixed));
   assert.equal(spendGrant({ ...use, grantId: legacy.grantId, operation: 'use', fields: ['password'] }).useCount, 1);
 
   const validGrants = readFileSync(GRANTS_PATH, 'utf8');
@@ -215,11 +349,11 @@ try {
   writeFileSync(GRANTS_PATH, 'null');
   try {
     await assert.rejects(handlers.get('vault_request')('id', { service: 'failed-approval', host: 'example.test' }, undefined, undefined, {
-      mode: 'tui', hasUI: true,
+      mode: 'tui', hasUI: true, sessionManager,
       ui: {
         input: async () => 'scratch saved',
         custom: async () => 'scratch-secret',
-        select: async (title) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Pi will ') ? 'All fields' : 'once — one operation',
+        select: async (title, choices) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Purpose: ') ? 'All fields' : choices.find((choice) => choice.startsWith('once:')),
       },
     }), /invalid structure/);
     assert.equal(listCredentials().length, beforeFailure, 'failed grant issuance must remove newly saved credential');
@@ -227,17 +361,17 @@ try {
     writeFileSync(GRANTS_PATH, validGrants);
   }
   const auditFailureEphemeral = createCredential({ label: 'audit-failure-once', service: 'test', host: 'example.test', type: 'token', createdBy: 'agent-once', fields: [{ name: 'token', value: 'scratch-audit-failure' }] });
-  const auditFailureGrant = issueGrant({ credentialId: auditFailureEphemeral.id, target: 'example.test', scope: 'once' });
+  const auditFailureGrant = issueGrant({ credentialId: auditFailureEphemeral.id, target: 'example.test', tool: 'terminal', scope: 'once', fields: ['token'] });
   const grantsBeforeAuditFailure = new Set(listGrants().map((entry) => entry.grantId));
   const credentialsBeforeAuditFailure = listCredentials().length;
   unlinkSync(AUDIT_PATH);
   mkdirSync(AUDIT_PATH); // An unwritable audit destination, entirely inside the scratch home.
   await assert.rejects(handlers.get('vault_request')('id', { service: 'audit-failure-saved', host: 'example.test' }, undefined, undefined, {
-    mode: 'tui', hasUI: true,
+    mode: 'tui', hasUI: true, sessionManager,
     ui: {
       input: async () => 'scratch saved',
       custom: async () => 'scratch-secret',
-      select: async (title) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Pi will ') ? 'All fields' : 'once — one operation',
+      select: async (title, choices) => title.startsWith('Save') ? 'Save to vault' : title.startsWith('Purpose: ') ? 'All fields' : choices.find((choice) => choice.startsWith('once:')),
     },
   }), (error) => ['EISDIR', 'EPERM', 'EACCES'].includes(error.code), 'approval must fail at the audit write');
   assert.equal(listCredentials().length, credentialsBeforeAuditFailure, 'audit failure must remove the saved credential');

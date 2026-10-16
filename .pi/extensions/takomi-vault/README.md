@@ -6,7 +6,7 @@ Pi extension for secure credential handles and short-lived grants.
 
 - stores logins and tokens with encrypted values outside the repo
 - agents see handles like `cred_AB12CD34`, never raw secrets
-- grants bind credential plus agent plus tool plus target plus operation plus expiry
+- grants bind credential, agent, terminal/file access, destination, fields and expiry, with chat ownership for reusable chat approval
 - injection adapters run commands with secrets in env or stdin without returning values
 - audit log records requests, approvals, denials, uses, and revocations with no secret values
 
@@ -72,9 +72,21 @@ vault_revoke
 
 ## Grants
 
-Scopes and time-to-live: `once` (one operation, 5 minutes), `turn` (15 minutes), `session` (12 hours, revoked on shutdown), `target` (30 days for one host). Enforcement binds target plus tool plus scope plus expiry. Operation and agent are recorded and audited. One-time credentials are ephemeral and auto-delete after first use or revoke.
+The first approval choice is `session`, this chat for up to 12 hours. It works across messages, tasks and ordinary process restarts when the host resumes the same saved native Pi session. `turn` means 15 minutes in this chat. Neither scope transfers to a new, forked or cloned chat. An unsaved native chat cannot resume after exit. If the host cannot identify the chat, chat-scoped approval is refused.
 
-Injection trusts the agent process with use. The guarantee is that secrets never enter transcripts, prompts, or logs — not that a hostile agent cannot misuse a value it was granted.
+`once` permits one admitted attempt within 5 minutes. `target` is an explicit choice to remember approval for 30 days across chats using the same Vault. Every scope still restricts the approved host, credential, fields and terminal/file access. The agent can suggest a scope but cannot preselect remember. Reuse, retries and restarts never extend expiry. Do not save offers only once approval or cancellation. Unsaved credentials auto-delete after the admitted attempt or revoke. Saving alone, including `/vault-add`, does not grant access.
+
+Every successful `vault_request` returns the issued credential ID, grant ID, target host, tool, purpose, approved fields, scope, expiry, use count and saved status. Pass that target host, such as `github.com`, not `terminal` or `file`. Terminal grants use `vault_use_env` or `vault_use_stdin`; file grants use `vault_write_env_file`. `envMap` and `entries` map environment variable names to approved stored field names, never values. For new policy-version-2 grants, operation text explains purpose. Changing or omitting it does not invalidate approval. Credential access does not approve deployments, deletion or other actions; normal action confirmations still apply.
+
+Reuse the issued grant through the use tools. Calling `vault_request` again always asks for approval again. Legacy once/target grants retain exact operation matching, including spaces and capitalization; omitting operation means `use`. Legacy turn/session grants have no trusted chat owner and require approval again. The extension never assigns old grants to the current chat.
+
+Enforcement checks target, tool, agent, approved fields, native chat owner where required, expiry, revocation, once-use count, credential ID and persistent-write scope. Legacy once/target grants also check exact operation; legacy grants without a field restriction retain their all-field meaning. Policy denials do not spend a grant. Each admitted attempt increments use count before command execution or file creation. A failed once attempt cannot be refunded. Reusable grants survive startup failures, nonzero exits and file-creation failures until expiry or revoke.
+
+File creation requires confirmation for every write and an existing parent, and never overwrites files or symlinks. Known denials return fixed reasons; unknown failures hide private error details. `vault_grants` distinguishes usable-here, other-chat, legacy-reapproval, expired, revoked and spent status without showing owner IDs. Applicability alone does not prove a requested destination, tool or field is allowed. Shutdown cleans temporary files and the key cache, not chat grants. New grants use a version-2 grant-file envelope that old loaded extension code refuses. Copying extension files does not replace code already loaded in a running process.
+
+Injection gives the agent process access to the approved values. Output redaction and private entry keep those values out of ordinary tool results; they cannot prevent a hostile process from misusing or transforming them.
+
+For model-driven private entry, RPC hosts must also set `T3_TAKOMI_VAULT_OWNERSHIP_NOTIFY=1` and handle the versioned ownership open/close notifications emitted through native `ctx.ui.notify`. Ownership is tied to the validated tool invocation and session, with cancellation on session changes. This is transport capability negotiation, not proof that the child process is trustworthy. Native RPC owns stdout; direct extension writes are not a supported ownership channel. Slash-command admission is unchanged. Hosts must keep entered values and ownership records out of public tool results and persisted transcripts.
 
 ## Security notes
 

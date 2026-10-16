@@ -62,7 +62,7 @@ Do not commit vault data into the repository.
 | Use | Agent can ask an adapter to inject the secret for one approved operation. Agent never sees plaintext. |
 | Read | Agent actually receives plaintext. Rare, explicit, logged, and off by default. |
 | Manage | Create, rename, or delete credentials. Human only in v1. Agent may propose a label, human confirms. |
-| Grant | Short lived capability binding credential plus agent plus tool plus target plus operation plus expiry. |
+| Grant | Time-limited permission for a credential, agent, tool, target and fields. Chat scopes also require a trusted native session owner. |
 | Adapter | The injection path: process env, stdin responder, temporary file. Browser fill is v2. |
 
 ## Credential Types in v1
@@ -143,32 +143,24 @@ Agent sees stdout and stderr only
 Grant expires, audit log records the use
 ```
 
-## Grant Model
+## Grant model
 
-Scopes in v1, with time-to-live enforced by expiry timestamps:
+The human chooses from these fixed durations, with session first regardless of the agent suggestion:
 
-- once: exactly one operation, 5 minute window
-- turn: 15 minute window standing in for the agent turn
-- session: 12 hour window, revoked early on session shutdown
-- target: 30 day window for one service host, for example `github.com`, until revoked
+- `session`: this chat for up to 12 hours, reusable across messages, tasks and ordinary process restarts.
+- `once`: one admitted attempt within 5 minutes.
+- `turn`: 15 minutes in this chat, not one model turn.
+- `target`: explicit remember for 30 days across chats using the same Vault.
 
-New grants bind target, tool, operation, agent (`pi`), expiry, and a human-selected field allowlist. The request tool always asks the human to select the effective scope, even when the model proposes one. It also asks for all fields or one named field. Unsaved credentials require once scope. Existing v1 grants without a field allowlist still allow all fields; operation and agent matching apply to those grants too. The use tools accept an optional `operation` parameter, defaulting to `use` for legacy callers. A request for `deploy` must pass `operation: "deploy"` at use time. Request `tool: "file"` for env-file writes; the default is `terminal`. Pi does not authenticate external agent processes through this extension: tool calls use the fixed `pi` identity.
+Reuse, failure and restart never refresh expiry. Unsaved credentials remain once-only. Saving a credential and approving access are separate decisions; `/vault-add` issues no grant. `vault_request` always asks again, while the use tools reuse existing permission. Every file write still needs human confirmation, and persistent writes require session or target scope. Credential access never approves deployments, deletion or other actions.
 
-Every grant binds:
+New `policyVersion: 2` grants require an explicit nonempty field allowlist and terminal/file access method. They retain credential, normalized destination, agent, expiry, revocation and use-count restrictions. Operation prose explains purpose, not an arbitrary exact-string permission. Legacy once/target grants keep exact operation matching, with omitted use operation meaning `use`; legacy absent fields still mean all fields. Legacy turn/session grants lack a trustworthy owner and fail closed with reapproval required. They are never assigned to the next chat that reads them.
 
-```json
-{
-  "grant_id": "grant_B11D",
-  "credential": "cred_A18F",
-  "agent": "pi",
-  "tool": "terminal",
-  "target": "github.com",
-  "operation": "login",
-  "expires": "2026-09-24T10:15:00+01:00"
-}
-```
+Chat ownership comes from each invocation's public `ctx.sessionManager.getSessionId()`, never model parameters, the generic `pi` agent name, a title, PID or registration-time context. The SDK retains this ID on resume/restart and creates distinct IDs for new/fork/clone. An unsaved native session supports current-chat permission but cannot promise recovery after exit. Missing or invalid identity refuses chat scopes, without silently choosing a different scope. Approval and file-confirmation awaits recheck cancellation and native identity before issuance or spending.
 
-The gateway checks agent, tool, target, operation, approved fields, and lifetime before spending a grant. It validates and increments use count under one cross-process file lock. A second concurrent use of a once grant is denied. These checks bind caller-supplied target and operation strings, not the destination of the child command: the terminal adapter cannot prove where an arbitrary process sends a secret. Approving terminal injection trusts that process with use of the credential.
+The gateway validates and increments use count under one cross-process file lock before any command or file effect. Once attempts are nonrefundable after admission, even on startup or write failure. Denied attempts do not spend. Reusable failures and nonzero exits leave permission valid for retries. Shutdown retains temporary-file and key-cache cleanup but never globally revokes chat grants. Another chat cannot use a grant, and cannot end its lifetime by shutting down.
+
+These checks bind a caller-supplied target, not the destination of the child command. Terminal injection trusts that process with the approved values. Native identity isolates chats within the host; it does not authenticate against malicious code running as the same OS user.
 
 Default save behavior: do not save unless the user selects save. Saved agent-request credentials are created only after the user completes grant approval. One time use creates an ephemeral credential row that is deleted after a spent grant even if the adapter fails, on revoke, or on revoke-all, so it never accumulates as vault trash. The window between request and use is the only time it appears in listings, marked one-time.
 
@@ -183,7 +175,7 @@ Contains:
 - service name and purpose
 - masked fields, for example token or username plus password
 - save choice: do not save, save to vault
-- allow scope: once, turn, session, this target
+- allow scope: this chat, one attempt, 15 minutes in this chat, explicit remember across chats
 - cancel and provide actions
 
 Pressing provide does not create a chat message with values. Pi receives IDs only.
@@ -217,19 +209,19 @@ Browser form fill, HTTP header injection, SSH, and OTP adapters are v2.
 ## Data Flow
 
 1. Pi needs auth and calls `credentials.request`.
-2. Gateway checks for a matching credential and active grant.
-3. If none exists, gateway opens secure input UI.
+2. Gateway offers exact matching saved credentials, or private input for new values.
+3. Each request asks for approval, even when another grant already exists.
 4. User enters values and picks save scope plus allow scope.
 5. Pi receives credential ID and grant ID, no plaintext.
 6. Pi calls `credentials.use` with the grant and an adapter.
-7. Gateway validates agent plus target plus operation plus lifetime.
+7. Gateway validates credential, agent, tool, target, fields, expiry and native chat owner where required. Legacy once/target also require exact operation.
 8. Gateway decrypts locally and injects through the adapter.
 9. Plaintext exists for the shortest practical time and never enters chat or logs.
 10. Gateway logs the use and expires or revokes the grant on schedule.
 
 ## Database Schema
 
-Single SQLite file plus sidecar config. Metadata is plaintext. Secret values are always encrypted blobs.
+JSON files persist credentials and grants under cross-process locks. Metadata is plaintext. Secret values are encrypted blobs.
 
 `vault.json` holds credentials with encrypted field blobs, `grants.json` holds grants, `audit.log` holds append-only audit lines, `key.json` holds the wrapped data key, `tempfiles.json` tracks non-persistent env files for session-end cleanup. Shapes:
 
@@ -247,6 +239,7 @@ Single SQLite file plus sidecar config. Metadata is plaintext. Secret values are
 
 ```json
 {
+  "policyVersion": 2,
   "grantId": "grant_<128-bit hex>",
   "credentialId": "cred_...",
   "agent": "pi",
@@ -254,14 +247,17 @@ Single SQLite file plus sidecar config. Metadata is plaintext. Secret values are
   "target": "convex.dev",
   "operation": "deploy",
   "fields": ["token"],
-  "scope": "once | turn | session | target",
+  "scope": "session",
+  "ownerSessionId": "<trusted native session ID>",
   "expiresAt": 1777580854310,
   "revoked": false,
   "useCount": 0
 }
 ```
 
-`fields` may be absent on pre-existing v1 grants, which allow all fields. `createdBy: agent-once` marks ephemeral rows for auto-delete. New audit lines carry a timestamp, fixed event name, validated credential/grant IDs, scope, tool, simple operation identifier, and hostname when available. Readers discard free-form fields from older lines, including `result`, and accept only validated structured metadata. Grant issuance fails and rolls back the grant if its audit write fails. Revocation remains effective when audit is unavailable; revoke and ephemeral-deletion events are best-effort and may be missing from the log. `/vault-audit [id]` shows the latest 50 matching events for a credential; `/vault-status` shows the latest eight events across credentials. Older audit files may still contain previously recorded free-form strings on disk and need separate secure retention handling.
+`ownerSessionId` is required only for v2 turn/session rows and forbidden on once/target rows. Public tools and commands never return it. The grant file accepts valid v1 legacy stores and mixed legacy/v2 rows in a v2 envelope. A v1 envelope cannot contain v2 rows. First new issuance writes outer `version: 2`; all later writes retain it, even after new grants are revoked. This makes old loaded readers refuse the file rather than silently ignoring ownership. Unknown or malformed rows/envelopes fail closed without overwrite. There is no private migration. Previously admitted operations in old processes cannot be recalled by this format guard.
+
+`fields` may be absent on pre-existing legacy grants, which retain their all-field meaning. `createdBy: agent-once` marks ephemeral rows for auto-delete. New audit lines carry a timestamp, fixed event name, validated credential/grant IDs, scope, tool, simple operation identifier, and hostname when available. Readers discard free-form fields from older lines, including `result`, and accept only validated structured metadata. Grant issuance fails and rolls back the grant if its audit write fails. Revocation remains effective when audit is unavailable; revoke and ephemeral-deletion events are best-effort and may be missing from the log. `/vault-audit [id]` shows the latest 50 matching events for a credential; `/vault-status` shows the latest eight events across credentials. Older audit files may still contain previously recorded free-form strings on disk and need separate secure retention handling.
 
 Event names include requested, approved, denied, used, expired, revoked, created, deleted, renamed, and revealed. No new audit event stores values or arbitrary paths or commands.
 

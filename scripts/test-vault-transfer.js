@@ -1,3 +1,4 @@
+import './vault-test-loader.js';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
@@ -7,6 +8,7 @@ import { join } from 'node:path';
 const home = mkdtempSync(join(tmpdir(), 'takomi-transfer-'));
 const original = homedir();
 const originalTransferUi = process.env.T3_TAKOMI_VAULT_TRANSFER_UI;
+delete process.env.T3_TAKOMI_VAULT_TRANSFER_UI;
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 const root = join(home, '.pi', 'agent', 'takomi-vault');
@@ -21,7 +23,7 @@ try {
     { name: 'username', value: 'transfer-user', visibility: 'agent-readable' },
     { name: 'password', value: 'transfer-secret-987', visibility: 'inject-only' },
   ] });
-  issueGrant({ credentialId: credential.id, target: 'example.test', scope: 'target' });
+  issueGrant({ credentialId: credential.id, target: 'example.test', tool: 'terminal', fields: ['username'], scope: 'target' });
   const commands = new Map();
   registerVaultCommands({ registerCommand: (name, def) => commands.set(name, def.handler) });
   let confirmation = '';
@@ -162,7 +164,7 @@ try {
     console.log('vault transfer: roundtrip passed');
   `;
   try {
-    const run = spawnSync(process.execPath, ['--input-type=module', '-e', child], { cwd: process.cwd(), input: JSON.stringify({ archive, key, id: credential.id }), encoding: 'utf8', env: { ...process.env, HOME: dest, USERPROFILE: dest } });
+    const run = spawnSync(process.execPath, ['--import', './scripts/vault-test-loader.js', '--input-type=module', '-e', child], { cwd: process.cwd(), input: JSON.stringify({ archive, key, id: credential.id }), encoding: 'utf8', env: { ...process.env, HOME: dest, USERPROFILE: dest } });
     assert.equal(run.status, 0, run.stderr);
     assert.match(run.stdout, /roundtrip passed/);
   } finally { rmSync(dest, { recursive: true, force: true }); }
@@ -197,7 +199,7 @@ try {
     assert.equal(result.includes(key), false);
   `;
   try {
-    const run = spawnSync(process.execPath, ['--input-type=module', '-e', rpcChild], {
+    const run = spawnSync(process.execPath, ['--import', './scripts/vault-test-loader.js', '--input-type=module', '-e', rpcChild], {
       cwd: process.cwd(), input: JSON.stringify({ archive: rpcArchive, key: rpcResult.key, id: credential.id }),
       encoding: 'utf8', env: { ...process.env, HOME: rpcDest, USERPROFILE: rpcDest, T3_TAKOMI_VAULT_TRANSFER_UI: '1', T3_TAKOMI_VAULT_SECRET_UI: '1' },
     });

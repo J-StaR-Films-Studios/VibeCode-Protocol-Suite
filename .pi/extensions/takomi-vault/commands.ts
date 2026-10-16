@@ -4,7 +4,7 @@ import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { logAudit, readAudit } from "./audit.ts";
 import { getBackend } from "./crypto-store.ts";
-import { listGrants, revokeGrants } from "./grant-store.ts";
+import { grantStatus, listGrants, revokeGrants } from "./grant-store.ts";
 import { exportVault, importVault, importVaultArchive, MAX_ARCHIVE } from "./transfer.ts";
 import { maskedSecret, supportsSecretEntry } from "./secret-input.ts";
 import { createCredential, deleteCredential, deleteIfEphemeral, findServiceCandidates, getCredential, isEphemeral, listCredentials, renameCredential, summarize } from "./vault-store.ts";
@@ -32,6 +32,10 @@ async function pickCredential(ctx: ExtensionCommandContext, requestedId?: string
   const selected = items[Number(choice.split(".")[0]) - 1];
   if (!selected) throw new Error("Unknown selection. Please try again.");
   return selected.id;
+}
+
+function nativeOwner(ctx: ExtensionCommandContext): string | undefined {
+  try { return ctx.sessionManager.getSessionId(); } catch { return undefined; }
 }
 
 function formatAudit(entry: ReturnType<typeof readAudit>[number]): string {
@@ -186,8 +190,8 @@ export function registerVaultCommands(pi: ExtensionAPI) {
         `service=${summary.service} host=${summary.host} type=${summary.type}`,
         `fields=${summary.fieldNames.join(", ")}`,
         `lastUsed=${summary.lastUsedAt ? new Date(summary.lastUsedAt).toLocaleString() : "never"}`,
-        `activeGrants=${grants.length}`,
-        ...grants.map((grant) => `  - ${grant.grantId} ${grant.scope} expires ${new Date(grant.expiresAt).toLocaleString()}`),
+        `unexpiredGrants=${grants.length} usableHere=${grants.filter((grant) => grantStatus(grant, nativeOwner(ctx)) === "usable-here").length}`,
+        ...grants.map((grant) => `  - ${grant.grantId} ${grant.scope} ${grantStatus(grant, nativeOwner(ctx))} expires ${new Date(grant.expiresAt).toLocaleString()}`),
       ].join("\n"));
     },
   });
@@ -232,7 +236,7 @@ export function registerVaultCommands(pi: ExtensionAPI) {
       const audit = readAudit(8);
       notify(ctx, [
         `Backend: ${getBackend()}`,
-        `Credentials: ${items.length} | active grants: ${grants.length}`,
+        `Credentials: ${items.length} | unexpired grants: ${grants.length} | usable here: ${grants.filter((grant) => grantStatus(grant, nativeOwner(ctx)) === "usable-here").length}`,
         "",
         "Recent activity (no values):",
         ...audit.map(formatAudit),

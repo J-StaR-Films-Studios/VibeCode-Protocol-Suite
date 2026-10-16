@@ -1,8 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { logAudit } from "./audit.ts";
 import { cleanupTempFiles } from "./adapters.ts";
 import { clearKeyCache, peekBackend } from "./crypto-store.ts";
-import { revokeExpiredSessionGrants, revokeGrants } from "./grant-store.ts";
+import { revokeExpiredSessionGrants } from "./grant-store.ts";
 import { registerVaultCommands } from "./commands.ts";
 import { registerVaultTools } from "./tools.ts";
 import { registerVaultInputGuard } from "./input-guard.ts";
@@ -31,10 +30,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     try {
-      const revoked = revokeGrants({ scope: "session" });
-      for (const grant of revoked) {
-        logAudit({ at: Date.now(), credentialId: grant.credentialId, agent: grant.agent, event: "revoked", target: grant.target, result: `session grant ${grant.grantId} ended with session` });
-      }
       cleanupTempFiles();
     } catch {
       // Shutdown cleanup is best-effort.
